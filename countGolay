@@ -1,0 +1,9 @@
+#!/bin/csh
+setenv NSLOTS $1
+setenv PREP $2
+setenv INCL_RESTS $3
+setenv PATH $HOME/python/bin:$PATH
+cd src
+echo "Running GolayCounting"
+../runModule GolayCounting $NSLOTS $PREP $INCL_RESTS
+

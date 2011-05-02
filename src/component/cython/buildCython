@@ -1,0 +1,6 @@
+#!/bin/bash
+rm -r build
+python setup.py build_ext &&
+mv build/*/exrecCython.so .
+rm -r build
+rm exrecCython.c
