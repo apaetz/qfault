@@ -4,6 +4,9 @@ Created on Nov 22, 2010
 @author: Adam
 '''
 from util.plotting import plotList
+from sim.SimulateAcceptanceRates import getStats, simOverlapPrep, simSteane4Prep,\
+	simSteane12Prep
+from counting.countParallel import configureMultiProcess
 
 
 
@@ -264,59 +267,71 @@ def qubitOverhead(qubitTime, prAccept):
 
 def overhead4(data, measX, measZ):
 	
-	prAcceptList = [getyvals(data, i) for i in range(1,4)]
-	X = getxvals(data)
+	X = sorted(data.keys())
 	
-	overheadList = []
-	for p in range(len(X)):
-		x1 = measX / prAcceptList[0][p]
-		x2 = measX / prAcceptList[1][p]
-		z = (x1 + x2 + measZ) / prAcceptList[2][p]
+	means = []
+	errors = []
+	for p in X:
+		x1 = data[p]['prepA0']
+		x2 = data[p]['prepA2']
+		z = data[p]['prepA']
 		
-		overheadList.append(z)
+		overheadSample = [measX * (x1[s] + x2[s]) + measZ * z[s] for s in xrange(len(z))]
+		mean, sigma = getStats(overheadSample)		
+		means.append(mean)
+		errors.append(sigma)
 		
-	return X, overheadList
+	return X, means, errors
 
-
-def overhead6(data, measX, measZ):
-	
-	prAcceptList = [getyvals(data, i) for i in range(1,6)]
-	X = getxvals(data)
-	
-	overheadList = []
-	for p in range(len(X)):
-		x1 = measX / prAcceptList[0][p]
-		x2 = measX / prAcceptList[1][p]
-		z1 = (x1 + x2 + measZ) / prAcceptList[2][p]
-		z2 = measX / prAcceptList[3][p]
-		x3 = (z1 + z2 + measZ) / prAcceptList[4][p]
-		
-		overheadList.append(x3)
-		
-	return X, overheadList
+#
+#def overhead6(data, measX, measZ):
+#	
+#	prAcceptList = [getyvals(data, i) for i in range(1,6)]
+#	X = getxvals(data)
+#	
+#	overheadList = []
+#	for p in range(len(X)):
+#		x1 = measX / prAcceptList[0][p]
+#		x2 = measX / prAcceptList[1][p]
+#		z1 = (x1 + x2 + measZ) / prAcceptList[2][p]
+#		z2 = measX / prAcceptList[3][p]
+#		x3 = (z1 + z2 + measZ) / prAcceptList[4][p]
+#		
+#		overheadList.append(x3)
+#		
+#	return X, overheadList
 
 
 def overhead12(data, meas1, meas2, meas3, meas4):
+
+	X = sorted(data.keys())
 	
-	ylabels = data[0][1:]
-	prAcceptList = [getyvals(data, i) for i in range(1,len(ylabels)+1)]
-	prAcceptList = dict(zip(ylabels, prAcceptList))
-	X = getxvals(data)
+	def calc(x1,z1,x2,z2,x3,z3,x4,z4):
+		o1 = meas1 * (x1 + z1)
+		o2 = meas2 * (x2 + z2)
+		o3 = meas3 * (x3 + z3)
+		o4 = meas4 * (x4 + z4)
+		
+		return o1 + o2 + o3 + o4
 	
-	overheadList = []
-	for p in range(len(X)):
-		x1 = meas1 / prAcceptList['prepA_X1'][p]
-		z1 = meas1 / prAcceptList['prepA_Z1'][p]
-		x2 = (x1 + meas2) / prAcceptList['prepA_X2'][p]
-		z2 = (z1 + meas2) / prAcceptList['prepA_Z2'][p]		
-		z3 = (2*x1 + meas3) / prAcceptList['prepA_Z3'][p]
-		x3 = (z3 + z1 + meas3) / prAcceptList['prepA_X3'][p]		
-		z4 = (x3 + x2 + meas4) / prAcceptList['prepA_Z4'][p]
-		x4 = (z4 + z2 + meas4) / prAcceptList['prepA_X4'][p]
+	means = []
+	errors = []
+	for p in X:
+		x1 = data[p]['prepA_X1']
+		z1 = data[p]['prepA_Z1']
+		x2 = data[p]['prepA_X2']
+		z2 = data[p]['prepA_Z2']
+		x3 = data[p]['prepA_X3']
+		z3 = data[p]['prepA_Z3']
+		x4 = data[p]['prepA_X4']
+		z4 = data[p]['prepA_Z4']
 		
-		overheadList.append(x4)
-		
-	return X, overheadList
+		overheadSample = [calc(x1[s],z1[s],x2[s],z2[s],x3[s],z3[s],x4[s],z4[s]) for s in xrange(len(x1))]
+		mean, sigma = getStats(overheadSample)		
+		means.append(mean)
+		errors.append(sigma)
+
+	return X, means, errors
 
 
 if __name__ == '__main__':
@@ -329,9 +344,16 @@ if __name__ == '__main__':
 #	plot(dataSteane12, 'prAcceptSteane12')
 #	plot(dataSteane12_noRests, 'prAcceptSteane12_noRests')
 	
+	configureMultiProcess(30)
+	
+	pMin = 0
+	pMax = 2e-3
+	pStep = 1e-4
+	iters = 100000	
+	
 	dataList = [ ('Random-4', dataSteaneRandom),
 				 ('RandomSteaneNR', dataSteaneRandom_noRests),
-				 ('Overlap-4', dataOverlap),
+				 ('Overlap-4', simOverlapPrep(pMin, pMax, pStep, iters)),
 				 ('OverlapNR', dataOverlap_noRests),
 				 ('Opt-6', dataReich),
 				 ('ReichardtNR', dataReich_noRests),
@@ -339,17 +361,17 @@ if __name__ == '__main__':
 				 ('Steane12NR', dataSteane12_noRests)
 				]
 	
-	ylist = []
-	labels = []
-	X = [0.0005 + 0.0001*i for i in range(21)]
-	for name, data in dataList:
-		if name.endswith('NR'):
-			continue
-		ylist.append(getyvals(data, -1))
-		labels.append(name)
-		
-	print X[5]
-	print [y[5] for y in ylist]
+#	ylist = []
+#	labels = []
+#	X = [0.0005 + 0.0001*i for i in range(21)]
+#	for name, data in dataList:
+#		if name.endswith('NR'):
+#			continue
+#		ylist.append(getyvals(data, -1))
+#		labels.append(name)
+#		
+#	print X[5]
+#	print [y[5] for y in ylist]
 	#plotList(X, ylist, 'plotComparePrAccept', labelList=labels, xLabel='p', yLabel='Pr[accept]')
 	
 	qubitTimeX = 46*9 + 23
@@ -358,16 +380,21 @@ if __name__ == '__main__':
 	qubitTime2 = 23*12
 	qubitTime3 = qubitTimeZ
 	qubitTime4 = qubitTime3
-	X4, overheadRandom = overhead4(dataSteaneRandom, qubitTimeX, qubitTimeZ)
-	X4, overheadOverlap = overhead4(dataOverlap, qubitTimeX, qubitTimeZ)
-	X6, overheadReic = overhead6(dataReich, qubitTimeX, qubitTimeZ)
-	X12, overheadSteane12 = overhead12(dataSteane12, qubitTime1, qubitTime2, qubitTime3, qubitTime4)
 	
-	yList = [overheadRandom, overheadOverlap, overheadReic, overheadSteane12]
-	labels = ['Random-4', 'Overlap-4', 'Opt-6', 'Steane-12']
-	print X[5]
-	print [y[5] for y in yList]
-	plotList(X4, yList, 'plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
+	samplesOverlap = simOverlapPrep(pMin, pMax, pStep, iters)
+	samplesSteane4 = simSteane4Prep(pMin, pMax, pStep, iters)
+	samplesSteane12 = simSteane12Prep(pMin, pMax, pStep, iters)
+	
+	X, meanOverlap, errorOverlap = overhead4(samplesOverlap, qubitTimeX, qubitTimeZ)
+	X, meanSteane4, errorSteane4 = overhead4(samplesSteane4, qubitTimeX, qubitTimeZ)
+	X, meanSteane12, errorSteane12 = overhead12(samplesSteane12, qubitTime1, qubitTime2, qubitTime3, qubitTime4)
+			
+	yList = [meanOverlap, meanSteane4, meanSteane12]
+	yErrList = [errorOverlap, errorSteane4, errorSteane12]
+	labels = ['Overlap-4', 'Steane-4', 'Steane-12']
+	plotList(X, yList, yErrList, filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
+	
+	raise Exception
 	
 	cnotsX = 77*2 + 23
 	cnotsZ = 23
