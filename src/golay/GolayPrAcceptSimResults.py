@@ -277,9 +277,9 @@ def overhead4(data, measX, measZ):
 		z = data[p]['prepA']
 		
 		overheadSample = [measX * (x1[s] + x2[s]) + measZ * z[s] for s in xrange(len(z))]
-		mean, sigma = getStats(overheadSample)		
+		mean, err = getStats(overheadSample)		
 		means.append(mean)
-		errors.append(sigma)
+		errors.append(err)
 		
 	return X, means, errors
 
@@ -327,9 +327,9 @@ def overhead12(data, meas1, meas2, meas3, meas4):
 		z4 = data[p]['prepA_Z4']
 		
 		overheadSample = [calc(x1[s],z1[s],x2[s],z2[s],x3[s],z3[s],x4[s],z4[s]) for s in xrange(len(x1))]
-		mean, sigma = getStats(overheadSample)		
+		mean, err = getStats(overheadSample)		
 		means.append(mean)
-		errors.append(sigma)
+		errors.append(err)
 
 	return X, means, errors
 
@@ -394,27 +394,22 @@ if __name__ == '__main__':
 	labels = ['Overlap-4', 'Steane-4', 'Steane-12']
 	plotList(X, yList, yErrList, filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
 	
-	raise Exception
-	
 	cnotsX = 77*2 + 23
 	cnotsZ = 23
 	cnots1 = cnotsX
 	cnots2 = 77 + 23
 	cnots3 = 23
 	cnots4 = cnots3
-
-	X4, overheadRandom = overhead4(dataSteaneRandom, cnotsX, cnotsZ)	
-	X6, overheadReic = overhead6(dataReich, cnotsX, cnotsZ)
-	X12, overheadSteane12 = overhead12(dataSteane12, cnots1, cnots2, cnots3, cnots4)
+	
+	X, meanSteane4, errorSteane4 = overhead4(dataSteaneRandom, cnotsX, cnotsZ)	
+	X, meanSteane12, errorSteane12 = overhead12(dataSteane12, cnots1, cnots2, cnots3, cnots4)
 	
 	cnotsX = 57*2 + 23
-	X4, overheadOverlap = overhead4(dataOverlap, cnotsX, cnotsZ)
+	X, meanOverlap, errorOverlap = overhead4(dataOverlap, cnotsX, cnotsZ)
 	
-	yList = [overheadRandom, overheadOverlap, overheadReic, overheadSteane12]
-	labels = ['Random-4', 'Overlap-4', 'Opt-6', 'Steane-12']
-	print X[5]
-	print [y[5] for y in yList]
-	plotList(X4, yList, 'plotCnotOverheadCompare', labelList=labels, xLabel='p', yLabel='CNOTs', legendLoc='upper left')
+	yList = [meanOverlap, meanSteane4, meanSteane12]
+	yErrList = [errorOverlap, errorSteane4, errorSteane12]
+	plotList(X, yList, 'plotCnotOverheadCompare', labelList=labels, xLabel='p', yLabel='CNOTs', legendLoc='upper left')
 	
 	cnotsX = 77*2 + 23
 	X4, overheadRandom = overhead4(dataSteaneRandom_noRests, cnotsX, cnotsZ)	
