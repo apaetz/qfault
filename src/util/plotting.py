@@ -120,7 +120,7 @@ def plotPolyList(polyList, xMin, xMax,
 	
 	plt.hold(False)
 	
-def plotList(X, yList, filename=None, labelList=None, xLabel='', yLabel='', legendLoc='upper right'):
+def plotList(X, yList, yErrList=None, filename=None, labelList=None, xLabel='', yLabel='', legendLoc='upper right'):
 	
 	#fontProps.set_size('small')
 	plt.hold(False)
@@ -131,17 +131,18 @@ def plotList(X, yList, filename=None, labelList=None, xLabel='', yLabel='', lege
 	plt.ylabel(yLabel)
 	plt.xlabel(xLabel)
 	
+	if None == yErrList:
+		yErrList = [None] * len(yList)
+		
+	if None == labelList:
+		labelList = [None] * len(yList)
+	
 	handles = []
 	for e, Y in enumerate(yList):
 		
 		ls = lineStyle(e)
-		if None != labelList:
-			print labelList[e], Y
-			handles.append(plt.plot(X,Y, ls, label=labelList[e]))
-		else:
-			print e+1, Y			
-			handles.append(plt.plot(X,Y, ls))
-			
+		print labelList[e], Y, yErrList[e]
+		handles.append(plt.errorbar(X,Y, yerr=yErrList[e], fmt=ls, label=labelList[e]))		
 
 
 

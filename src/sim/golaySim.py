@@ -472,57 +472,68 @@ def prepareAncilla12(errorRates, name='a0', eigenstate='Z'):
 	
 	roundOrder = range(7)
 	
+	
+	attempts = {
+			 'prepA0': 0,
+			 'prepA0v': 0,
+			 'prepA2': 0,
+			 'prepA4': 0,
+			 'prepA': 0,
+			 'prepA_X1': 0,
+			 'prepA_Z1': 0,
+			 'prepA_X2': 0,
+			 'prepA_Z2': 0,
+			 'prepA_X3': 0,
+			 'prepA_Z3': 0,
+			 'prepA_X4': 0,
+			 'prepA_Z4': 0
+			 }
+	
 	def prepUnverified(blockName):
 		return lambda: prepareUnverifiedAncilla(errorRates, roundOrder, cnots, blockName)
 
 	def prepA_1(XorZ, name1, name2):
-		errors, attempts = prepareAndVerify(errorRates, XorZ, 
+		errors, numAttempts = prepareAndVerify(errorRates, XorZ, 
 										    name1, prepUnverified(name1), 
 											name2, prepUnverified(name2))
 		key = 'prepA_' + XorZ + '1'
-		prepStats[key]['attempts'] += attempts
-		prepStats[key]['success'] += 1
+		attempts[key] += numAttempts
 		return errors
 	def prepA_2(XorZ):
-		errors, attempts = prepareAndVerify(errorRates, XorZ, 
+		errors, numAttempts = prepareAndVerify(errorRates, XorZ, 
 										    'a1', lambda: prepA_1(XorZ, 'a1', 'a2'), 
 											'a3', prepUnverified('a3'))
 		key = 'prepA_' + XorZ + '2'
-		prepStats[key]['attempts'] += attempts
-		prepStats[key]['success'] += 1
+		attempts[key] += numAttempts
 		return errors
 	def prepA_Z3():
-		errors, attempts = prepareAndVerify(errorRates, 'Z', 
+		errors, numAttempts = prepareAndVerify(errorRates, 'Z', 
 										    'a0', lambda: prepA_1('X', 'a0', 'a1'), 
 											'a2', lambda: prepA_1('X', 'a2', 'a3'))
 		key = 'prepA_Z3'
-		prepStats[key]['attempts'] += attempts
-		prepStats[key]['success'] += 1
+		attempts[key] += numAttempts
 		return errors
 	
 	def prepA_X3():
-		errors, attempts = prepareAndVerify(errorRates, 'X', 
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
 										    'a0', prepA_Z3, 
 											'a1', lambda: prepA_1('Z', 'a1', 'a2'))
 		key = 'prepA_X3'
-		prepStats[key]['attempts'] += attempts
-		prepStats[key]['success'] += 1
+		attempts[key] += numAttempts
 		return errors
 	def prepA_Z4():
-		errors, attempts = prepareAndVerify(errorRates, 'Z', 
+		errors, numAttempts = prepareAndVerify(errorRates, 'Z', 
 										    'a0', prepA_X3, 
 											'a1', lambda: prepA_2('X'))
 		key = 'prepA_Z4'
-		prepStats[key]['attempts'] += attempts
-		prepStats[key]['success'] += 1
+		attempts[key] += numAttempts
 		return errors
 	def prepA_X4():
-		errors, attempts = prepareAndVerify(errorRates, 'X', 
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
 										    'a0', prepA_Z4, 
 											'a1', lambda: prepA_2('Z'))
 		key = 'prepA_X4'
-		prepStats[key]['attempts'] += attempts
-		prepStats[key]['success'] += 1
+		attempts[key] += numAttempts
 		return errors			
 	
 	errors = prepA_X4()
@@ -532,7 +543,7 @@ def prepareAncilla12(errorRates, name='a0', eigenstate='Z'):
 	else: #eigenstate == 'X' --- assuming that the error model is symmetrical, we can just swap the X and Z errors
 		errors = {'X':{name:errors['Z']['a0']}, 'Z':{name:errors['X']['a0']}}
 	#print "prepared ancilla:", util.counterUtils.errorsToStr(errors, 23, True)	
-	return errors
+	return errors, attempts
 	
 
 def prepareAncillaNew(errorRates, name='a0', eigenstate='Z'):
@@ -659,13 +670,13 @@ def prepareAncillaOverlap(errorRates, name='a0', eigenstate='Z'):
 	Note that it assumes that the error model is symmetrical under X and Z errors.  Thus to prepare an encoded 
 	|+>, it prepares an encoded |0> and swaps the X and Z errors.  
 	"""
-	from golay import GolayOverlap
+	from golay import overlap
 	
-	perms = GolayOverlap.bestXZset
-	cnotsA0 = GolayOverlap.getOverlapPrep(perms[0][0])
-	cnotsA1 = GolayOverlap.getOverlapPrep(perms[0][1])
-	cnotsA2 = GolayOverlap.getOverlapPrep(perms[1][0])
-	cnotsA3 = GolayOverlap.getOverlapPrep(perms[1][1])
+	perms = overlap.bestXZset
+	cnotsA0 = overlap.getOverlapPrep(perms[0][0])
+	cnotsA1 = overlap.getOverlapPrep(perms[0][1])
+	cnotsA2 = overlap.getOverlapPrep(perms[1][0])
+	cnotsA3 = overlap.getOverlapPrep(perms[1][1])
 
 	return prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name, eigenstate)
 
@@ -677,33 +688,34 @@ def prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name='a0', e
 	"""
 	rounds = range(7)
 	
+	attempts = {'prepA0': 0,
+			    'prepA2': 0,
+			    'prepA': 0}
+	
 	def prepA0():
-		errors, attempts = prepareAndVerify(errorRates, 'X', 
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
 			'a0', lambda: prepareUnverifiedAncilla(errorRates, rounds, cnotsA0, 'a0'), 
 			'a1', lambda: prepareUnverifiedAncilla(errorRates, rounds, cnotsA1, 'a1'),
 			includeMeasRest=True)
-		prepStats['prepA0']['attempts'] += attempts
-		prepStats['prepA0']['success'] += 1
+		attempts['prepA0'] += numAttempts
 		return errors
 	def prepA2():
-		errors, attempts = prepareAndVerify(errorRates, 'X', 
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
 			'a2', lambda: prepareUnverifiedAncilla(errorRates, rounds, cnotsA2, 'a2'), 
 			'a3', lambda: prepareUnverifiedAncilla(errorRates, rounds, cnotsA3, 'a3'),
 			includeMeasRest=True)
-		prepStats['prepA2']['attempts'] += attempts
-		prepStats['prepA2']['success'] += 1
+		attempts['prepA2'] += numAttempts
 		return errors
 		
-	errors, attempts = prepareAndVerify(errorRates, 'Z', 'a0', prepA0, 'a2', prepA2, includeMeasRest=True)
-	prepStats['prepA']['attempts'] += attempts
-	prepStats['prepA']['success'] += 1
+	errors, numAttempts = prepareAndVerify(errorRates, 'Z', 'a0', prepA0, 'a2', prepA2, includeMeasRest=True)
+	attempts['prepA'] += numAttempts
 	
 	if eigenstate == 'Z':	# might as well clean out the other ancilla blocks
 		errors = {'X':{name:errors['X']['a0']}, 'Z':{name:errors['Z']['a0']}}
 	else: #eigenstate == 'X' --- assuming that the error model is symmetrical, we can just swap the X and Z errors
 		errors = {'X':{name:errors['Z']['a0']}, 'Z':{name:errors['X']['a0']}}
 	#print "prepared ancilla:", util.counterUtils.errorsToStr(errors, 23, True)	
-	return errors
+	return errors, attempts
 
 
 
