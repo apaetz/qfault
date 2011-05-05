@@ -9,6 +9,7 @@ from settings.noise import NoiseModelZeroSympy, TransformedNoiseModelXSympy, \
 	TransformedNoiseModelZSympy
 import logging
 import math
+from counting import levelOne
 
 logger = logging.getLogger('settings')
 
@@ -73,20 +74,22 @@ def getTransformedSettings(settings, GammaX, weightsX, GammaZ, weightsZ, gMax):
 			weightsX[key] = int(math.ceil(weightsX[key]))
 		for key in weightsZ:
 			weightsZ[key] = int(math.ceil(weightsZ[key]))
+			
+		labels = levelOne.maligEventLabels
 		
-		prepZ = weightsX['prepZ']
-		measZ = weightsX['measZ']
-		rest0 = weightsX['rest0']
-		cnotIX = weightsX['cnotIX']
-		cnotXI = weightsX['cnotXI']
-		cnotXX = weightsX['cnotXX']
+		prepZ = weightsX[labels['prep0']]
+		measZ = weightsX[labels['measZ']]
+		rest0 = weightsX[labels['rest0']]
+		cnotIX = weightsX[labels['IX']]
+		cnotXI = weightsX[labels['XI']]
+		cnotXX = weightsX[labels['XX']]
 		
-		prepX = weightsZ['prepX']
-		measX = weightsZ['measX']
-		restPlus = weightsZ['rest+']
-		cnotIZ = weightsZ['cnotIZ']
-		cnotZI = weightsZ['cnotZI']
-		cnotZZ = weightsZ['cnotZZ']
+		prepX = weightsZ[labels['prep+']]
+		measX = weightsZ[labels['measX']]
+		restPlus = weightsZ[labels['rest+']]
+		cnotIZ = weightsZ[labels['IZ']]
+		cnotZI = weightsZ[labels['ZI']]
+		cnotZZ = weightsZ[labels['ZZ']]
 		
 		
 		# Adjust the noise settings.
