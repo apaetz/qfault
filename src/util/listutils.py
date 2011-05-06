@@ -47,6 +47,12 @@ def mulLists(*lists):
 	'''
 	return [reduce(operator.mul, (l[i] for l in lists), 1) for i in xrange(len(lists[0]))]
 
+def mul(list):
+	'''
+	Returns the product of all elements in the list.
+	'''
+	return reduce(operator.mul, list, 1)
+
 def addDicts(*dicts):
 	'''
 	Returns the key-wise sum of the given dictionaries.

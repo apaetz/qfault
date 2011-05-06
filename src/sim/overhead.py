@@ -1,6 +1,5 @@
 
 import sim.simulateUtils
-import math
 from counting import countParallel
 
 def simAncillaPrep(prepFcn, pMin, pMax, pStep, iters, noRests=False):
@@ -33,17 +32,3 @@ def simAncillaPrep(prepFcn, pMin, pMax, pStep, iters, noRests=False):
 		p += pStep
 		
 	return sampleData
-
-def getStats(sample):
-	N = float(len(sample))
-	mean = sum(sample) / N
-	sampleSigma = math.sqrt(sum((s - mean)**2 for s in sample) / (N-1))
-	sampleErr = sampleSigma / math.sqrt(N)
-	
-	# Use 1.96 for 95% confidence interval
-	return mean, 1.96 * sampleErr 
-
-def printSampleData(data):
-	for p in sorted(data.keys()):
-		stats = [getStats(sample) for sample in data[p].values()]
-		print p, dict(zip(data[p].keys(), stats))
