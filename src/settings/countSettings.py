@@ -110,7 +110,7 @@ def getTransformedSettings(settings, GammaX, weightsX, GammaZ, weightsZ, gMax):
 		settingsVX = settingsVZ.getSubcomponent('vx')
 		
 		# There is no XZ correlation information.
-		settingsVX['kBestVX'] = 0
-		settingsVZ['kBestVZ'] = 0
+		settingsVX['kBest'] = 0
+		settingsVZ['kBest'] = 0
 		
 		return settings	
