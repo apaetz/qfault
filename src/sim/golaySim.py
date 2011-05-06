@@ -664,7 +664,7 @@ def prepareAndVerifyNoPostselect(errorRates, XorZ, a0name, a0prep, a1name, a1pre
 		return errors, attempts
 
 
-def prepareAncillaOverlap(errorRates, name='a0', eigenstate='Z'):
+def prepareAncillaOverlap(errorRates, name='a0', eigenstate='Z', stats=None):
 	"""This will simulate preparation of a verified ancilla.
 	
 	Note that it assumes that the error model is symmetrical under X and Z errors.  Thus to prepare an encoded 
@@ -678,9 +678,9 @@ def prepareAncillaOverlap(errorRates, name='a0', eigenstate='Z'):
 	cnotsA2 = overlap.getOverlapPrep(perms[1][0])
 	cnotsA3 = overlap.getOverlapPrep(perms[1][1])
 
-	return prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name, eigenstate)
+	return prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name, eigenstate, stats)
 
-def prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name='a0', eigenstate='Z'):
+def prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name='a0', eigenstate='Z', stats=None):
 	"""This will simulate preparation of a verified ancilla.
 	
 	Note that it assumes that the error model is symmetrical under X and Z errors.  Thus to prepare an encoded 
@@ -698,6 +698,8 @@ def prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name='a0', e
 			'a1', lambda: prepareUnverifiedAncilla(errorRates, rounds, cnotsA1, 'a1'),
 			includeMeasRest=True)
 		attempts['prepA0'] += numAttempts
+		if stats != None:
+			stats['prepA0'] += [0]*(numAttempts-1) + [1]
 		return errors
 	def prepA2():
 		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
@@ -705,10 +707,14 @@ def prepareAncilla4(cnotsA0, cnotsA1, cnotsA2, cnotsA3, errorRates, name='a0', e
 			'a3', lambda: prepareUnverifiedAncilla(errorRates, rounds, cnotsA3, 'a3'),
 			includeMeasRest=True)
 		attempts['prepA2'] += numAttempts
+		if stats != None:
+			stats['prepA2'] += [0]*(numAttempts-1) + [1]
 		return errors
 		
 	errors, numAttempts = prepareAndVerify(errorRates, 'Z', 'a0', prepA0, 'a2', prepA2, includeMeasRest=True)
 	attempts['prepA'] += numAttempts
+	if stats != None:
+		stats['prepA'] += [0]*(numAttempts-1) + [1] 
 	
 	if eigenstate == 'Z':	# might as well clean out the other ancilla blocks
 		errors = {'X':{name:errors['X']['a0']}, 'Z':{name:errors['Z']['a0']}}
