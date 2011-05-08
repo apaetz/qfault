@@ -328,10 +328,10 @@ def getOverlapPreps(includeRests=True):
 	cnotsA2 = overlap.getOverlapPrep(perms[1][0])
 	cnotsA3 = overlap.getOverlapPrep(perms[1][1])
 	
-	zeroPrepA0 = Locations(randomAncillaZPrep(cnotsA0, range(7), 'A'), 'OverlapGolay0.A0')
-	zeroPrepA1 = Locations(randomAncillaZPrep(cnotsA1, range(7), 'B'), 'OverlapGolay0.A1')
-	zeroPrepA2 = Locations(randomAncillaZPrep(cnotsA2, range(7), 'A'), 'OverlapGolay0.A2')
-	zeroPrepA3 = Locations(randomAncillaZPrep(cnotsA3, range(7), 'B'), 'OverlapGolay0.A3')
+	zeroPrepA0 = Locations(ancillaZPrep(cnotsA0, range(7), 'A'), 'OverlapGolay0.A0')
+	zeroPrepA1 = Locations(ancillaZPrep(cnotsA1, range(7), 'B'), 'OverlapGolay0.A1')
+	zeroPrepA2 = Locations(ancillaZPrep(cnotsA2, range(7), 'A'), 'OverlapGolay0.A2')
+	zeroPrepA3 = Locations(ancillaZPrep(cnotsA3, range(7), 'B'), 'OverlapGolay0.A3')
 	
 	
 	if not includeRests:
