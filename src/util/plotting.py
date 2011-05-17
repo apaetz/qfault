@@ -80,7 +80,7 @@ def lineStyle(i):
 	return str(color) + str(marker) + '-'
 
 def plotPolyList(polyList, xMin, xMax, 
-			filename=None, labelList=None, xLabel='', yLabel='', legendLoc='upper right', 
+			filename=None, labelList=None, xLabel='', yLabel='', yscale='linear', legendLoc='upper right', 
 			numPoints=100):
 	
 	
@@ -114,6 +114,7 @@ def plotPolyList(polyList, xMin, xMax,
 	# Place legend at the right side of the axes viewport
 	#plt.figlegend(handles, labelList, loc='upper right')
 	plt.legend(loc=legendLoc)
+	plt.yscale(yscale)
 	plt.show()
 	if filename != None:
 		plt.savefig(filename)

@@ -264,6 +264,13 @@ def countXVerifyXZ(zeroPrepA, zeroPrepB, settings, noise):
 
 
 
+def getXZCorrections(zeroPrepA, zeroPrepB, settings, noise, zTotals):
+	xzResult = countXVerifyXZ(zeroPrepA, zeroPrepB, settings, noise)
+	zRejected = zCountsFromXZCounts(xzResult.countsRejected)
+	
+	corrections, _ = rescaleXZCounts(zRejected, xzResult.locTotals, zTotals, 'Z', noise)
+	return corrections
+
 @fetchable
 def countXVerifyZOnly(zeroPrepA, zeroPrepB, settings, noise):
 	'''
@@ -301,11 +308,7 @@ def countXVerifyZOnly(zeroPrepA, zeroPrepB, settings, noise):
 	kBest = settings['kBest']
 	
 	if kBest > 0:
-		xzResult = countXVerifyXZ(zeroPrepA, zeroPrepB, settings, noise)
-		zRejected = zCountsFromXZCounts(xzResult.countsRejected)
-		corrections, err = rescaleXZCounts(zRejected, xzResult.locTotals, goodResult.locTotals, 'Z', noise)
-		logger.debug('XZ corrections: %s', [sum(c) for c in corrections])
-		logger.debug('Correction error: %s', err)
+		corrections = getXZCorrections(zeroPrepA, zeroPrepB, settings, noise, goodResult.locTotals)
 		
 		# Subtract the XZ corrections
 		goodCounts = goodResult.counts
