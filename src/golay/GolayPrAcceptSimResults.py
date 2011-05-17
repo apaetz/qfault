@@ -4,6 +4,7 @@ Created on Nov 22, 2010
 @author: Adam
 '''
 from util.plotting import plotList
+from sim.SimulateAcceptanceRates import getStats, simOverlapPrep
 
 
 
@@ -264,16 +265,17 @@ def qubitOverhead(qubitTime, prAccept):
 
 def overhead4(data, measX, measZ):
 	
-	prAcceptList = [getyvals(data, i) for i in range(1,4)]
-	X = getxvals(data)
+	X = sorted(data.keys())
 	
 	overheadList = []
-	for p in range(len(X)):
-		x1 = measX / prAcceptList[0][p]
-		x2 = measX / prAcceptList[1][p]
-		z = (x1 + x2 + measZ) / prAcceptList[2][p]
+	for p in X:
+		x1 = data[p]['prepA0']
+		x2 = data[p]['prepA2']
+		z = data[p]['prepA']
 		
-		overheadList.append(z)
+		overheadSample = [measX * (x1[s] + x2[s]) + measZ * z[s] for s in xrange(len(z))]
+		mean, sigma = getStats(overheadSample)		
+		overheadList.append((mean,sigma))
 		
 	return X, overheadList
 
@@ -329,9 +331,14 @@ if __name__ == '__main__':
 #	plot(dataSteane12, 'prAcceptSteane12')
 #	plot(dataSteane12_noRests, 'prAcceptSteane12_noRests')
 	
+	pMin = 5e-4
+	pMax = 2e-3
+	pStep = 1e-4
+	iters = 50	
+	
 	dataList = [ ('Random-4', dataSteaneRandom),
 				 ('RandomSteaneNR', dataSteaneRandom_noRests),
-				 ('Overlap-4', dataOverlap),
+				 ('Overlap-4', simOverlapPrep(pMin, pMax, pStep, iters)),
 				 ('OverlapNR', dataOverlap_noRests),
 				 ('Opt-6', dataReich),
 				 ('ReichardtNR', dataReich_noRests),
@@ -339,17 +346,17 @@ if __name__ == '__main__':
 				 ('Steane12NR', dataSteane12_noRests)
 				]
 	
-	ylist = []
-	labels = []
-	X = [0.0005 + 0.0001*i for i in range(21)]
-	for name, data in dataList:
-		if name.endswith('NR'):
-			continue
-		ylist.append(getyvals(data, -1))
-		labels.append(name)
-		
-	print X[5]
-	print [y[5] for y in ylist]
+#	ylist = []
+#	labels = []
+#	X = [0.0005 + 0.0001*i for i in range(21)]
+#	for name, data in dataList:
+#		if name.endswith('NR'):
+#			continue
+#		ylist.append(getyvals(data, -1))
+#		labels.append(name)
+#		
+#	print X[5]
+#	print [y[5] for y in ylist]
 	#plotList(X, ylist, 'plotComparePrAccept', labelList=labels, xLabel='p', yLabel='Pr[accept]')
 	
 	qubitTimeX = 46*9 + 23
@@ -358,8 +365,15 @@ if __name__ == '__main__':
 	qubitTime2 = 23*12
 	qubitTime3 = qubitTimeZ
 	qubitTime4 = qubitTime3
+	
+	X4, overheadOverlap = overhead4(simOverlapPrep(pMin, pMax, pStep, iters), qubitTimeX, qubitTimeZ)
+	print X4
+	print overheadOverlap
+	
+	raise Exception
+	
 	X4, overheadRandom = overhead4(dataSteaneRandom, qubitTimeX, qubitTimeZ)
-	X4, overheadOverlap = overhead4(dataOverlap, qubitTimeX, qubitTimeZ)
+
 	X6, overheadReic = overhead6(dataReich, qubitTimeX, qubitTimeZ)
 	X12, overheadSteane12 = overhead12(dataSteane12, qubitTime1, qubitTime2, qubitTime3, qubitTime4)
 	

@@ -162,7 +162,7 @@
 # (I was running the code twice in parallel because my laptop has two CPU cores.)
 #
 from counting.location import Locations
-from golay import GolayOverlap
+from golay import overlap
 from util.counterUtils import locXprep, locZprep, loccnot, locrest, \
 	propagateAllErrors
 
@@ -321,12 +321,12 @@ def ancillaZPrep(schedule, roundPermutation, name='0'):
 	return locations
 
 def getOverlapPreps(includeRests=True):
-	
-	perms = GolayOverlap.bestXZset
-	cnotsA0 = GolayOverlap.getOverlapPrep(perms[0][0])
-	cnotsA1 = GolayOverlap.getOverlapPrep(perms[0][1])
-	cnotsA2 = GolayOverlap.getOverlapPrep(perms[1][0])
-	cnotsA3 = GolayOverlap.getOverlapPrep(perms[1][1])
+
+	perms = overlap.bestXZset
+	cnotsA0 = overlap.getOverlapPrep(perms[0][0])
+	cnotsA1 = overlap.getOverlapPrep(perms[0][1])
+	cnotsA2 = overlap.getOverlapPrep(perms[1][0])
+	cnotsA3 = overlap.getOverlapPrep(perms[1][1])
 	
 	zeroPrepA0 = Locations(randomAncillaZPrep(cnotsA0, range(7), 'A'), 'OverlapGolay0.A0')
 	zeroPrepA1 = Locations(randomAncillaZPrep(cnotsA1, range(7), 'B'), 'OverlapGolay0.A1')

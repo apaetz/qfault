@@ -1,32 +1,12 @@
-from util.counterUtils import SubsetIterator
-from golayCode import permuteList, permuteListByInverse
-#from GolayOverlapSuperXpairs import superXpairs
 from counting.countErrors import reduceAllErrorSyndromesZero, countErrors1Block
-from settings.noise import NoiseModelXZSympy
 from counting.location import Locations
-from counting.countParallel import configureMultiProcess
-
-prep = [[[9, 22], [4, 21], [7, 20], [1, 19], [3, 17], [5, 16], [0, 14], [6, 13]], [[4, 22], [8, 21], [2, 20], [6, 19], [9, 16], [1, 15], [7, 14], [10, 13], [3, 12]], [[20, 17], [19, 16], [14, 15], [5, 22], [3, 21], [8, 18], [0, 13], [10, 12], [2, 11]], [[10, 22], [9, 21], [8, 20], [6, 17], [4, 15], [2, 12], [13, 11]], [[22, 20], [21, 19], [17, 18], [16, 14], [15, 12], [5, 11], [8, 13]], [[1, 22], [0, 21], [7, 19], [5, 18], [9, 17], [2, 16], [8, 15], [10, 14], [3, 13], [4, 11]], [[3, 22], [2, 21], [0, 18], [10, 17], [8, 16], [5, 15], [1, 13]]]  # schedule from Appendix A of Adam's project
-permA1 = [18, 15, 16, 20, 0, 17, 22, 1, 13, 11, 12, 14, 4, 2, 6, 19, 21, 9, 7, 8, 3, 10, 5]
-
-permsA2A3 = [
-([20, 21, 22, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], [2, 8, 22, 0, 7, 6, 18, 4, 12, 9, 11, 16, 19, 1, 17, 13, 3, 15, 21, 14, 10, 5, 20]),
-([20, 21, 22, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], [16, 6, 14, 18, 2, 5, 13, 8, 1, 19, 12, 11, 15, 21, 3, 9, 4, 10, 0, 22, 7, 20, 17]),
-([20, 21, 22, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], [0, 19, 14, 22, 15, 9, 21, 3, 5, 10, 17, 7, 11, 4, 1, 6, 2, 8, 18, 16, 20, 13, 12]),
-([2, 8, 22, 0, 7, 6, 18, 4, 12, 9, 11, 16, 19, 1, 17, 13, 3, 15, 21, 14, 10, 5, 20], [20, 21, 22, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]),
-([2, 8, 22, 0, 7, 6, 18, 4, 12, 9, 11, 16, 19, 1, 17, 13, 3, 15, 21, 14, 10, 5, 20], [0, 19, 14, 22, 15, 9, 21, 3, 5, 10, 17, 7, 11, 4, 1, 6, 2, 8, 18, 16, 20, 13, 12]),
-([16, 6, 14, 18, 2, 5, 13, 8, 1, 19, 12, 11, 15, 21, 3, 9, 4, 10, 0, 22, 7, 20, 17], [20, 21, 22, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]),
-([0, 19, 14, 22, 15, 9, 21, 3, 5, 10, 17, 7, 11, 4, 1, 6, 2, 8, 18, 16, 20, 13, 12], [20, 21, 22, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]),
-([0, 19, 14, 22, 15, 9, 21, 3, 5, 10, 17, 7, 11, 4, 1, 6, 2, 8, 18, 16, 20, 13, 12], [2, 8, 22, 0, 7, 6, 18, 4, 12, 9, 11, 16, 19, 1, 17, 13, 3, 15, 21, 14, 10, 5, 20]),
-]
+from golay.overlap import prep
+from golayCode import permuteList, permuteListByInverse
+from settings.noise import NoiseModelXZSympy
+from util.counterUtils import SubsetIterator
+#from GolayOverlapSuperXpairs import superXpairs
 
 
-bestXZset = (
-	([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22], 
-	 [20, 0, 11, 19, 8, 4, 15, 12, 22, 18, 16, 2, 14, 7, 1, 10, 9, 3, 21, 5, 13, 17, 6]), 
-	([14, 10, 11, 13, 15, 7, 12, 3, 19, 20, 8, 22, 16, 18, 6, 1, 2, 21, 4, 0, 5, 9, 17], 
-	 [12, 0, 10, 11, 17, 3, 1, 19, 8, 6, 18, 20, 4, 2, 14, 7, 13, 9, 22, 5, 15, 16, 21])			
-)
 
 
 
@@ -43,17 +23,6 @@ bestXZset = (
 
 mask11 = (2**11) - 1
 
-
-def getOverlapPrep(perm):
-	permPrep = []
-	for round in prep:
-		permRound = []
-		for src, tgt in round:
-			permCnot = [perm[src], perm[tgt]]
-			permRound.append(permCnot)
-		permPrep.append(permRound)
-
-	return permPrep	
 
 
 
@@ -273,6 +242,7 @@ if __name__ == '__main__':
 	from util.listutils import nonZeroIndices
 	from golay import golayCode
 	
+	from counting.countParallel import configureMultiProcess
 	configureMultiProcess(1)
 	
 	from golay.ancillaPrep import randomAncillaZPrep#, ancilla0checkXerrors
