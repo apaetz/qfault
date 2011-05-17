@@ -1,16 +1,15 @@
 from sim.golaySim import prepareAncilla12, prepareAncillaOverlap, \
-	prepareAncillaNew
-from sim.overhead import simAncillaPrep, getStats
+	prepareAncillaNew, prepareAncilla12_alt, prepareAncilla12_alt2
+from sim.overhead import simAncillaPrep
+from util import stats, listutils
 from util.cache import fetchable
 from util.plotting import plotList
+from util.stats import getStats
 import logging
-import numpy
-import math
-from util import stats, listutils
+import sys
 
 @fetchable
 def simOverlapPrep(pMin, pMax, pStep, iters, noRests=False):
-	stats = {'prepA0':0, 'prepA2':0, 'prepA':0}
 	return simAncillaPrep(prepareAncillaOverlap, pMin, pMax, pStep, iters, noRests)
 
 @fetchable
@@ -20,6 +19,15 @@ def simSteane4Prep(pMin, pMax, pStep, iters, noRests=False):
 @fetchable
 def simSteane12Prep(pMin, pMax, pStep, iters, noRests=False):
 	return simAncillaPrep(prepareAncilla12, pMin, pMax, pStep, iters, noRests)
+
+@fetchable
+def simSteane12AltPrep(pMin, pMax, pStep, iters, noRests=False):
+	return simAncillaPrep(prepareAncilla12_alt, pMin, pMax, pStep, iters, noRests)
+
+@fetchable
+def simSteane12Alt2Prep(pMin, pMax, pStep, iters, noRests=False):
+	return simAncillaPrep(prepareAncilla12_alt2, pMin, pMax, pStep, iters, noRests)
+
 
 def overhead4(data, measX, measZ):
 	
@@ -118,6 +126,74 @@ def prAccept12(data):
 		
 	return X, means, errors
 
+def prAccept12_alt(data):
+	
+	X = sorted(data.keys())
+	
+	means = []
+	errors = []
+	for p in X:
+		x0Attempts = data[p]['prepAX0']
+		x1Attempts = data[p]['prepAX1']
+		x2Attempts = data[p]['prepAX2']
+		z0Attempts = data[p]['prepAZ0']
+		z1Attempts = data[p]['prepAZ1']
+		
+		# For each verification stage, calculate the total number of attempts
+		# and the number of successes.
+		z1 = (sum(z1Attempts), iters)
+		z0 = (sum(z0Attempts), z1[0])
+		x2 = (sum(x2Attempts), 2*z0[0] + z1[0])
+		x1 = (sum(x1Attempts), x2[0])
+		x0 = (sum(x0Attempts), x1[0])		
+		attSucc = [x0,x1,x2,z0,z1]
+		
+		samples = [[1]*succ + [0]*(att-succ) for att,succ in attSucc]
+		sampleMeans = map(stats.mean, samples)
+		stds = map(stats.std, samples)
+		stdErrs = [stats.stdErr(stds[i], attSucc[i][0]) for i in xrange(len(stds))]
+		
+		err95 = stats.stdProduct(stdErrs, sampleMeans)
+		
+		means.append(listutils.mul(sampleMeans))
+		errors.append(err95)
+		
+	return X, means, errors
+
+def prAccept12_alt2(data):
+	
+	X = sorted(data.keys())
+	
+	means = []
+	errors = []
+	for p in X:
+		z1Attempts = data[p]['prepAZ1']
+		z2Attempts = data[p]['prepAZ2']
+		x1Attempts = data[p]['prepAX1']
+		x2Attempts = data[p]['prepAX2']
+		x3Attempts = data[p]['prepAX3']
+		
+		# For each verification stage, calculate the total number of attempts
+		# and the number of successes.
+		x3 = (sum(x3Attempts), iters)
+		x2 = (sum(x2Attempts), x3[0])
+		x1 = (sum(x1Attempts), x2[0])
+		z2 = (sum(z2Attempts), x3[0] + x2[0] + 2*x1[0])
+		z1 = (sum(z1Attempts), z2[0])		
+		attSucc = [z1,z2,x1,x2,x3]
+		
+		samples = [[1]*succ + [0]*(att-succ) for att,succ in attSucc]
+		sampleMeans = map(stats.mean, samples)
+		stds = map(stats.std, samples)
+		stdErrs = [stats.stdErr(stds[i], attSucc[i][0]) for i in xrange(len(stds))]
+		
+		err95 = stats.stdProduct(stdErrs, sampleMeans)
+		
+		means.append(listutils.mul(sampleMeans))
+		errors.append(err95)
+		
+	return X, means, errors
+
 
 #
 #def overhead6(data, measX, measZ):
@@ -142,6 +218,9 @@ def overhead12(data, meas1, meas2, meas3, meas4):
 
 	X = sorted(data.keys())
 	
+	print 'meas:'
+	print meas1,meas2,meas3,meas4
+	
 	def calc(x1,z1,x2,z2,x3,z3,x4,z4):
 		o1 = meas1 * (x1 + z1)
 		o2 = meas2 * (x2 + z2)
@@ -161,35 +240,98 @@ def overhead12(data, meas1, meas2, meas3, meas4):
 		z3 = data[p]['prepA_Z3']
 		x4 = data[p]['prepA_X4']
 		z4 = data[p]['prepA_Z4']
+				
+		if p == 0:
+			print 'p=0:'
+			print x1[0],x2[0],x3[0],x4[0],z1[0],z2[0],z3[0],z4[0]
+		
 		
 		overheadSample = [calc(x1[s],z1[s],x2[s],z2[s],x3[s],z3[s],x4[s],z4[s]) for s in xrange(len(x1))]
+		mean, _, err = getStats(overheadSample)
+				
+		means.append(mean)
+		errors.append(err)
+
+	return X, means, errors
+
+def overhead12_alt(data, measVX0, measVX1, measVZ):
+
+	X = sorted(data.keys())
+	
+	def calc(x0,x1,x2,z0,z1):
+		o1 = measVX0 * x0
+		o2 = measVX1 * (x1 + x2)
+		o3 = measVZ * (z0 + z1)
+		
+		return o1 + o2 + o3
+	
+	means = []
+	errors = []
+	for p in X:
+		x0 = data[p]['prepAX0']
+		x1 = data[p]['prepAX1']
+		x2 = data[p]['prepAX2']
+		z0 = data[p]['prepAZ0']
+		z1 = data[p]['prepAZ1']
+		
+		overheadSample = [calc(x0[s],x1[s],x2[s],z0[s],z1[s]) for s in xrange(len(x1))]
 		mean, _, err = getStats(overheadSample)		
 		means.append(mean)
 		errors.append(err)
 
 	return X, means, errors
 
+def overhead12_alt2(data, measVZ0, measVZ1, measVX):
 
-def qubitOverhead(samplesOverlap, samplesSteane4, samplesSteane12):
+	X = sorted(data.keys())
+	
+	def calc(z1,z2,x1,x2,x3):
+		o1 = measVZ0 * z1
+		o2 = measVZ1 * z2
+		o3 = measVX * (x1 + x2 + x3)
+		
+		return o1 + o2 + o3
+	
+	means = []
+	errors = []
+	for p in X:
+		z1 = data[p]['prepAZ1']
+		z2 = data[p]['prepAZ2']
+		x1 = data[p]['prepAX1']
+		x2 = data[p]['prepAX2']
+		x3 = data[p]['prepAX3']
+		
+		overheadSample = [calc(z1[s],z2[s],x1[s],x2[s],x3[s]) for s in xrange(len(x1))]
+		mean, _, err = getStats(overheadSample)		
+		means.append(mean)
+		errors.append(err)
+
+	return X, means, errors
+
+def qubitOverhead(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12Alt,samplesSteane12Alt2):
 	# TODO: would be better to extract this information directly from the
 	# prep circuits.
-	qubitTimeX = 46*9 + 23
-	qubitTimeZ = 46*2
+	prepTime = 23*8
+	verifyTime = 46*2 + 23
+	qubitTimeX = 2*prepTime + verifyTime
+	qubitTimeZ = verifyTime
 	qubitTime1 = qubitTimeX
-	qubitTime2 = 23*12
+	qubitTime2 = 23*8 + qubitTimeZ
 	qubitTime3 = qubitTimeZ
 	qubitTime4 = qubitTime3
 		
 	_, meanOverlap, errorOverlap = overhead4(samplesOverlap, qubitTimeX, qubitTimeZ)
 	_, meanSteane4, errorSteane4 = overhead4(samplesSteane4, qubitTimeX, qubitTimeZ)
-	X, meanSteane12, errorSteane12 = overhead12(samplesSteane12, qubitTime1, qubitTime2, qubitTime3, qubitTime4)
+	_, meanSteane12, errorSteane12 = overhead12(samplesSteane12, qubitTime1, qubitTime2, qubitTime3, qubitTime4)
+	_, meanSteane12Alt, errorSteane12Alt = overhead12_alt(samplesSteane12Alt, qubitTimeX, qubitTime2, qubitTimeZ)
+	X, meanSteane12Alt2, errorSteane12Alt2 = overhead12_alt2(samplesSteane12Alt2, qubitTimeX, qubitTime2, qubitTimeZ)
 			
-	yList = [meanOverlap, meanSteane4, meanSteane12]
-	yErrList = [errorOverlap, errorSteane4, errorSteane12]
+	yList = [meanOverlap, meanSteane4, meanSteane12, meanSteane12Alt,meanSteane12Alt2]
+	yErrList = [errorOverlap, errorSteane4, errorSteane12, errorSteane12Alt,errorSteane12Alt2]
 	
 	return X, yList, yErrList	
 
-def cnotOverhead(samplesOverlap, samplesSteane4, samplesSteane12):
+def cnotOverhead(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12Alt,samplesSteane12Alt2):
 
 	cnotsX = 77*2 + 23
 	cnotsZ = 23
@@ -200,21 +342,25 @@ def cnotOverhead(samplesOverlap, samplesSteane4, samplesSteane12):
 	
 	_, meanSteane4, errorSteane4 = overhead4(samplesSteane4, cnotsX, cnotsZ)	
 	_, meanSteane12, errorSteane12 = overhead12(samplesSteane12, cnots1, cnots2, cnots3, cnots4)
+	_, meanSteane12Alt, errorSteane12Alt = overhead12_alt(samplesSteane12Alt, cnotsX, cnots2, cnotsZ)
+	_, meanSteane12Alt2, errorSteane12Alt2 = overhead12_alt2(samplesSteane12Alt2, cnotsX, cnots2, cnotsZ)
 	
 	cnotsX = 57*2 + 23
 	X, meanOverlap, errorOverlap = overhead4(samplesOverlap, cnotsX, cnotsZ)
 	
-	yList = [meanOverlap, meanSteane4, meanSteane12]
-	yErrList = [errorOverlap, errorSteane4, errorSteane12]
+	yList = [meanOverlap, meanSteane4, meanSteane12, meanSteane12Alt, meanSteane12Alt2]
+	yErrList = [errorOverlap, errorSteane4, errorSteane12, errorSteane12Alt, errorSteane12Alt2]
 	
 	return X, yList, yErrList
 
-def prAccept(samplesOverlap, samplesSteane4, samplesSteane12):
+def prAccept(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12Alt,samplesSteane12Alt2):
 	_, meanOverlap, errorOverlap = prAccept4(samplesOverlap)
 	_, meanSteane4, errorSteane4 = prAccept4(samplesSteane4)
-	X, meanSteane12, errorSteane12 = prAccept12(samplesSteane12)
+	_, meanSteane12, errorSteane12 = prAccept12(samplesSteane12)
+	_, meanSteane12Alt, errorSteane12Alt = prAccept12_alt(samplesSteane12Alt)
+	X, meanSteane12Alt2, errorSteane12Alt2 = prAccept12_alt2(samplesSteane12Alt2)
 		
-	return X, [meanOverlap,meanSteane4,meanSteane12], [errorOverlap,errorSteane4,errorSteane12]
+	return X, [meanOverlap,meanSteane4,meanSteane12,meanSteane12Alt,meanSteane12Alt2], [errorOverlap,errorSteane4,errorSteane12,errorSteane12Alt,errorSteane12Alt2]
 
 
 if __name__ == '__main__':
@@ -224,28 +370,37 @@ if __name__ == '__main__':
 	pStep = 1e-4
 	iters = 100000
 	
+	if len(sys.argv) > 1:
+		from counting import countParallel
+		nslots = int(sys.argv[1])
+		countParallel.configureMultiProcess(nslots)
+	
 	samplesOverlap = simOverlapPrep(pMin, pMax, pStep, iters)
 	samplesSteane4 = simSteane4Prep(pMin, pMax, pStep, iters)
 	samplesSteane12 = simSteane12Prep(pMin, pMax, pStep, iters)
+	samplesSteane12_alt = simSteane12AltPrep(pMin, pMax, pStep, iters)
+	samplesSteane12_alt2 = simSteane12Alt2Prep(pMin, pMax, pStep, iters)
 	
 	samplesNROverlap = simOverlapPrep(pMin, pMax, pStep, iters, noRests=True)
 	samplesNRSteane4 = simSteane4Prep(pMin, pMax, pStep, iters, noRests=True)
 	samplesNRSteane12 = simSteane12Prep(pMin, pMax, pStep, iters, noRests=True)
+	samplesNRSteane12_alt = simSteane12AltPrep(pMin, pMax, pStep, iters, noRests=True)
+	samplesSteane12_alt2 = simSteane12Alt2Prep(pMin, pMax, pStep, iters, noRests=True)
 	
-	labels = ['Overlap-4', 'Steane-4', 'Steane-12']
+	labels = ['Overlap-4', 'Steane-4', 'Steane-12', 'Steane-12 (alt)', 'Steane-12 (alt2)']
 	
-	X, yList, yErrList = qubitOverhead(samplesOverlap, samplesSteane4, samplesSteane12)
-	plotList(X, yList, yErrList, filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
+	X, yList, yErrList = qubitOverhead(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12_alt, samplesSteane12_alt2)
+	plotList(X, yList[:5], yErrList[:5], filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
 
-	X, yList, yErrList = qubitOverhead(samplesNROverlap, samplesNRSteane4, samplesNRSteane12)
+	X, yList, yErrList = qubitOverhead(samplesNROverlap, samplesNRSteane4, samplesNRSteane12, samplesNRSteane12_alt, samplesSteane12_alt2)
 	plotList(X, yList, yErrList, filename='plotQubitOverheadNRCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
 	
 	
-	X, yList, yErrList = cnotOverhead(samplesOverlap, samplesSteane4, samplesSteane12)
-	plotList(X, yList, yErrList, filename='plotCnotOverheadCompare', labelList=labels, xLabel='p', yLabel='CNOTs', legendLoc='upper left')
+	X, yList, yErrList = cnotOverhead(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12_alt, samplesSteane12_alt2)
+	plotList(X, yList[:5], yErrList[:5], filename='plotCnotOverheadCompare', labelList=labels, xLabel='p', yLabel='CNOTs', legendLoc='upper left')
 
-	X, yList, yErrList = cnotOverhead(samplesNROverlap, samplesNRSteane4, samplesNRSteane12)
+	X, yList, yErrList = cnotOverhead(samplesNROverlap, samplesNRSteane4, samplesNRSteane12, samplesNRSteane12_alt, samplesSteane12_alt2)
 	plotList(X, yList, yErrList, filename='plotCnotOverheadNRCompare', labelList=labels, xLabel='p', yLabel='CNOTs', legendLoc='upper left')
 
-	X, pr, err = prAccept(samplesOverlap, samplesSteane4, samplesSteane12)
+	X, pr, err = prAccept(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12_alt,samplesSteane12_alt2)
 	plotList(X, pr, err, filename='plotPrAcceptCompare', labelList=labels, xLabel='p', yLabel='Pr[accept]', legendLoc='upper right')

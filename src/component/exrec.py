@@ -243,47 +243,6 @@ def countCnotExRecParallel(countsLEC, countsECLogical, countsCnot, configs):
 	logger.info('Final Malignant Counts: {0}'.format(mCounts))
 			
 	return mCounts
-	
-	
-def plotCnotExRecDetails(ancillaPairs, settings, gMaxAlt=1.):
-	noise = settings['noise']
-	gMin, gMax = noise['X'].noiseRange()
-	gMax = min(gMaxAlt, gMax)
-	
-	zOnly = exRecZOnly(ancillaPairs, settings)	
-	xOnly = exRecXOnly(ancillaPairs, settings)
-	xMaxes, zMaxes = countCnotExRec(ancillaPairs, settings)
-	
-	badChars = ['.', ',', ' ', ')', '(', '}', '{']
-	pairStr = str(ancillaPairs)
-	for char in badChars:
-		pairStr = pairStr.replace(char, '')
-	
-	errorStrX = ['IX', 'XI', 'XX']
-	errorStrZ = ['IZ', 'ZI', 'ZZ']
-	ecLabels = ['--', '-B', 'A-', 'AB', 'max']
-	
-	def plotDetail(polys, filename, error, ylabel='', legend='upper left'):
-		plotPolyList(polys, gMin, gMax, filename, labelList=ecLabels, numPoints=20, legendLoc=legend, xLabel=r'$\gamma$', yLabel=ylabel)
-		
-	for error in reversed(range(3)):
-		esX = errorStrX[error]
-		prBadXList = [result.prBad for result in xOnly[error]]
-		plotDetail(prBadXList, 'plot-prBad-cnot-' + esX + pairStr, error, ylabel='Pr[bad]')
-		polysX = [countResultAsPoly(r, noise['X']) for r in xOnly[error]] + [xMaxes[error]]
-		plotDetail(polysX, 'plot-cnot-exrec-malig-' + esX + pairStr, error, ylabel=r'Pr[mal$_{' + esX + r'}$]')
-
-		#print 'Pr[bad](0.00014)=', [p(0.00014) for p in prBadXList]
-		#prAcceptXList = [result.prAccept for result in  xOnly[error]]
-		#plotDetail(prAcceptXList, 'plot-prAccept-cnot-' + errorStrX[error] + pairStr, error, legend='upper right')
-		
-		esZ = errorStrZ[error]
-		polysZ = [countResultAsPoly(r, noise['Z']) for r in zOnly[error]] + [zMaxes[error]]
-		plotDetail(polysZ, 'plot-cnot-exrec-malig-' + esZ + pairStr, error, ylabel=r'Pr[mal$_{' + esZ + r'}$]')
-		prBadZList = [result.prBad for result in zOnly[error]]
-		plotDetail(prBadZList, 'plot-prBad-cnot-' + esZ + pairStr, error, ylabel='Pr[bad]')
-		#prAcceptZList = [result.prAccept for result in  xOnly[error]]
-		#plotDetail(prAcceptZList, 'plot-prAccept-cnot-' + errorStrZ[error] + pairStr, error, legend='upper right')
 		
 	
 

@@ -544,7 +544,137 @@ def prepareAncilla12(errorRates, name='a0', eigenstate='Z'):
 		errors = {'X':{name:errors['Z']['a0']}, 'Z':{name:errors['X']['a0']}}
 	#print "prepared ancilla:", util.counterUtils.errorsToStr(errors, 23, True)	
 	return errors, attempts
+
+def prepareAncilla12_alt(errorRates, name='a0', eigenstate='Z'):
+	"""Alternative 12-ancilla preparation and verification circuit.  In this circuit, three encoded |0> states
+	are verified against X errors.  Then, two of the verified |0> states are used to verified the remaining
+	|0> against Z errors.
+	"""
 	
+	roundOrder = range(7)
+	
+	
+	attempts = {
+			 'prepAX0': 0,
+			 'prepAX1': 0,
+			 'prepAX2': 0,
+			 'prepAZ0': 0,
+			 'prepAZ1': 0
+			 }
+	
+	def prepUnverified(blockName):
+		return lambda: prepareUnverifiedAncilla(errorRates, roundOrder, cnots, blockName)
+
+	def prepAX0(name1='a0',name2='aX1'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
+									    name1, prepUnverified(name1), 
+										name2, prepUnverified(name2))
+		attempts['prepAX0'] += numAttempts
+		return errors
+
+	def prepAX1(name1='a0',name2='aX1',name3='aX2'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
+									    name1, lambda: prepAX0(name1,name2), 
+										name3, prepUnverified(name3))
+		attempts['prepAX1'] += numAttempts
+		return errors	
+
+	def prepAX2(name1='a0',name2='aX1',name3='aX2',name4='aX3'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
+									    name1, lambda: prepAX1(name1,name2,name3), 
+										name4, prepUnverified(name4))
+		attempts['prepAX2'] += numAttempts
+		return errors
+		
+	def prepAZ0(name1='a0',name2='aZ0'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'Z', 
+									    name1, lambda: prepAX2(name1),
+										name2, lambda: prepAX2(name2))
+		attempts['prepAZ0'] += numAttempts
+		return errors	
+
+	def prepAZ1(name1='a0',name2='aZ0',name3='aZ1'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'Z', 
+									    name1, lambda: prepAZ0(name1,name2),
+										name3, lambda: prepAX2(name3))
+		attempts['prepAZ1'] += numAttempts
+		return errors		
+	
+	errors = prepAZ1(name)
+	
+	if eigenstate == 'Z':	# might as well clean out the other ancilla blocks
+		errors = {'X':{name:errors['X'][name]}, 'Z':{name:errors['Z'][name]}}
+	else: #eigenstate == 'X' --- assuming that the error model is symmetrical, we can just swap the X and Z errors
+		errors = {'X':{name:errors['Z'][name]}, 'Z':{name:errors['X'][name]}}
+	#print "prepared ancilla:", util.counterUtils.errorsToStr(errors, 23, True)	
+	return errors, attempts
+	
+	
+def prepareAncilla12_alt2(errorRates, name='a0', eigenstate='Z'):
+	"""Alternative 12-ancilla preparation and verification circuit.  In this circuit, four encoded |0> states
+	are verified against Z errors.  Then, three of the verified |0> states are used to verify the remaining
+	|0> against Z errors.
+	"""
+	
+	roundOrder = range(7)
+	
+	
+	attempts = {
+			 'prepAZ1': 0,
+			 'prepAZ2': 0,
+			 'prepAX1': 0,
+			 'prepAX2': 0,
+			 'prepAX3': 0
+			 }
+	
+	def prepUnverified(blockName):
+		return lambda: prepareUnverifiedAncilla(errorRates, roundOrder, cnots, blockName)
+
+	def prepAZ1(name1='a0',name2='aZ1'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'Z', 
+									    name1, prepUnverified(name1), 
+										name2, prepUnverified(name2))
+		attempts['prepAZ1'] += numAttempts
+		return errors
+
+	def prepAZ2(name1='a0',name2='aZ1',name3='aZ2'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'Z', 							     
+										name1, prepUnverified(name1),
+										name2, lambda: prepAZ1(name2,name3))
+		attempts['prepAZ2'] += numAttempts
+		return errors
+		
+	def prepAX1(name1='a0',name2='aX1'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
+									    name1, lambda: prepAZ2(name1),
+										name2, lambda: prepAZ2(name2))
+		attempts['prepAX1'] += numAttempts
+		return errors	
+
+	def prepAX2(name1='a0',name2='aX1',name3='aX2'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
+									    name1, lambda: prepAZ2(name1),
+										name2, lambda: prepAX1(name2,name3))
+		attempts['prepAX2'] += numAttempts
+		return errors		
+
+	def prepAX3(name1='a0',name2='aX1',name3='aX2',name4='aX3'):
+		errors, numAttempts = prepareAndVerify(errorRates, 'X', 
+									    name1, lambda: prepAZ2(name1),
+										name2, lambda: prepAX2(name2,name3,name4))
+		attempts['prepAX3'] += numAttempts
+		return errors		
+
+	
+	errors = prepAX3(name)
+	
+	if eigenstate == 'Z':	# might as well clean out the other ancilla blocks
+		errors = {'X':{name:errors['X'][name]}, 'Z':{name:errors['Z'][name]}}
+	else: #eigenstate == 'X' --- assuming that the error model is symmetrical, we can just swap the X and Z errors
+		errors = {'X':{name:errors['Z'][name]}, 'Z':{name:errors['X'][name]}}
+	#print "prepared ancilla:", util.counterUtils.errorsToStr(errors, 23, True)	
+	return errors, attempts
+
 
 def prepareAncillaNew(errorRates, name='a0', eigenstate='Z'):
 	"""This will simulate preparation of a verified ancilla.
