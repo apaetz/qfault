@@ -76,25 +76,58 @@ def evalExpr(val, expr):
 
 def lineStyle(i):
 	marker = markers[i % len(markers)]
-	color = colors[i % len(colors)]
+	color = getColor(i)
 	return str(color) + str(marker) + '-'
 
-def plotPolyList(polyList, xMin, xMax, 
-			filename=None, labelList=None, xLabel='', yLabel='', yscale='linear', legendLoc='upper right', 
-			numPoints=100):
+def getColor(i, colors=colors):
+	return colors[i % len(colors)]
+
+class Series(object):
 	
-	
-	
-	#fontProps.set_size('small')
+	def __init__(self, X, Y, name):
+		self.X = X
+		self.Y = Y
+		self.name = name
+
+
+def plotInit():
 	plt.hold(False)
 	plt.figure()
 	plt.hold(True)
-	#plt.axes([0.2, 0.3, 0.65, 0.65])
+	
+def plotShow(filename=None):
+	plt.show()
+	if filename != None:
+		plt.savefig(filename)
+	
+	plt.hold(False)
+
+def barSeries(seriesList, filename=None, legendLoc='upper right', width=0.75, colors=colors):
+	X = set()
+	for i,series in enumerate(seriesList):
+		X |= set(series.X)
+		plt.bar(series.X, series.Y, width=width, color=getColor(i,colors), label=series.name)
+		
+	w2 = width/2.
+	X = sorted(X)
+	plt.xticks([x + w2 for x in X], [str(x) for x in X])
+	
+	plt.legend(loc=legendLoc)
+	plotShow(filename)
+	
+
+def plotPolyList(polyList, xMin, xMax, 
+			filename=None, labelList=None, xLabel='', yLabel='', yscale='linear', legendLoc='upper right',
+			ylim=None, 
+			numPoints=100):
+	
+	
+	plotInit()
 	
 	plt.ylabel(yLabel)
 	plt.xlabel(xLabel)
 	
-	xStep = (xMax-xMin)/numPoints
+	xStep = (xMax-xMin)/(numPoints-1)
 	X = [xMin + i*xStep for i in range(numPoints)]
 	
 	handles = []
@@ -115,11 +148,10 @@ def plotPolyList(polyList, xMin, xMax,
 	#plt.figlegend(handles, labelList, loc='upper right')
 	plt.legend(loc=legendLoc)
 	plt.yscale(yscale)
-	plt.show()
-	if filename != None:
-		plt.savefig(filename)
-	
-	plt.hold(False)
+	if None != ylim:
+		plt.ylim(ylim)
+
+	plotShow(filename)
 	
 def plotList(X, yList, yErrList=None, filename=None, labelList=None, xLabel='', yLabel='', legendLoc='upper right'):
 	

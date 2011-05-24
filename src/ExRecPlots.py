@@ -8,11 +8,12 @@ from component.xverify import countXVerifyXOnly
 from component.zverify import countZVerifyXOnly_uncorrected
 from counting.levelOne import countExRecs, transformedWeights
 from counting.probability import countResultAsPoly, countsAsProbability
-from util.plotting import plotPolyList
+from util.plotting import plotPolyList, Series, barSeries
 import GolayCounting
 import math
-from component import xverify
+from component import xverify, zverify
 from counting.countErrors import CountResult
+from util import listutils
 
 # Malignant event labels defined in levelOne.py do not necessarily match
 # the labels in the paper.  This maps between the two.
@@ -64,15 +65,24 @@ def plotLevel1Malig(ancillaPairs, settings):
 	
 	ratiosXStr = str(ratiosX.values()).replace(' ', '').replace('.', '').replace(')','').replace('(','')
 	ratiosZStr = str(ratiosZ.values()).replace(' ', '').replace('.', '').replace(')','').replace('(','')	
-		
+	
+	# For comparison, we want to plot X and Z events using the same y-axis limits.	
+	yMax = max(p(gMax) for p in valuesX+valuesZ) * 1.05
+	# pylot chokes on mpf (bug?), so cast here.
+	yMax = float(yMax)
+	ylim = (0,yMax)
+
+	numPoints = 20
+	
 	filename = 'plot-level1-maligX-' + settingsStr
 	plotPolyList(valuesX,# + [GammaX], 
 				 gMin, gMax, 
 				 filename, 
 				 labelList=mapLabels(labelsX) + [r'$\Gamma_X$'], 
-				 numPoints=20,
+				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
-				 legendLoc='upper left')
+				 legendLoc='upper left',
+				 ylim = ylim)
 	
 
 	filename = 'plot-level1-maligZ-' + settingsStr
@@ -80,9 +90,10 @@ def plotLevel1Malig(ancillaPairs, settings):
 				 gMin, gMax, 
 				 filename, 
 				 labelList=mapLabels(labelsZ) + [r'$\Gamma_Z$'], 
-				 numPoints=20,
+				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
-				 legendLoc='upper left')
+				 legendLoc='upper left',
+				 ylim = ylim)
 	
 	
 	filename = 'plot-level1-tranformedX-' + ratiosXStr + settingsStr
@@ -91,7 +102,7 @@ def plotLevel1Malig(ancillaPairs, settings):
 				 gMin, gMax, 
 				 filename, 
 				 labelList=mapLabels(labelsX), 
-				 numPoints=20,
+				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
 				 legendLoc='upper left')
 
@@ -101,7 +112,7 @@ def plotLevel1Malig(ancillaPairs, settings):
 				 gMin, gMax, 
 				 filename, 
 				 labelList=mapLabels(labelsZ), 
-				 numPoints=20,
+				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
 				 legendLoc='upper left')
 
@@ -115,21 +126,94 @@ def plotXZCorrection(ancillaPreps, settings):
 	noise = settings['noise']
 	settingsVX = settings.getSubcomponent('ec').getSubcomponent('vz').getSubcomponent('vx')
 	
-	zResult = xverify.countXVerifyZOnly(pair1[0], pair1[1], settingsVX, noise)
+	zResult = xverify.countXVerifyZOnly_uncorrected(pair1[0], pair1[1], settingsVX, noise)
 	corrections = xverify.getXZCorrections(pair1[0], pair1[1], settingsVX, noise, zResult.locTotals)
 	
 	# We want to plot corrections by fault-order.  Syndrome corrections are not important.
-	corrections = [sum(c) for c in corrections]
-	print corrections
+	uncorrectedZero = [c[0] for c in zResult.counts]
+	uncorrectedNZ = [sum(c)-c[0] for c in zResult.counts]
+	correctedZero = [c[0] for c in corrections]
+	correctedNZ = [sum(c)-c[0] for c in corrections]
+		
+	corrResults = [CountResult([0]*(k) + [correctedNZ[k]], None, zResult.locTotals, 1, 0) for k in range(len(correctedNZ))]
+	corrResultsZero = [CountResult([0]*(k) + [correctedZero[k]], None, zResult.locTotals, 1, 0) for k in range(len(correctedZero))]
+	uncorrResults = [CountResult([0]*(k) + [uncorrectedNZ[k]], None, zResult.locTotals, 1, 0) for k in range(len(uncorrectedNZ))]
+	uncorrResultsZero = [CountResult([0]*(k) + [uncorrectedZero[k]], None, zResult.locTotals, 1, 0) for k in range(len(uncorrectedZero))]
 	
-	corrResults = [CountResult([0]*(k) + [corrections[k]], None, zResult.locTotals, 1, 0) for k in range(len(corrections))]
 	corrPolys = [countResultAsPoly(r, noise['Z']) for r in corrResults]
+	corrPolysZero = [countResultAsPoly(r, noise['Z']) for r in corrResultsZero]
+	uncorrPolys = [countResultAsPoly(r, noise['Z']) for r in uncorrResults]
+	uncorrPolysZero = [countResultAsPoly(r, noise['Z']) for r in uncorrResultsZero]
+
+	g = .001/15
+	corrBar = [-pr(g) for pr in corrPolys]
+	corrBarZero = [-pr(g) for pr in corrPolysZero]
+	uncorrBar = [pr(g) for pr in uncorrPolys]
+	uncorrBarZero = [pr(g) for pr in uncorrPolysZero]
+	
+	corrected = listutils.addLists(corrPolys)#, corrPolysZero)
+	uncorrected = listutils.addLists(uncorrPolys)#, uncorrPolysZero)
+	
+	print 'g=', g
+	gUncorr = [pr(g) for pr in uncorrected]
+	gCorr = [pr(g) for pr in corrected]
+	print 'uncorrected=', gUncorr 
+	print 'corrected=', gCorr
+	print 'ratio=', sum(gCorr) / sum(gUncorr)
+	
+	corrSeries = Series(range(len(corrBar)), corrBar, 'correction')
+	corrSeriesZero = Series(range(len(corrBarZero)), corrBarZero, 'correction (0)')
+
+	uncorrSeries = Series(range(len(uncorrBar)), uncorrBar, 'uncorrected')
+	uncorrSeriesZero = Series(range(len(uncorrBarZero)), uncorrBarZero, 'uncorrected (0)')
+	
+	barSeries([uncorrSeries, corrSeries, uncorrSeriesZero, corrSeriesZero], filename='bar-XZ-correction', colors=['g','r', 'b', 'k'])
+
 	
 	gMin = 0
 	_, gMax = noise['Z'].noiseRange()
-	labels = ['k=1', 'k=2', 'k=3']
+	labels = ['k=1', 'k=2', 'k=3'] + ['0','1', '2', '3', '4','5','6','7','8']
 	ylabel = r'Pr[K=k,best,$\neg$accept]'
-	plotPolyList(corrPolys[1:], gMin, gMax, 'plot-XZ-corrections-', labelList=labels, xLabel=r'$\gamma$', yLabel=ylabel, numPoints=20, legendLoc='upper left')
+	plotPolyList(corrPolys[1:] + uncorrPolys, gMin, gMax, 'plot-XZ-corrections-', labelList=labels, xLabel=r'$\gamma$', yLabel=ylabel, numPoints=20, legendLoc='upper left')
+
+
+def plotXZCorrection_X(ancillaPreps, settings):
+	pair1, pair2 = ancillaPreps
+	noise = settings['noise']
+	settingsVZ = settings.getSubcomponent('ec').getSubcomponent('vz')
+	
+	xResult = zverify.countZVerifyXOnly_uncorrected(pair1, pair2, settingsVZ, noise)
+	corrections = zverify.getXZCorrections(pair1, pair2, settingsVZ, noise, xResult.locTotals)
+	
+	# We want to plot corrections by fault-order.  Syndrome corrections are not important.
+	uncorrectedZero = [c[0] for c in xResult.counts]
+	uncorrectedNZ = [sum(c)-c[0] for c in xResult.counts]
+	correctedZero = [c[0] for c in corrections]
+	correctedNZ = [sum(c)-c[0] for c in corrections]
+		
+	corrResults = [CountResult([0]*(k) + [correctedNZ[k]], None, xResult.locTotals, 1, 0) for k in range(len(correctedNZ))]
+	corrResultsZero = [CountResult([0]*(k) + [correctedZero[k]], None, xResult.locTotals, 1, 0) for k in range(len(correctedZero))]
+	uncorrResults = [CountResult([0]*(k) + [uncorrectedNZ[k]], None, xResult.locTotals, 1, 0) for k in range(len(uncorrectedNZ))]
+	uncorrResultsZero = [CountResult([0]*(k) + [uncorrectedZero[k]], None, xResult.locTotals, 1, 0) for k in range(len(uncorrectedZero))]
+	
+	corrPolys = [countResultAsPoly(r, noise['Z']) for r in corrResults]
+	corrPolysZero = [countResultAsPoly(r, noise['Z']) for r in corrResultsZero]
+	uncorrPolys = [countResultAsPoly(r, noise['Z']) for r in uncorrResults]
+	uncorrPolysZero = [countResultAsPoly(r, noise['Z']) for r in uncorrResultsZero]
+
+	g = .001/15
+	
+	corrected = listutils.addLists(corrPolys)#, corrPolysZero)
+	uncorrected = listutils.addLists(uncorrPolys)#, uncorrPolysZero)
+	
+	print 'X-error corrections for Z-verification:'
+	print 'g=', g
+	gUncorr = [pr(g) for pr in uncorrected]
+	gCorr = [pr(g) for pr in corrected]
+	print 'uncorrected=', gUncorr 
+	print 'corrected=', gCorr
+	print 'ratio=', sum(gCorr) / sum(gUncorr)	
+	
 	
 def plotPrAccept(ancillaPreps, settings):
 	pair1, pair2 = ancillaPreps
@@ -219,6 +303,20 @@ def plotCnotExRecDetails(ancillaPairs, settings, gMaxAlt=1.):
 		#prAcceptZList = [result.prAccept for result in  xOnly[error]]
 		#plotDetail(prAcceptZList, 'plot-prAccept-cnot-' + errorStrZ[error] + pairStr, error, legend='upper right')
 
+
+def xverify_errorCount(preps, settings):
+	from counting.countErrors import countXerrorsZero, propagateAndReduceZeroX
+	pair1, pair2 = preps
+	noise = settings['noise']
+	settings0 = settings.getSubcomponent('ec').getSubcomponent('vz').getSubcomponent('vx').getSubcomponent('zero')
+
+	prepA = propagateAndReduceZeroX(pair1[0])
+	countsA1 = [countXerrorsZero(k, prepA, 'A', noise) for k in range(settings0['kGood']+1)]
+	#countsA2 = [countXerrorsZero(k, pair1[1], 'B', noise) for k in range(settingsVX['kGood']+1)]
+
+	numErrors = [listutils.numNonzeroEntries(c) for c in countsA1]
+	print 'numErrors=', numErrors
+
 if __name__ == '__main__':
 	settings = GolayCounting.globalSettings
 	#preps = GolayCounting.getSteaneRandomPreps()
@@ -230,10 +328,12 @@ if __name__ == '__main__':
 	
 	#configureMultiProcess(12)
 	
-	plotXZCorrection(pairs, settings)
-	#plotPrAccept(pairs, settings)
-	#plotCnotExRecDetails(pairs, settings)
-	#plotLevel1Malig(pairs, settings)
+	#xverify_errorCount(pairs, settings)
+	#plotXZCorrection(pairs, settings)
+	#plotXZCorrection_X(pairs, settings)
+	plotPrAccept(pairs, settings)
+	plotCnotExRecDetails(pairs, settings)
+	plotLevel1Malig(pairs, settings)
 	
 	#preps = [prep.filterAgainst('rest') for prep in preps]
 	#preps = GolayCounting.getOverlapPreps()

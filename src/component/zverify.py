@@ -242,6 +242,12 @@ def countZVerifyXZ(prepPairA, prepPairB, settings, noise):
 	locTotals = result0.locTotals + result1.locTotals + locationsRCM.getTotals()
 	return CountResult(acceptedCounts, rejectedCounts, locTotals, 0, 0)
 
+def getXZCorrections(prepPairA, prepPairB, settings, noise, xTotals):
+	xzResult = countZVerifyXZ(prepPairA, prepPairB, settings, noise)
+	xRejected = xCountsFromXZCounts(xzResult.countsRejected)
+	corrections, _ = rescaleXZCounts(xRejected, xzResult.locTotals, xTotals, 'X', noise)
+	return corrections
+
 
 @fetchable
 def countZVerifyXOnly(prepPairA, prepPairB, settings, noise):
@@ -283,9 +289,7 @@ def countZVerifyXOnly(prepPairA, prepPairB, settings, noise):
 	kBest = settings['kBest']
 	
 	if kBest > 0:
-		xzResult = countZVerifyXZ(prepPairA, prepPairB, settings, noise)
-		xRejected = xCountsFromXZCounts(xzResult.countsRejected)
-		corrections, _ = rescaleXZCounts(xRejected, xzResult.locTotals, goodResult.locTotals, 'X', noise)
+		corrections = getXZCorrections(prepPairA, prepPairB, settings, noise, goodResult.locTotals)
 		
 		# Subtract the XZ corrections
 		goodCounts = goodResult.counts
