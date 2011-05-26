@@ -8,7 +8,7 @@ from component.xverify import countXVerifyXOnly
 from component.zverify import countZVerifyXOnly_uncorrected
 from counting.levelOne import countExRecs, transformedWeights
 from counting.probability import countResultAsPoly, countsAsProbability
-from util.plotting import plotPolyList, Series, barSeries
+from util.plotting import Series, barSeries
 import GolayCounting
 import math
 from component import xverify, zverify
@@ -34,6 +34,28 @@ maligEventLabelMap = {
 	
 def mapLabels(labels):
 	return [maligEventLabelMap[label] for label in labels]
+
+def pWrap(gammaPoly):
+	return lambda p: gammaPoly(p/15)	
+
+def plotPolyList(polys, gMin, gMax, **kwargs):
+	'''
+	Wrapper for util.plotting.plotPolyList.  Plots all of
+	the polynomials in terms of p instead of gamma.
+	'''
+	import util.plotting as plotting
+	
+	pMin = gMin*15
+	pMax = gMax*15
+	
+	if 'xLabel' in kwargs.keys():
+		kwargs['xLabel'] = r'$p$'
+	
+	# Wrap each gamma polynomial so that it is a
+	# polynomial in terms of p.
+	polys = [pWrap(poly) for poly in polys]
+	
+	return plotting.plotPolyList(polys, pMin, pMax, **kwargs)
 	
 def plotLevel1Malig(ancillaPairs, settings):
 	#noise = settings['noise']
@@ -77,7 +99,7 @@ def plotLevel1Malig(ancillaPairs, settings):
 	filename = 'plot-level1-maligX-' + settingsStr
 	plotPolyList(valuesX,# + [GammaX], 
 				 gMin, gMax, 
-				 filename, 
+				 filename=filename, 
 				 labelList=mapLabels(labelsX) + [r'$\Gamma_X$'], 
 				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
@@ -88,7 +110,7 @@ def plotLevel1Malig(ancillaPairs, settings):
 	filename = 'plot-level1-maligZ-' + settingsStr
 	plotPolyList(valuesZ,# + [GammaZ], 
 				 gMin, gMax, 
-				 filename, 
+				 filename=filename, 
 				 labelList=mapLabels(labelsZ) + [r'$\Gamma_Z$'], 
 				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
@@ -100,7 +122,7 @@ def plotLevel1Malig(ancillaPairs, settings):
 	valuesXTransformed = [GammaX * ratiosX[label] for label in labelsX]
 	plotPolyList(valuesXTransformed, 
 				 gMin, gMax, 
-				 filename, 
+				 filename=filename, 
 				 labelList=mapLabels(labelsX), 
 				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
@@ -110,7 +132,7 @@ def plotLevel1Malig(ancillaPairs, settings):
 	valuesZTransformed = [GammaZ * ratiosZ[label] for label in labelsZ]
 	plotPolyList(valuesZTransformed, 
 				 gMin, gMax, 
-				 filename, 
+				 filename=filename, 
 				 labelList=mapLabels(labelsZ), 
 				 numPoints=numPoints,
 				 xLabel=r'$\gamma$',
@@ -174,7 +196,7 @@ def plotXZCorrection(ancillaPreps, settings):
 	_, gMax = noise['Z'].noiseRange()
 	labels = ['k=1', 'k=2', 'k=3'] + ['0','1', '2', '3', '4','5','6','7','8']
 	ylabel = r'Pr[K=k,best,$\neg$accept]'
-	plotPolyList(corrPolys[1:] + uncorrPolys, gMin, gMax, 'plot-XZ-corrections-', labelList=labels, xLabel=r'$\gamma$', yLabel=ylabel, numPoints=20, legendLoc='upper left')
+	plotPolyList(corrPolys[1:] + uncorrPolys, gMin, gMax, filename='plot-XZ-corrections-', labelList=labels, xLabel=r'$\gamma$', yLabel=ylabel, numPoints=20, legendLoc='upper left')
 
 
 def plotXZCorrection_X(ancillaPreps, settings):
@@ -233,7 +255,7 @@ def plotPrAccept(ancillaPreps, settings):
 	labels = [r'Pr[accept$^{(1)}$]', 
 			  r'Pr[accept$^{(2)}$]', 
 			  r'Pr[accept | accept$^{(1)}$, accept$^{(2)}$]']
-	plotPolyList(plots, gMin, gMax, 'plot-prAccept', labelList=labels, xLabel=r'$\gamma$', numPoints=20)
+	plotPolyList(plots, gMin, gMax, filename='plot-prAccept', labelList=labels, xLabel=r'$\gamma$', numPoints=20)
 	
 
 def plotOverhead(ancillaPreps, settings):
@@ -256,7 +278,7 @@ def plotOverhead(ancillaPreps, settings):
 			   qubitsTimeX / resultX2.prAccept + \
 			   qubitsTimeZ / resultZ.prAccept
 
-	plotPolyList([overhead], gMin, gMax, 'overheadPlot', xLabel=r'$\gamma$', yLabel='qubit overhead', numPoints=10)
+	plotPolyList([overhead], gMin, gMax, filename='overheadPlot', xLabel=r'$\gamma$', yLabel='qubit overhead', numPoints=10)
 
 
 
@@ -280,7 +302,7 @@ def plotCnotExRecDetails(ancillaPairs, settings, gMaxAlt=1.):
 	ecLabels = ['--', '-B', 'A-', 'AB', 'max']
 	
 	def plotDetail(polys, filename, error, ylabel='', yscale='linear', legend='upper left'):
-		plotPolyList(polys, gMin, gMax, filename, labelList=ecLabels, numPoints=20, legendLoc=legend, xLabel=r'$\gamma$', yLabel=ylabel, yscale=yscale)
+		plotPolyList(polys, gMin, gMax, filename=filename, labelList=ecLabels, numPoints=20, legendLoc=legend, xLabel=r'$\gamma$', yLabel=ylabel, yscale=yscale)
 		
 	for error in reversed(range(3)):
 		esX = errorStrX[error]
