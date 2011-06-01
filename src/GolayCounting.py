@@ -5,6 +5,13 @@
 # 
 # Ben Reichardt, 5/22/2010
 #
+
+import os
+# By default sympy uses a global cache.  This cache seems to be buggy
+# when using multiple threads.  This command turns off the cache.
+os.putenv('SYMPY_USE_CACHE', 'no')
+print 'Turned off the sympy cache.'
+
 from settings import golayCountSettings
 from util.polynomial import Composite
 import logging

@@ -311,16 +311,21 @@ def overhead12_alt2(data, measVZ0, measVZ1, measVX):
 def qubitOverhead(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12Alt,samplesSteane12Alt2):
 	# TODO: would be better to extract this information directly from the
 	# prep circuits.
-	prepTime = 23*8
+	
+	# TODO: 23*8 is inaccurate, since not all qubits need to be prepared before round 1.
+	# (especially for the overlap circuit)
+	prepTime = 23*8 - 1	# only 22 qubits are needed in round 1
+	prepTimeOverlap = 23*8 - 9 # Some of the qubits can be prepared during round 1 or round 2.
 	verifyTime = 46*2 + 23
 	qubitTimeX = 2*prepTime + verifyTime
+	qubitTimeXOverlap = 2*prepTimeOverlap + verifyTime
 	qubitTimeZ = verifyTime
 	qubitTime1 = qubitTimeX
 	qubitTime2 = 23*8 + qubitTimeZ
 	qubitTime3 = qubitTimeZ
 	qubitTime4 = qubitTime3
 		
-	_, meanOverlap, errorOverlap = overhead4(samplesOverlap, qubitTimeX, qubitTimeZ)
+	_, meanOverlap, errorOverlap = overhead4(samplesOverlap, qubitTimeXOverlap, qubitTimeZ)
 	_, meanSteane4, errorSteane4 = overhead4(samplesSteane4, qubitTimeX, qubitTimeZ)
 	_, meanSteane12, errorSteane12 = overhead12(samplesSteane12, qubitTime1, qubitTime2, qubitTime3, qubitTime4)
 	_, meanSteane12Alt, errorSteane12Alt = overhead12_alt(samplesSteane12Alt, qubitTimeX, qubitTime2, qubitTimeZ)
@@ -390,7 +395,7 @@ if __name__ == '__main__':
 	labels = ['Overlap-4', 'Steane-4', 'Steane-12', 'Steane-12 (alt)', 'Steane-12 (alt2)']
 	
 	X, yList, yErrList = qubitOverhead(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12_alt, samplesSteane12_alt2)
-	plotList(X, yList[:5], yErrList[:5], filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
+	plotList(X, yList[:3], yErrList[:3], filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
 
 	X, yList, yErrList = qubitOverhead(samplesNROverlap, samplesNRSteane4, samplesNRSteane12, samplesNRSteane12_alt, samplesSteane12_alt2)
 	plotList(X, yList, yErrList, filename='plotQubitOverheadNRCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')

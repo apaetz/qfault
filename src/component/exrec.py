@@ -247,8 +247,7 @@ def countCnotExRecParallel(countsLEC, countsECLogical, countsCnot, configs):
 	
 
 @fetchable
-def countCnotExRec(ancillaPairs, settings):
-	
+def countCnotExRec(ancillaPairs, settings):	
 	noise = settings['noise']
 	_, gMax = noise['X'].noiseRange()
 	gMin = gMax/100
@@ -260,19 +259,14 @@ def countCnotExRec(ancillaPairs, settings):
 	# gives the maximum error probability.
 	xMaxes = []
 	zMaxes = []
-	errorStrX = ['IX', 'XI', 'XX']
-	errorStrZ = ['IZ', 'ZI', 'ZZ']
-	ecLabels = ['--', '-B', 'A-', 'AB']
 	for error in range(3):
 		polysX = [countResultAsPoly(r, noise['X']) for r in xOnly[error]]
 		xMax = computeMax(polysX, gMin, gMax)
 		xMaxes.append(xMax)
-		plotPolyList(polysX + [xMax], gMin, gMax, 'plot-cnot-withMax-' + errorStrX[error], labelList=ecLabels + ['xMax'], numPoints=10)
 		
 		polysZ = [countResultAsPoly(r, noise['Z']) for r in zOnly[error]]
 		zMax = computeMax(polysZ, gMin, gMax)
 		zMaxes.append(zMax)
-		plotPolyList(polysZ + [zMax], gMin, gMax, 'plot-cnot-withMax-' + errorStrZ[error], labelList=ecLabels + ['zMax'], numPoints=10)
 
 	
 	return xMaxes, zMaxes

@@ -32,9 +32,9 @@ def samplePolys(polyList, xMin, xMax, numPoints):
 	X = [xMin + (xMax-xMin) * (i/float(numPoints-1))**exp[i] for i in range(numPoints)]
 	
 	# Sample each polynomial in parallel
-	sampleResults = iterParallel(polyList, evalExprList, [X])
-	
-	return [r.get() for r in sampleResults]
+	return [evalExprList(poly, X) for poly in polyList]
+	#sampleResults = iterParallel(polyList, evalExprList, [X])
+	#return [r.get() for r in sampleResults]
 
 
 def computeMax(polyList, xMin, xMax, numPoints=1000):

@@ -237,9 +237,6 @@ def boundedFailureWeights(kMin, locTotals, noiseModel, kMax):
 	'''
 	
 	
-	logger.info('Computing Pr[{0} <= k <= {1}] for {2}, {3}'.format(kMin, kMax, locTotals, noiseModel))
-	
-	
 	nCnot = locTotals.cnot
 	nRest = locTotals.rest
 	nPrepX = locTotals.prepX
@@ -415,7 +412,7 @@ def calcPrBadEC(ecTotals, prBadECZ, prBadECX, prAcceptEC, kGoodEC, kMax, noise):
 
 def calcPrBadCnotExRec_LEC_CNOT_ignore(totalsEC, totalsCNOT, kGoodEC, kGoodCNOT, kGood_LEC_CNOT, prAcceptEC, noise):
 	# Compute Pr of the bad configs, conditioned on the LECs accepting.  
-	prIgnored = 2 ** abs(kGood_LEC_CNOT[0] - kGood_LEC_CNOT[1]) * \
+	prIgnored = (2 ** abs(kGood_LEC_CNOT[0] - kGood_LEC_CNOT[1])) * \
 				prBadPoly(kGood_LEC_CNOT[2], totalsCNOT, noise, kMax=kGoodCNOT) * \
 				prBadPoly(kGood_LEC_CNOT[0], totalsEC, noise, kMax=kGoodEC) * \
 				prBadPoly(kGood_LEC_CNOT[1], totalsEC, noise, kMax=kGoodEC)
