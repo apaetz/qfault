@@ -3,17 +3,21 @@ Created on 2011-04-12
 
 @author: adam
 '''
+from component import xverify, zverify
 from component.exrec import exRecXOnly, countCnotExRec, exRecZOnly
 from component.xverify import countXVerifyXOnly
 from component.zverify import countZVerifyXOnly_uncorrected
+from counting.countErrors import CountResult
+from counting.countParallel import configureMultiProcess
 from counting.levelOne import countExRecs, transformedWeights
-from counting.probability import countResultAsPoly, countsAsProbability
-from util.plotting import Series, barSeries
+from counting.probability import countResultAsPoly, countsAsProbability, \
+	prBadPoly, calcPrBadCnotExRec_LEC_CNOT_ignore
+from util import listutils
+from util.plotting import Series, barSeries, plotPolyList
 import GolayCounting
 import math
-from component import xverify, zverify
-from counting.countErrors import CountResult
-from util import listutils
+import copy
+import gmpy
 
 # Malignant event labels defined in levelOne.py do not necessarily match
 # the labels in the paper.  This maps between the two.
@@ -32,9 +36,17 @@ maligEventLabelMap = {
 	r'mal$_{\mathrm{meas},X}$': r'$\mathrm{mal}_{Z}^{\mathrm{meas}}$'
 }
 	
+class PWrapper(object):
+	
+	def __init__(self, gammaPoly):
+		self.gammaPoly = gammaPoly
+		
+	def __call__(self, p):
+		return self.gammaPoly(p/15)
+	
 def mapLabels(labels):
 	return [maligEventLabelMap[label] for label in labels]
-
+	
 def pWrap(gammaPoly):
 	return lambda p: gammaPoly(p/15)	
 
@@ -53,7 +65,7 @@ def plotPolyList(polys, gMin, gMax, **kwargs):
 	
 	# Wrap each gamma polynomial so that it is a
 	# polynomial in terms of p.
-	polys = [pWrap(poly) for poly in polys]
+	polys = [PWrapper(poly) for poly in polys]
 	
 	return plotting.plotPolyList(polys, pMin, pMax, **kwargs)
 	
@@ -254,9 +266,103 @@ def plotPrAccept(ancillaPreps, settings):
 	plots = [resultX1.prAccept, resultX2.prAccept, resultZ.prAccept]
 	labels = [r'Pr[accept$^{(1)}$]', 
 			  r'Pr[accept$^{(2)}$]', 
-			  r'Pr[accept | accept$^{(1)}$, accept$^{(2)}$]']
+			  r'Pr[accept | accept$^{(1,2)}$]']
 	plotPolyList(plots, gMin, gMax, filename='plot-prAccept', labelList=labels, xLabel=r'$\gamma$', numPoints=20)
 	
+def plotPrBad(ancillaPairs, settings):
+	noise = settings['noise']
+	gMin = 0
+	gMin = (1e-4)/15
+	_, gMax = noise['X'].noiseRange()
+	gMax = gmpy.mpf(gMax)
+	gMaxAlt= 1.
+	gMax = min(gMaxAlt, gMax)
+
+		
+	zOnly = exRecZOnly(ancillaPairs, settings)
+	xOnly = exRecXOnly(ancillaPairs, settings)
+	before = str(xOnly[2][3].prBad)
+	bef = copy.deepcopy(xOnly[2][3].prBad)
+	print 'gMax=', gMax, type(gMax) 
+	b = bef(gMax)
+	print 'bef(gMax)=', b, type(b)
+	xMaxes, zMaxes = countCnotExRec(ancillaPairs, settings)
+	after = str(xOnly[2][3].prBad)
+	if str(bef) != after:
+		print 'bef != after'
+	
+	print 'bef(gMax)=', bef(gMax)	
+	print 'after(gMax)=', xOnly[2][3].prBad(gMax)
+	print 'compare says:', bef.getsympy().compare(xOnly[2][3].prBad.getsympy())
+		
+	if before != after:
+		#print 'Before:', before
+		#print 'After:', after
+		
+		raise Exception
+	else:
+		print 'looks good...'
+	
+	badChars = ['.', ',', ' ', ')', '(', '}', '{']
+	pairStr = str(ancillaPairs)
+	for char in badChars:
+		pairStr = pairStr.replace(char, '')
+	
+	errorStrX = ['IX', 'XI', 'XX']
+	errorStrZ = ['IZ', 'ZI', 'ZZ']
+	ecLabels = ['--', '-B', 'A-', 'AB', 'max']
+	
+	def plotDetail(polys, filename, error, ylabel='', yscale='linear', legend='upper left'):
+		plotPolyList(polys, gMin, gMax, filename=filename, labelList=ecLabels, numPoints=20, legendLoc=legend, xLabel=r'$\gamma$', yLabel=ylabel, yscale=yscale)
+		
+	for error in reversed(range(3)):
+		esX = errorStrX[error]
+		prBadXList = [result.prBad for result in xOnly[error]]
+		plotDetail(prBadXList, 'plot-prBad-cnot-' + esX + pairStr, error, ylabel='Pr[bad]', yscale='log')
+	
+
+	
+	
+	
+	
+	import component.exrec as exrec
+	import component.ec as ec
+	noise = settings['noise']
+	settingsEC = settings.getSubcomponent('ec')
+	kGoodCnot = settings.getSubcomponent('cnot')['kGood']
+	kGoodExRec = settings['kGood']
+	kGood_LEC_CNOT = settings['kGood-LEC-CNOT']
+	gMin = 0
+	gMin = (1e-3)/15
+	_, gMax = noise['X'].noiseRange()
+
+	xResults = exrec.exRecXOnly(ancillaPairs, settings)
+	
+	labels = ['--', '-B', 'A-', 'AB']
+	plotPolyList([xResults[2][i].prBad for i in range(4)], (1e-4)/15, gMax, filename='plot-prBad-TEC', labelList=labels, xLabel=r'$\gamma$', yscale='log', legendLoc='lower right', numPoints=20)	
+	raise Exception
+	
+	cnotXX = xResults[2][3]
+	
+	totalsCnot = exrec.locationsExRecCnot().getTotals()
+	prBadCnot = prBadPoly(kGoodCnot, totalsCnot, noise['Z'], kGoodExRec)
+	
+	resultEC = ec.countEC_xOnly(ancillaPairs, settingsEC, noise)
+	totalsEC = resultEC.locTotals
+	print 'EC totals=', totalsEC
+	prAcceptEC = resultEC.prAccept
+	print 'Pr[accept](0.001)=', prAcceptEC(0.001/15)
+	kGoodEC = settingsEC['kGood']
+	prIgnored = calcPrBadCnotExRec_LEC_CNOT_ignore(totalsEC, totalsCnot, kGoodEC, kGoodCnot, kGood_LEC_CNOT, prAcceptEC, noise['X'])
+	
+	prExrec4 = prBadPoly(kGoodExRec, cnotXX.locTotals, noise['X']) / (prAcceptEC ** 4)
+	prExrec2 = prBadPoly(kGoodExRec, cnotXX.locTotals, noise['X']) / (prAcceptEC ** 2)
+	
+	labels = ['Pr[bad]', 'cnot', 'LEC-cnot', 'EC', 'exRec', 'sum4', 'sum2', 'Pr[bad]2']
+	prList4 = [cnotXX.prBad, prBadCnot, prIgnored, resultEC.prBad * 4, prExrec4]
+	prList2 = [cnotXX.prBad, prBadCnot, prIgnored, resultEC.prBad * 2, prExrec2]
+	plotPolyList(prList4 + [sum(prList4[1:]), sum(prList2[1:]), xResults[2][0].prBad], gMin, gMax, filename='plot-prBad', labelList=labels, xLabel=r'$\gamma$', yscale='log', legendLoc='lower right', numPoints=20)
+
 
 def plotOverhead(ancillaPreps, settings):
 	pair1, pair2 = ancillaPreps
@@ -285,6 +391,7 @@ def plotOverhead(ancillaPreps, settings):
 def plotCnotExRecDetails(ancillaPairs, settings, gMaxAlt=1.):
 	noise = settings['noise']
 	gMin = 0
+	gMin = (1e-4)/15
 	_, gMax = noise['X'].noiseRange()
 	gMax = min(gMaxAlt, gMax)
 	
@@ -340,6 +447,8 @@ def xverify_errorCount(preps, settings):
 	print 'numErrors=', numErrors
 
 if __name__ == '__main__':
+	configureMultiProcess(10)
+	
 	settings = GolayCounting.globalSettings
 	#preps = GolayCounting.getSteaneRandomPreps()
 	preps = GolayCounting.getOverlapPreps()
@@ -347,15 +456,14 @@ if __name__ == '__main__':
 	
 	#GammaX, weightsX, GammaZ, weightsZ, gMax = transformedWeights(pairs, settings)
 	#settings = getTransformedSettings(settings, GammaX, weightsX, GammaZ, weightsZ, gMax)
-	
-	#configureMultiProcess(12)
-	
+		
 	#xverify_errorCount(pairs, settings)
 	#plotXZCorrection(pairs, settings)
 	#plotXZCorrection_X(pairs, settings)
-	plotPrAccept(pairs, settings)
-	plotCnotExRecDetails(pairs, settings)
-	plotLevel1Malig(pairs, settings)
+	#plotPrAccept(pairs, settings)
+	#plotCnotExRecDetails(pairs, settings)
+	#plotLevel1Malig(pairs, settings)
+	plotPrBad(pairs, settings)
 	
 	#preps = [prep.filterAgainst('rest') for prep in preps]
 	#preps = GolayCounting.getOverlapPreps()

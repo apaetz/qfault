@@ -5,11 +5,11 @@ Created on 2010-10-24
 
 @author: adam
 '''
-import matplotlib
+from counting.countParallel import iterParallel
 import logging
+import matplotlib
 matplotlib.use('PDF')  # Save plots as PDF files.
-import matplotlib.pyplot as plt
-
+from matplotlib import pyplot as plt
 
 logger = logging.getLogger('plotting')
 
@@ -66,7 +66,8 @@ def evalExprList(expr, X):
 	'''
 	Evaluates expression expr for all values in the list X.
 	'''
-	return [expr(x) for x in X]
+	return [r.get() for r in iterParallel(X, expr)]
+	#return [expr(x) for x in X]
 
 def evalExpr(val, expr):
 	'''
@@ -132,8 +133,8 @@ def plotPolyList(polyList, xMin, xMax,
 	
 	handles = []
 	for e, poly in enumerate(polyList):
-		#Y = evalExprList(poly, X)
-		Y = [poly(x) for x in X]
+		Y = evalExprList(poly, X)
+		#Y = [poly(x) for x in X]
 		
 		ls = lineStyle(e)
 		if None != labelList:
