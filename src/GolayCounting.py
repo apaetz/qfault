@@ -5,13 +5,6 @@
 # 
 # Ben Reichardt, 5/22/2010
 #
-
-import os
-# By default sympy uses a global cache.  This cache seems to be buggy
-# when using multiple threads.  This command turns off the cache.
-os.putenv('SYMPY_USE_CACHE', 'no')
-print 'Turned off the sympy cache.'
-
 from settings import golayCountSettings
 from util.polynomial import Composite
 import logging
@@ -80,7 +73,8 @@ if __name__ == "__main__":
 		else:
 			raise Exception('invalid ancilla prep name "%s"', sys.argv[2])
 	
-	logger.info('Settings are: {0}'.format(globalSettings))
+	settings = golayCountSettings.getSettings()
+	logger.info('Settings are: {0}'.format(settings))
 	
-	countAndComputeThresh(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, globalSettings)
+	countAndComputeThresh(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings)
 	print 'done!'	

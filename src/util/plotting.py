@@ -118,8 +118,11 @@ def barSeries(seriesList, filename=None, legendLoc='upper right', width=0.75, co
 	
 
 def plotPolyList(polyList, xMin, xMax, 
-			filename=None, labelList=None, xLabel='', yLabel='', yscale='linear', legendLoc='upper right',
-			ylim=None, 
+			filename=None, 
+			labelList=None, 
+			xLabel='', 
+			yLabel='', yscale='linear',  ylim=None,
+			legendLoc='upper right', legendCols=1, legendPoints=2, legendFrame=True,
 			numPoints=100):
 	
 	
@@ -147,7 +150,7 @@ def plotPolyList(polyList, xMin, xMax,
 
 	# Place legend at the right side of the axes viewport
 	#plt.figlegend(handles, labelList, loc='upper right')
-	plt.legend(loc=legendLoc)
+	plt.legend(loc=legendLoc, ncol=legendCols, numpoints=legendPoints,frameon=legendFrame)
 	plt.yscale(yscale)
 	if None != ylim:
 		plt.ylim(ylim)

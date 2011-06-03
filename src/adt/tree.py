@@ -40,7 +40,7 @@ class TreeNode(object):
 		return self._children[name]
 	
 	def children(self):
-		return self._children.values()
+		return [self._children[name] for name in sorted(self._children.keys())]
 	
 	def addChild(self, child):
 		self._children[child.name()] = child
@@ -82,7 +82,7 @@ class TreeNode(object):
 		if 0 != len(children):
 			string += '->'
 			
-		for c in sorted(children):
+		for c in children:
 			string += c.subtreeStr() + ':'
 			
 		if 0 != len(children):

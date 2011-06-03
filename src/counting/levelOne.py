@@ -83,26 +83,26 @@ def transformedWeights(ancillaPairs, settings):
 	results.update(resultsZ)
 	
 		
-	settingsStr = str(settings).replace(' ', '').replace('.', '')
+#	settingsStr = str(settings).replace(' ', '').replace('.', '')
 	_, gMax = noise['X'].noiseRange()
 	gMax = min(gMax, pseudothresh)
 	gMin = gMax/10
-	filename = 'plot-all-' + settingsStr
-	plotPolyList(results.values(), gMin, gMax, filename, labelList=results.keys(), numPoints=10)
-	
-	#GammaX = computeMin(resultsX.values(), gMin, gMax)
-	#ratiosX = computeRatioMaxes(resultsX.values(), GammaX, gMin, gMax)
+#	filename = 'plot-all-' + settingsStr
+#	plotPolyList(results.values(), gMin, gMax, filename, labelList=results.keys(), numPoints=10)
+#	
+#	#GammaX = computeMin(resultsX.values(), gMin, gMax)
+#	#ratiosX = computeRatioMaxes(resultsX.values(), GammaX, gMin, gMax)
 	GammaX, ratiosX = computeWeights(resultsX.values(), gMin, gMax)
-	print 'ratiosX=', ratiosX
-	
-	#GammaZ = computeMin(resultsZ.values(), gMin, gMax)
-	#ratiosZ = computeRatioMaxes(resultsZ.values(), GammaZ, gMin, gMax)
+#	print 'ratiosX=', ratiosX
+#	
+#	#GammaZ = computeMin(resultsZ.values(), gMin, gMax)
+#	#ratiosZ = computeRatioMaxes(resultsZ.values(), GammaZ, gMin, gMax)
 	GammaZ, ratiosZ = computeWeights(resultsZ.values(), gMin, gMax)
-	print 'ratiosZ=', ratiosZ
-
-	settingsStr = str(settings).replace(' ', '').replace('.', '')
-	filename = 'plot-all-' + settingsStr
-	plotPolyList(results.values() + [GammaX, GammaZ], gMin, gMax, filename, labelList=results.keys() + ['GammaX', 'GammaZ'], numPoints=20)
+#	print 'ratiosZ=', ratiosZ
+#
+#	settingsStr = str(settings).replace(' ', '').replace('.', '')
+#	filename = 'plot-all-' + settingsStr
+#	plotPolyList(results.values() + [GammaX, GammaZ], gMin, gMax, filename, labelList=results.keys() + ['GammaX', 'GammaZ'], numPoints=20)
 
 	
 	#filename = 'plot-ratios-' + settingsStr
@@ -165,17 +165,17 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	#thresh = pseudoThresh(prFail, pMin, pMax)
 	thresh = pseudoThresh(prFail, pMin, pMax)
 	
-	settingsStr = str(ancillaPairs) + str(settings)
-	settingsStr = settingsStr.replace(' ', '').replace('.', '').replace(')','').replace('(','')
-	settingsStr = settingsStr.replace('}', ']').replace('{', '[')	
-	filename = 'plot-full-CNOT-prMalig' + settingsStr
-	plotPolyList([prFail], 
-				 pMin, pMax, 
-				 filename,  
-				 numPoints=20,
-				 xLabel=r'$p$',
-				 yLabel=r'$\Pr[$CNOT malig$]$',
-				 legendLoc='upper left')
+#	settingsStr = str(ancillaPairs) + str(settings)
+#	settingsStr = settingsStr.replace(' ', '').replace('.', '').replace(')','').replace('(','')
+#	settingsStr = settingsStr.replace('}', ']').replace('{', '[')	
+#	filename = 'plot-full-CNOT-prMalig' + settingsStr
+#	plotPolyList([prFail], 
+#				 pMin, pMax, 
+#				 filename,  
+#				 numPoints=20,
+#				 xLabel=r'$p$',
+#				 yLabel=r'$\Pr[$CNOT malig$]$',
+#				 legendLoc='upper left')
 
 	
 	print 'pseudothreshold (p) >=', thresh
