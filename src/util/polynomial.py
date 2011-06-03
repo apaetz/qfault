@@ -6,13 +6,33 @@ This file contains classes for creating and manipulating polynomials.
 @author: adam
 '''
 import logging
+logger = logging.getLogger('polynomial')
 import operator
+
+def disableSympyCache():
+	'''
+	Disabled the sympy global cache.  This function must be called before
+	importing sympy. 
+	By default sympy uses a global cache.  This cache seems to be buggy
+	when using multiple threads.  The workaround is to disable the cache
+	entirely.
+	'''
+		
+	import os
+	os.putenv('SYMPY_USE_CACHE', 'no')
+	import sympy
+	if sympy.cache.usecache != 'no':
+		raise Exception('Unable to turn off sympy cache.  Sympy may have been imported already.')
+	logger.info('Disabled sympy cache.')
+
+disableSympyCache()
+
 import sympy
 from sympy import Symbol
 from sympy.simplify.simplify import powsimp, collect
 from sympy.functions.combinatorial.factorials import Factorial
 
-logger = logging.getLogger('polynomial')
+
 
 
 def chebyshevT(n, symbol='x'):

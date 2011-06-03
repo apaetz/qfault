@@ -5,7 +5,7 @@ Its primary purpose is to compute a lower bound on the tolerable depolarizing no
 ------------------------
 Python modules were written and tested for Python version 2.6.  Some or all modules may be compatible with previous versions, but this has not been tested.
 The following third-party packages are also required.  Tested versions are listed.
-	- Sympy 0.6.7 http://sympy.org
+	- Sympy (development branch 06/02/2011) http://sympy.org
 	- matplotlib 1.0.0 http://matplotlib.sourceforge.net
 	- gmpy 1.11 http://gmpy.sourceforge.net
 	- Cython 0.12.1 http://cython.org
