@@ -301,15 +301,15 @@ def plotPrBad(ancillaPairs, settings):
 	#prExrec2 = prBadPoly(kGoodExRec, cnotXX.locTotals, noise['X']) / (prAcceptEC ** 2)
 	
 	labels = [r'$\Pr[\mathrm{bad}_X|\mathrm{accept}^{(1,2,4,5)}]$',
-			  r'$\Pr[K_3>1] \prod_{j=1}^2 \Pr[K_j > 3 \vert\mathrm{accept}^{(j)}]$',  
-			  r'$\Pr[\mathrm{bad}_X^{(1,2,4,5)}|\mathrm{accept}^{(1,2,4,5)}]$', 
-			  r'$\Pr[\mathrm{bad}_X^{(3)}]$', 
-			  r'$\Pr[K>25]$']
+			  r'$\Pr[K_{X,3}>1] \prod_{j=1}^2 \Pr[K_{X,j} > 3 \vert\mathrm{accept}^{(j)}]$',  
+			  r'$\Pr[\mathrm{bad}_X^{(1,2,4,5)}|\mathrm{accept}^{(1,2,4,5)}]$',
+			  r'$\Pr[K_X>25]$', 
+			  r'$\Pr[\mathrm{bad}_X^{(3)}]$']
 	prList4 = [cnotXX.prBad,
 			   prIgnored, 
 			   resultEC.prBad * 4,
-			   prBadCnot, 
-			   prExrec4]
+			   prExrec4,
+			   prBadCnot]
 	#prList2 = [cnotXX.prBad, prBadCnot, prIgnored, resultEC.prBad * 2, prExrec2]
 	plotPolyList(prList4, gMin, gMax, 
 				filename='plot-prBad', 
@@ -414,11 +414,11 @@ if __name__ == '__main__':
 	#settings = getTransformedSettings(settings, GammaX, weightsX, GammaZ, weightsZ, gMax)
 		
 	#xverify_errorCount(pairs, settings)
-	#plotXZCorrection(pairs, settings)
-	#plotXZCorrection_X(pairs, settings)
-	#plotPrAccept(pairs, settings)
-	#plotCnotExRecDetails(pairs, settings)
-	#plotLevel1Malig(pairs, settings)
+	plotXZCorrection(pairs, settings)
+	plotXZCorrection_X(pairs, settings)
+	plotPrAccept(pairs, settings)
+	plotCnotExRecDetails(pairs, settings)
+	plotLevel1Malig(pairs, settings)
 	plotPrBad(pairs, settings)
 	
 	#preps = [prep.filterAgainst('rest') for prep in preps]
