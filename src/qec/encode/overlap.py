@@ -1,21 +1,39 @@
 '''
 Created on 2011-08-29
 
+This file contains functions for identifying and exploiting overlap between
+stabilizer generators.  Overlap is loosely defined as the amount of similarity
+between two or more stabilizer generators.  The idea is that when multiple
+stabilizer generators share the same Pauli operators on two qubits, a CNOT gate
+between those qubits can copy many Pauli operators at once and thereby reduce
+the number of gates required to construct a stabilizer state. 
+
 @author: adam
 '''
-from adt.BitString import BitString
 from copy import copy
-from util.iteration import PairSetIterator, ParallelPairIterator
+from util.iteration import ParallelPairIterator
 import numpy
 import util.matrix
 
 def overlapMatrix(stabilizers):
+    '''
+    Returns a matrix O for which the entry O(i,j) contains the
+    number of positions in which columns (qubits) i and j overlap.
+    '''
     O = numpy.dot(numpy.transpose(stabilizers), stabilizers)
     O[numpy.diag_indices(len(O))] = 0
     return O
     #return numpy.triu(O)
     
 def useOverlap(A, c, t):
+    '''
+    Consumes the overlap for qubits c and t.
+    Overlapping entries in the target qubit (t) are
+    removed, leaving non-overlapping entries intact.
+    Overlapping entries in the control qubit (c) are
+    left intact, and non-overlapping entries are removed
+    (they cannot exist until *after* the overlap is used).
+    '''
     #print 'before (c=', c, ', t=', t, '):'
     #print A
     At = numpy.transpose(A)
@@ -30,6 +48,13 @@ def useOverlap(A, c, t):
     return numpy.transpose(At)
     
 def findOverlapCircuits(stabilizers):
+    '''
+    Find overlap-based circuits for the given set
+    of X stabilizer generators.
+    TODO: gaussian elimination does not do what I want.  For
+    now the stabilizers argument must be given in (I|A) format.
+    '''
+    
     if True != util.matrix.gauss_jordan(stabilizers):
         print stabilizers
         raise Exception
@@ -46,6 +71,17 @@ def findOverlapCircuits(stabilizers):
     print net
         
 def checkAllPairs(A, verbose=False, level=0):
+    '''
+    Checks all "maximal" column pairings.  That is
+    each column is paired with another column (one column
+    may be idle if the total number is odd).  Overlap between
+    each pair is exploited.  The remaining stabilizer matrix
+    is analyzed by recursively checking all column pairings
+    until no useful pairings remain.
+    
+    Returns the maximum reduction in CNOTs along with the
+    schedule of overlap CNOTs.
+    '''
     
     if level > 4:
         raise Exception
@@ -95,14 +131,16 @@ def checkAllPairs(A, verbose=False, level=0):
     return maxNet, maxCnots 
     
 def getUsefulPairs(overlapMtx):
+    '''
+    Returns a list of pairs (c,t) for which performing
+    a CNOT from qubit c to qubit t would result in
+    reducing the number of CNOT gates required overall.
+    '''
     rowsU, colsU = numpy.triu_indices_from(overlapMtx)
     rowsL, colsL = numpy.tril_indices_from(overlapMtx)
     offDiag = zip(rowsU,colsU) + zip(rowsL,colsL)
     usefulPairs = [pair for pair in offDiag if overlapMtx[pair[0]][pair[1]] > 1]
     return usefulPairs
-
-def pairsNotContaining(pairs, value):
-    return [pair for pair in pairs if value not in pair]
     
 # Steane [[7,1,3]]] X stabilizers
 #steane7 = [
@@ -133,5 +171,4 @@ golay = [
 
 if __name__ == "__main__":
     print overlapMatrix(golay)
-    
     findOverlapCircuits(golay)
