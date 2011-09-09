@@ -4,6 +4,9 @@ Created on 2010-08-30
 
 @author: adam
 '''
+
+print 'loading countParallel.'
+
 from multiprocessing.pool import Pool
 from util.counterUtils import convolveCounts, PartitionIterator
 from util.listutils import addLists, addDicts
