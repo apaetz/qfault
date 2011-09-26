@@ -16,6 +16,7 @@ import time
 
 
 logger = logging.getLogger('countParallel')
+defaultPool = None
 
 class DummyPool(object):
 	'''
@@ -29,7 +30,7 @@ class DummyPool(object):
 		Constructor
 		'''
 		
-		self.pool = Pool(1, initializer, initargs)
+		#self.pool = Pool(1, initializer, initargs)
 		
 	def apply(self, func, args=(), kwds={}):
 		'''
@@ -59,7 +60,7 @@ class DummyPool(object):
 		'''
 		Asynchronous equivalent of `apply()` builtin
 		'''
-		result = self.pool.apply(func, args, kwds)
+		result = apply(func, args, kwds)
 		if None != callback:
 			callback(result)
 		return DummyResult(result)
@@ -138,6 +139,8 @@ def numSlots():
 	return nSlots
 
 def getPool():
+	if None == defaultPool:
+		return Pool(1)
 	return defaultPool
 
 def setPool(pool):
@@ -343,8 +346,6 @@ def iterParallel(iterator, iterFunc, extraArgs=[], callback=None, pool=None):
 	results = [pool.apply_async(iterFunc, [i] + extraArgs, callback=callback) for i in iterator]
 	return results
 
-
-setPool(DummyPool())
 
 if __name__ == '__main__':
 	import doctest
