@@ -4,12 +4,12 @@ Created on Mar 3, 2010
 @author: adam
 '''
 #from qec.Error import CompoundError
+from qec.error import Pauli
 
 class Qecc(object):
     '''
     Abstract base class for quantum error correcting codes.
     '''
-
 
     def __init__(self, name, n, k, d):
         '''
@@ -20,13 +20,13 @@ class Qecc(object):
         self.k = k
         self.d = d
         
-    def reduceError(self, e, eType):
+    def reduceError(self, e):
         return e;
     
-    def getCorrection(self, e, eType):
+    def getCorrection(self, e):
         return 0
     
-    def decodeError(self, e, eType):
+    def decodeError(self, e):
         return bool(e)
            
     def blockLength(self):
@@ -45,11 +45,32 @@ class StabilizerCode(Qecc):
         super(StabilizerCode, self).__init__(name, n, k, d)
     
     def getSyndrome(self, e):
-        return e
+        raise NotImplementedError
     
 class CssCode(StabilizerCode):
     def __init__(self, name, n, k, d):
         super(CssCode, self).__init__(name, n, k, d)
+        
+    def getSyndrome(self, e, paulis=(Pauli.X, Pauli.Z)):
+        '''
+        Since X and Z stabilizers are distinct for CSS codes, it
+        is possible to return just the 'X-part' or just the 'Z-part'
+        of the syndrome.  To return just the 'X-part', use paulis=[Pauli.X],
+        and similiarly for just the 'Z-part'.
+        '''
+        raise NotImplementedError
+    
+    def decodeError(self, e):
+        bits = self._isLogicalError(e[Pauli.X], Pauli.X) + 2*self._isLogicalError(e[Pauli.Z], Pauli.Z)
+        return Pauli.FromBits(bits)
+    
+    def _decodeError(self, e, Type):
+        '''
+        Subclass hook.
+        Returns True if the string e represents a logical error
+        of type 'eType', and False otherwise.
+        '''
+        raise NotImplementedError
         
 #class CompoundCode(Qecc):
 #    

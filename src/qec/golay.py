@@ -118,7 +118,7 @@ class GolayZero(GolayCode):
     def getCorrection(self, e, eType):
         # TODO
         if Pauli.Z == eType:
-            return super(self.__class__, self,).getCorrection(e, eType)
+            return super(self.__class__, self).getCorrection(e, eType)
         
         raise Exception
         

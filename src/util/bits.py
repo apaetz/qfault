@@ -3,6 +3,7 @@ Created on 2011-08-29
 
 @author: adam
 '''
+import gmpy
 
 def weight(e, n = 32):
     """Returns the Hamming weight of the 32-bit integer e.
@@ -29,6 +30,17 @@ def getBits(e, n = 32):
             j += 1
         e >>= 1
     return bits
+
+def numbits(x):
+    '''
+    >>> msbIndex(1<<42)
+    42
+    '''
+    i = 0
+    while x > 0:
+        x >>= 1
+        i+=1
+    return i
 
 def bitsToStr(e, n = 32):
     """Converts the (32-bit) integer e into a string of bits.

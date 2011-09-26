@@ -5,9 +5,12 @@ Created on May 1, 2011
 '''
 from abc import abstractmethod, ABCMeta
 from block import CountedBlock
-from cache import fetchable
-from countErrors import propagateAndReduceZero, countErrors1Block, convolveABB
-from error import Pauli
+from util.cache import fetchable
+from countErrors import propagateAndReduceZero, convolveABB
+from qec.error import Pauli
+from counting.countErrors import countErrors
+from util import counterUtils
+import operator
 
 class Component(object):
 	'''
@@ -102,9 +105,21 @@ class Component(object):
 	def __repr__(self):
 		rep = str(self.__class__.__name__) + '('
 		if None != self._nickname:
-			rep += self._name
+			rep += self._nickname
 		rep += ')'
 		return rep
+	
+class SyndromeKeyGenerator(object):
+	
+	def __init__(self, code, paulis):
+		self._code = code
+		self._paulis = paulis
+		
+	def getKey(self,e):
+		return self._code.getSyndrome(e, self._paulis)
+	
+	def __repr__(self):
+		return str(self._code) + ''.join(str(p) for p in self._paulis)
 		
 class PrepZero(Component):
 	
@@ -115,9 +130,16 @@ class PrepZero(Component):
 		
 	def _count(self, noise):				
 		counts = {}
-		for pauli, kGood in [(Pauli.X, self.kGood), (Pauli.Z, self.kGood), (Pauli.X+Pauli.Z, self.kBest)]:
+		for pauli, kGood in [(Pauli.X, self.kGood), (Pauli.Z, self.kGood), (Pauli.X*Pauli.Z, self.kBest)]:
 			reduced = propagateAndReduceZero(self.locations, self.code, pauli)
-			counts[pauli] = [countErrors1Block(reduced, pauli, noise, k) for k in range(kGood+1)]
+			# TODO: if locations were an object at this point, then the blocknames could be obtained directly.
+			blocknames = counterUtils.allBlocks(reduced)
+			if 1 != len(blocknames):
+				raise Exception('Logical |0> should be only a single block.')
+			
+			keyGenerator = SyndromeKeyGenerator(self.code, pauli.types())
+			counts[pauli] = [countErrors(k, reduced, blocknames, 0, 0, noise[pauli], keyGenerator) 
+							 for k in range(kGood+1)]
 		return CountedBlock(str(self.locations), self.code, counts)
 		
 class VerifyX(Component):

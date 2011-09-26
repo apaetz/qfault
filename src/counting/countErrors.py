@@ -7,12 +7,10 @@ This file contains functions counting error propagation within a given set of lo
 
 
 from collections import namedtuple
-from error import Pauli
-from golay import golayCode
+from qec.error import Pauli, PauliError, xType, zType
+from util import iteration
 from util.cache import fetchable
 from util.listutils import nonZeroIndices
-import copy
-import countParallel
 import logging
 import util.counterUtils
 
@@ -21,101 +19,9 @@ logging.basicConfig(level=logging.INFO,
 					format='[%(asctime)s] %(process)d %(levelname)-8s %(name)s: %(message)s')
 
 logger = logging.getLogger('Counting')
-
-corrector = golayCode.Corrector()	# initialize the ideal decoder
 	
 CountResult = namedtuple('CountResult', ['counts', 'countsRejected', 'locTotals', 'prAccept', 'prBad'])
 
-
-zeroBitsForType = {'X': 12, 'Z': 11}
-		
-def countXerrorsZero(k, locations, noise):
-	'''
-	Takes a set of locations on a single Golay encoded |0> block and returns a list indexed by syndrome with the
-	(weighted) number of X errors leading to each syndrome when exactly k locations fail.
-	'''
-	return countErrors1Block(k, locations, str(locations), 12, 'X', noise['X'])
-
-def countErrorsZero(k, locations, name, noise, type):
-	return countErrors1Block(k, locations, name, zeroBitsForType[type], type, noise[type])
-
-def countXErrorsGolay(k, locations, name, noise):
-	'''
-	Takes a set of locations on a single Golay encoded block and returns a list indexed by syndrome with the
-	(weighted) number of X errors leading to each syndrome when exactly k locations fail.
-	'''
-	return countXerrorsZero(k, locations, name, noise)
-
-def countZerrorsZero(k, locations, name, noise):
-	'''
-	Takes a set of locations on a single Golay encoded |0> block and returns a list indexed by syndrome with the
-	(weighted) number of Z errors leading to each syndrome when exactly k locations fail.
-	'''
-	return countErrors1Block(k, locations, str(locations), 11, 'Z', noise['Z'])
-
-def countZerrorsPlus(k, locations, name, noise):
-	'''
-	Takes a set of locations on a single Golay encoded |+> block and returns a list indexed by syndrome with the
-	(weighted) number of Z errors leading to each syndrome when exactly k locations fail.
-	'''
-	return countErrors1Block(k, locations, name, 12, 'Z', noise['Z'])
-
-def countZerrorsGolay(k, locations, name, noise):
-	'''
-	Takes a set of locations on a single Golay encoded block and returns a list indexed by syndrome with the
-	(weighted) number of Z errors leading to each syndrome when exactly k locations fail.
-	'''
-	return countZerrorsPlus(k, locations, name, noise)
-
-def countXZErrorsZero(k, locations, noise):
-	'''
-	'''
-	return countErrors1BlockXZ(k, locations, str(locations), 11, 12, noise['XZ'])	
-
-def countXerrorsZeroZero(k, locations, name1, name2, noise):
-	'''
-	Takes a set of locations on two encoded |0> blocks and returns a list indexed by syndrome with the
-	(weighted) number of X errors leading to each syndrome when exactly k locations fail.
-	'''
-	return countErrors2blocks(k, locations, name1, 12, name2, 12, 'X', noise['X'])
-
-def countErrorsZeroZero(k, locations, name1, name2, noise, type):
-	'''
-	Takes a set of locations on two encoded |0> blocks and returns a list indexed by syndrome with the
-	(weighted) number of X errors leading to each syndrome when exactly k locations fail.
-	'''
-	bits = zeroBitsForType[type]
-	return countErrors2blocks(k, locations, name1, bits, name2, bits, type, noise[type])
-
-def countZerrorsZeroZero(k, locations, name1, name2, noise):
-	'''
-	Takes a set of locations on two encoded |0> blocks and returns a list indexed by syndrome with the
-	(weighted) number of Z errors leading to each syndrome when exactly k locations fail.
-	'''
-	return countErrors2blocks(k, locations, name1, 11, name2, 11, 'Z', noise['Z'])
-
-def countXZErrorsZeroZero(k, locations, name1, name2, noise):
-	return countErrors2blocksXZ(k, locations, name1, 11, 12, name2, 11, 12, noise['XZ'])
-
-
-def countErrors1Block(k, locations, pauli, noise):
-	"""This takes a set of locations on one block, and returns a list indexed by syndrome, 
-	with the number of X (or Z) error possibilities leading to each syndrome when exactly k locations fail.
-	A single gate can fail as XI, IX or XX (or ZI, IZ, ZZ).  For a logical |0>, the X error syndrome is 12 bits, the Z syndrome is 11 bits.
-	
-	When considering subsets of different kinds of locations, reweighting is necessary.  
-	This is because, working with likelihoods, the CNOT parameter is 4g/(1-12g), where g=p/15 and p is the total error 
-	rate (e.g., p=1/1000); the rest likelihood parameter is 8g/(1-8g); and the prep/meas parameter is 4g/(1-4g).  
-	"""
-#	counts = [0] * (1<<errorBits)
-	
-	dictCounts = countErrorsParallel(k, locations, countLocationSets1Block, [pauli, str(locations), noise])
-	counts = dictCounts
-#	# Convert from a dictionary to a list.
-#	for s, count in dictCounts.iteritems():
-#		counts[s] = count
-			
-	return counts
 
 def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 
@@ -130,10 +36,13 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 		# No locations (and at least 1 failure), so all counts must be zero.
 		return counts
 		
+	import countParallel
+	pool = countParallel.getPool()
+	
 	lSets = [ls for ls in util.counterUtils.SubsetIterator(locations, k)]
 	lSetSlices = countParallel.packTasks(100, lSets, [1] * len(lSets))
 	lsResults = []
-	pool = countParallel.getPool()
+	
 	for lSetSlice in lSetSlices:
 		lsResults.append(pool.apply_async(lsCountingFcn, [lSetSlice] + extraArgs))
 		
@@ -144,134 +53,14 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 			
 	return counts
 
-def countLocationSets1Block(lSets, type, blockname, noise):
-	type1 = type + '1'
-	type2 = type + '2'
-	counts = {}
-	for ls in lSets:
-		k = len(ls)
-		for es in util.counterUtils.TupleIterator(map(util.counterUtils.errorRangeX, ls)):
-			# ls is the set of locations under consideration, es the error types: XI, IX or XX
-			totalError = 0
-			totalWeight = 1
-			for j in range(k):
-				l = ls[j]
-				e = es[j] + 1	# after adding 1, e is now in {1,2,3}, corresponding to XI, IX and XX
-				totalWeight *= noise.getWeight(l,e-1)
-				if e&1:
-					totalError ^= l[type1][type][blockname]
-				if e&2:
-					totalError ^= l[type2][type][blockname]
-			counts[totalError] = counts.get(totalError,0) + totalWeight
-
-	return counts
+class DefaultErrorKeyGenerator(object):
+	
+	def getKey(self,e):
+		return e
 
 
 @fetchable
-def countErrors1BlockXZ(k, locations, blockname, zBits, xBits, noise):
-	"""
-	Counts Y and Z errors for a single (23-qubit) encoded block.  X errors (i.e. errors that
-	contain no Z Pauli) are not counted.
-	
-	Returned counts are a dictionary indexed by a 23-bit syndrome.  The least significant zBits bits are
-	the Z syndrome, the remaining xBits bits are the X syndrome.  Syndromes for which the count is 0 are
-	not included in the dictionary.
-	"""
-	return countErrorsParallel(k, locations, countLocationSets1BlockXZ, [blockname, zBits, noise])
-
-
-
-def countLocationSets1BlockXZ(lSets, blockname, zBits, noise):
-	
-	eXI = 1
-	eZI = 4
-	errorSets = {
-				 'prepX': [eZI],
-				 'prepZ': [eXI],
-				 'measX': [eZI],
-				 'measZ': [eXI],
-				 'rest': [eXI, eZI, eXI + eZI],
-				 'cnot': range(16)
-				 }
-
-	counts = {}
-	for ls in lSets:
-		k = len(ls)
-		for es in util.counterUtils.TupleIterator(map(util.counterUtils.errorRangeXZ, ls)):
-			# ls is the set of locations under consideration, es the error types: XI, IX, ...
-			totalError = 0
-			totalWeight = 1
-			for j in range(k):
-				l = ls[j]
-				
-				# after adding 1, e is now in {1,2,...,15}, corresponding to XI, IX, ..., YY
-				# i.e. bit0 ~ XI, bit1 ~ IX, bit2 ~ ZI, bit3 ~ IZ
-				eIndex = es[j]
-				e = errorSets[l['type']][eIndex]
-				
-				totalWeight *= noise.getWeight(l, e-1)
-				
-				if e&1:
-					totalError ^= (l['X1']['X'][blockname] << zBits)
-				if e&2:
-					totalError ^= (l['X2']['X'][blockname] << zBits)
-				if e&4:
-					totalError ^= l['Z1']['Z'][blockname]
-				if e&8:
-					totalError ^= l['Z2']['Z'][blockname]
-					
-			counts[totalError] = counts.get(totalError, 0) + totalWeight
-
-	return counts
-
-
-
-
-@fetchable
-def countErrors2blocks(k, locations, name1, errorBits1, name2, errorBits2, type, noise):
-	""" Identical to countErrors1Block(), except that the locations may now span two blocks."""
-	counts = [0] * (1 << (errorBits1 + errorBits2))
-	
-	extraArgs = [type, name1, errorBits1, name2, errorBits2, noise]
-	
-	dictCounts = countErrorsParallel(k, locations, countLocationSets2Blocks, extraArgs)
-	
-	for s, count in dictCounts.iteritems():
-		counts[s] = count
-	
-	return counts
-
-
-def countLocationSets2Blocks(lSets, type, name1, errorBits1, name2, errorBits2, noise):
-	type1 = type + '1'
-	type2 = type + '2'
-	
-	counts = {}
-	for ls in lSets:
-		k = len(ls)
-		for es in util.counterUtils.TupleIterator(map(util.counterUtils.errorRangeX, ls)):
-			# ls is the set of CNOT locations under consideration, es the error types: XI, IX or XX
-			totalError1 = 0
-			totalError2 = 0
-			totalWeight = 1
-			for j in range(k):
-				l = ls[j]
-				e = es[j] + 1	# after adding 1, e is now in {1,2,3}, corresponding to XI, IX and XX
-				totalWeight *= noise.getWeight(l,e-1)
-				if e&1:
-					totalError1 ^= l[type1][type][name1]
-					totalError2 ^= l[type1][type][name2]
-				if e&2:
-					totalError1 ^= l[type2][type][name1]
-					totalError2 ^= l[type2][type][name2]
-					
-			TODO
-			counts[totalError1] = counts.get(totalError1,0) + totalWeight
-	
-	return counts
-
-@fetchable
-def countErrors2blocksXZ(k, locations, name1, zBits1, xBits1, name2, zBits2, xBits2, noise):
+def countErrors(k, locations, blocknames, xbits, zbits, noise, keyGenerator=DefaultErrorKeyGenerator):
 	""" Identical to countErrors1BlockYZ(), except that the locations may now span two blocks.
 	When considering both Y and Z errors, there can be (for encoded |0>) as many as 2^44
 	syndromes across two blocks.  In order to manage this, counts are kept in dictionaries
@@ -282,67 +71,63 @@ def countErrors2blocksXZ(k, locations, name1, zBits1, xBits1, name2, zBits2, xBi
 	the next zBits1 are the Z syndrome of the first block, and the final xBits1 are the X
 	syndrome of the first block.
 	
-	TODO: It might make more sense to arrange the syndrome by X and Z instead of by block.
+	TODO: This documentation is old. Update documentation.
 	
 	"""
-	extraArgs = [name1, xBits1, zBits1, name2, xBits2, zBits2, noise]
-	return countErrorsParallel(k, locations, countLocationSets2BlocksXZ, extraArgs)
-
-
-def countLocationSets2BlocksXZ(lSets, name1, xBits1, zBits1, name2, xBits2, zBits2, noise):
 		
-	block2Bits = zBits2 + xBits2
-	block1XShift = zBits1 + block2Bits
-	
-	eXI = 1
-	eZI = 4
-	errorSets = {
-				 'prepX': [eZI],
-				 'prepZ': [eXI],
-				 'measX': [eZI],
-				 'measZ': [eXI],
-				 'rest': [eXI, eZI, eXI + eZI],
-				 'cnot': range(16)
-				 }
-	
+	extraArgs = [blocknames, xbits, zbits, noise, keyGenerator]
+	return countErrorsParallel(k, locations, countLocationSets, extraArgs)
+
+
+def countLocationSets(lSets, blocknames, xbits, zbits, noise, keyGenerator):
+
 	counts = {}
 	
 	for ls in lSets:
+		# The set of possible errors can be different for each location.
+		errorLookup = map(noise.errorList, ls)
+		
 		k = len(ls)
-		for es in util.counterUtils.TupleIterator(map(util.counterUtils.errorRangeXZ, ls)):
-			# ls is the set of CNOT locations under consideration, es the error types: XI, IX, ...
-			totalError = 0
+		for eIndexes in iteration.TupleIterator(map(len, errorLookup)):
+			# ls is the set of locations under consideration.
+			# eIndexes is a list of indexes, one for each location, that represent error types.
+			
+			X = [0 for _ in blocknames]
+			Z = [0 for _ in blocknames]
 			totalWeight = 1
+			
 			for j in range(k):
-				l = ls[j]
-				# after adding 1, e is now in {1,2,...,15}, corresponding to XI, IX, ..., YY
-				# i.e. bit0 ~ XI, bit1 ~ IX, bit2 ~ ZI, bit3 ~ IZ
-				eIndex = es[j]
-				e = errorSets[l['type']][eIndex]
-				totalWeight *= noise.getWeight(l,e-1)
+				l = ls[j]				
+				e = errorLookup[j][eIndexes[j]]
 				
-				if e&1:
-					totalError ^= (l['X1']['X'][name1] << block1XShift) + \
-								  (l['X1']['X'][name2] << zBits2)
-				if e&2:
-					totalError ^= (l['X2']['X'][name1] << block1XShift) + \
-								  (l['X2']['X'][name2] << zBits2)					 
-				if e&4:
-					totalError ^= (l['Z1']['Z'][name1]<< block2Bits) + \
-								  l['Z1']['Z'][name2]
-				if e&8:
-					totalError ^= (l['Z2']['Z'][name1] << block2Bits) + \
-								  l['Z2']['Z'][name2]
+				totalWeight *= noise.getWeight(l,e)
+				
+				# X-error at location l on qubit 1 (i.e., XI, or YI, or XX, etc.)
+				if e[xType] & 1:
+					X = [X[i] ^ l['X1']['X'][name] for i,name in enumerate(blocknames)]
+					
+				# X-error at location l on qubit 2 (i.e., XI, or YI, or XX, etc.)
+				if e[xType] & 2:
+					X = [X[i] ^ l['X2']['X'][name] for i,name in enumerate(blocknames)]
+					
+				# (IZ)
+				if e[zType] & 1:
+					Z = [Z[i] ^ l['Z1']['Z'][name] for i,name in enumerate(blocknames)]					
+								
+				# (ZI)
+				if e[zType] & 2:
+					Z = [Z[i] ^ l['Z2']['Z'][name] for i,name in enumerate(blocknames)]
 
-			counts[totalError] = counts.get(totalError, 0) + totalWeight
+			# Concatenate the errors on each block into a single bit string.
+			X = reduce(lambda x, i: (x << xbits[i]) + X[i], range(1,len(X)), X[0])
+			Z = reduce(lambda z, i: (z << zbits[i]) + Z[i], range(1,len(Z)), Z[0])
+			
+			totalError = PauliError(X,Z)
+			errorKey = keyGenerator.getKey(totalError)
+			counts[errorKey] = counts.get(errorKey, 0) + totalWeight
 
 	return counts
 
-def convolveCountsPostselectX(counts1, counts2):
-	return convolveCountsPostselect(counts1, counts2, 12)
-
-def convolveCountsPostselectZ(counts1, counts2):
-	return convolveCountsPostselect(counts1, counts2, 11)
 
 def convolveCountsPostselect(counts1, counts2, syndromeBits):
 	'''
@@ -361,6 +146,13 @@ def convolveCountsPostselect(counts1, counts2, syndromeBits):
 		s2b = s2 & mask
 		counts[s2a ^ s2b] += counts1[s2b] * counts2[s2]
 	return counts
+
+
+
+###################
+# TODO: most of the convolution functions have the number of syndrome bits hardcoded.
+# Need to parameterize.
+###################
 
 def convolveXZRejected(countsA1, countsVX):
 	
@@ -519,55 +311,38 @@ def convolveABA(countsAB, countsA, bitsA=12, bitsB=12):
 	return counts
 
 
-def reduceAllErrorSyndromes(locations, code, eigenstate=None):
-	"""Reduces errors to error syndromes for locations on an encoded block."""
-	corrector = code.getCorrector()
-	for l in locations:
-		for name in l['X1']['X'].keys(): 
-			reduceError(l, name, corrector, eigenstate)	
-				
-
-def reduceAllErrorSyndromesZero(locations, code):
-	return reduceAllErrorSyndromes(locations, code, Pauli.Z)
-
-def reduceAllErrorSyndromesPlus(locations, code):
-	return reduceAllErrorSyndromes(locations, code, Pauli.X)
-		
-def reduceError(l, name, corrector, eigenstate):
-	for pauli in [Pauli.X, Pauli.Z]:
-		# First, determine how which syndrome to get.  If were
-		# looking at errors of the same type at the logical
-		# Pauli for which this block is an eigenstate, then
-		# the logical operator is a stabilizer, and there are
-		# fewer inequivalent errors.
-		if pauli == eigenstate:
-			getSyndrome = lambda e: corrector.getSyndrome(e)
-		else:
-			getSyndrome = lambda e: corrector.getLogicalSyndrome(e)
-			
-		# All locations have a node on block 1.  Only some have a node
-		# on block 2.
-		l[pauli+'1'][pauli][name] = getSyndrome(l[pauli+'1'][pauli][name])
-		if pauli+'2' in l:
-			l[pauli+'2'][pauli][name] = getSyndrome(l[pauli+'2'][pauli][name])
+#def reduceAllErrorSyndromes(locations, code, eigenstate=None):
+#	"""Reduces errors to error syndromes for locations on an encoded block."""
+#	for l in locations:
+#		for name in l['X1']['X'].keys(): 
+#			reduceError(l, name, code, eigenstate)	
+#				
+#
+#def reduceAllErrorSyndromesZero(locations, code):
+#	return reduceAllErrorSyndromes(locations, code, Pauli.Z)
+#
+#def reduceAllErrorSyndromesPlus(locations, code):
+#	return reduceAllErrorSyndromes(locations, code, Pauli.X)
+#		
+#def reduceError(l, name, code, eigenstate):
+#	for pauli in [str(Pauli.X), str(Pauli.Z)]:
+#		# All locations have a node on block 1.  Only some have a node
+#		# on block 2.
+#		l[pauli+'1'][pauli][name] = code.getSyndrome(l[pauli+'1'][pauli][name])
+#		if pauli+'2' in l:
+#			l[pauli+'2'][pauli][name] = code.getSyndrome(l[pauli+'2'][pauli][name])
 
 
-def propagateAndReduceZero(locations, code, pauli=None):
-	assert pauli == Pauli.X or pauli == Pauli.Z or pauli == Pauli.X+Pauli.Z
+def propagateAndReduceZero(locations, code, pauli):
 	# |+> preparations and X-basis measurements cannot cause X errors
 	# (and similarly for Z). So they need not be counted.
-	if pauli != Pauli.X+Pauli.Z:
-		locations = locations.filterAgainst('meas' + pauli)
-		locations = locations.filterAgainst('prep' + pauli)
+	if pauli != Pauli.Y:
+		locations = locations.filterAgainst('meas' + str(pauli))
+		locations = locations.filterAgainst('prep' + str(pauli))
 	util.counterUtils.propagateAllErrors(locations)
-	reduceAllErrorSyndromesZero(locations, code)
+	#reduceAllErrorSyndromesZero(locations, code)
 	
 	return locations
-
-def propagateReduceAndCountZero(locations, type, blockname, noise, kMax):
-	locations = propagateAndReduceZero(locations, type)
-	counts = [countErrorsZero(k, locations, blockname, noise, type) for k in range(kMax + 1)]
-	return locations, counts
 
 
 
