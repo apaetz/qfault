@@ -7,7 +7,7 @@ from counting.location import Locations
 from qec.encode.ancilla import ancillaZPrep
 from qec.error import Pauli, PauliError
 from qec.qecc import CssCode
-import qec.error
+import qec.error as error
 from util import bits
 from util.bits import weight
 
@@ -33,7 +33,7 @@ class ED422Code(CssCode):
     It encodes two qubits, though one of the two is often defined as a "gauge"
     qubit and is ignored.
     There are two stabilizer generators: XXXX, and ZZZZ.
-    One set of logical operators is: XXII, ZIZI.
+    One set of logical operators is: IIXX, IZIZ (given in descending qubit order).
     The other set of logical operators is: IXIX, IIZZ.
     '''
 
@@ -52,7 +52,7 @@ class ED422Code(CssCode):
 
         return PauliError(r[Pauli.X], r[Pauli.Z])
     
-    def getSyndrome(self, e, types=(qec.error.xType, qec.error.zType)):
+    def getSyndrome(self, e, types=(error.xType, error.zType)):
         s = 0
         for etype in types:
             s << 1
@@ -78,8 +78,8 @@ class ED422State(ED422Code):
     def __init__(self, logicalStabX=0, logicalStabZ=0):
         super(ED422State, self).__init__()
         self.logical = dict()
-        self.logical[Pauli.X] = logicalStabX
-        self.logical[Pauli.Z] = logicalStabZ
+        self.logical[error.xType] = logicalStabX
+        self.logical[error.zType] = logicalStabZ
         
     def reduceError(self, e):
         e1 = super(ED422State, self).reduceError(e)
@@ -89,6 +89,16 @@ class ED422State(ED422Code):
         if weight(e2) < weight(e1):
             return e2
         return e1
+       
+    def getSyndrome(self, e, types=(error.xType, error.zType)):
+        s = super(ED422State, self).getSyndrome(e, types)
+        for etype in types:
+            s << 1
+            logical = self.logical[error.dualType(etype)]
+            s += bits.parity(e[etype] & logical, 4)
+            
+        print 'e=', str(e), 's=', s
+        return s
     
     def _isLogicalError(self, e, eType):
         # A logical error occurs if the error anticommutes with
@@ -98,8 +108,8 @@ class ED422State(ED422Code):
         # We want the logical operator corresponding to the dual of eType.
         # For example, if eType == Pauli.Z and XXII is the logical-X operator
         # in the stabilizer, then the logical-X operator that we want is
-        # IXIX.
-        logical = self.logical[Pauli.Dual(eType)] ^ 0b1001
+        # XIXI.
+        logical = self.logical[error.dualType(eType)] ^ 0b0110
         
         return bits.parity(e & logical, 4)
         
@@ -111,7 +121,7 @@ class ED422ZeroPlus(ED422State):
     '''
     
     def __init__(self):
-        super(ED422ZeroPlus, self).__init__(logicalStabX=0b0101, logicalStabZ=0b0011)
+        super(ED422ZeroPlus, self).__init__(logicalStabX=0b0101, logicalStabZ=0b0101)
         self.name += ' |0>|+>'
         
 if __name__ == '__main__':

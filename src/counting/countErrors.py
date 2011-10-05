@@ -101,8 +101,11 @@ def countLocationSets(lSets, blocknames, xbits, zbits, noise, keyGenerator):
 				e = errorLookup[j][eIndexes[j]]
 				
 				totalWeight *= noise.getWeight(l,e)
+				#print 'l=', l
+				#print 'k=', k, 'j=', j, 'eIndex=', eIndexes[j]
+				#print 'e=', e, 'weight=', totalWeight
 				
-				# X-error at location l on qubit 1 (i.e., XI, or YI, or XX, etc.)
+				# X-error at location l on qubit 1 (i.e., IX, or IY, or XX, etc.)
 				if e[xType] & 1:
 					X = [X[i] ^ l['X1']['X'][name] for i,name in enumerate(blocknames)]
 					

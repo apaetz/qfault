@@ -46,6 +46,12 @@ class StabilizerCode(Qecc):
     
     def getSyndrome(self, e):
         raise NotImplementedError
+       
+    def stabilizerGenerators(self):
+        '''
+        Returns an iterable containing the stabilizer generators.
+        '''
+        raise NotImplementedError
     
 class CssCode(StabilizerCode):
     def __init__(self, name, n, k, d):

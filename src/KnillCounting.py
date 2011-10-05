@@ -18,4 +18,4 @@ if __name__ == '__main__':
               Pauli.Z: NoiseModelZSympy(),
               Pauli.Y: NoiseModelXZSympy() 
              }
-    print prepZ.count(noise)
+    print prepZ.count(noise).counts()

@@ -33,9 +33,22 @@ errorListXZ = {
 		'prepX': (Pauli.Z,),
 		'measX': (Pauli.Z,),	
 		'rest':  (Pauli.X, Pauli.Z, Pauli.Y),
-		'cnot':  tuple([p1+p2 for p1,p2 in SubsetIterator([Pauli.X,Pauli.Z,Pauli.Y,Pauli.I], 2) 
-					                    if not(p1==Pauli.I and p2==Pauli.I)])
-}
+		'cnot':  (Pauli.I+Pauli.X,
+				  Pauli.I+Pauli.Z,
+				  Pauli.I+Pauli.Y,
+				  Pauli.X+Pauli.I,
+				  Pauli.X+Pauli.X,
+				  Pauli.X+Pauli.Z,
+				  Pauli.X+Pauli.Y,
+				  Pauli.Z+Pauli.I,
+				  Pauli.Z+Pauli.X,
+				  Pauli.Z+Pauli.Z,
+				  Pauli.Z+Pauli.Y,
+				  Pauli.Y+Pauli.I,
+				  Pauli.Y+Pauli.X,
+				  Pauli.Y+Pauli.Z,
+				  Pauli.Y+Pauli.Y)
+}			
 
 
 class NoiseModel(object):

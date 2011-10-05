@@ -132,8 +132,7 @@ class PrepZero(Component):
 		counts = {}
 		for pauli, kGood in [(Pauli.X, self.kGood), (Pauli.Z, self.kGood), (Pauli.X*Pauli.Z, self.kBest)]:
 			reduced = propagateAndReduceZero(self.locations, self.code, pauli)
-			# TODO: if locations were an object at this point, then the blocknames could be obtained directly.
-			blocknames = counterUtils.allBlocks(reduced)
+			blocknames = reduced.blocknames()
 			if 1 != len(blocknames):
 				raise Exception('Logical |0> should be only a single block.')
 			

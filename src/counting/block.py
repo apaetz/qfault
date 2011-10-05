@@ -30,11 +30,11 @@ class CountedBlock(Block):
 	
 	def __init__(self, name, code, counts):
 		super(CountedBlock, self).__init__(name, code)
-		self.counts = counts
+		self._counts = counts
 		
 	def __get__(self, etype):
-		return self.counts[etype]
+		return self._counts[etype]
 	
 	def counts(self):
-		return self.counts
+		return self._counts
 		
