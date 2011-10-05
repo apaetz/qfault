@@ -120,9 +120,15 @@ class fetchable(object):
 	def GetKey(funcName, args, kwargs):
 		args = list(args) + kwargs.keys()
 		key =  reduce(lambda s, arg: s + '.' + str(arg), args, funcName)
-		badChars = [' ', '(', ')', '[', ']', '{', '}', '\'']
+		
+		# TODO: create a proper string filter class.
+		badChars = [' ', '(', ')', '[', ']', '{', '}', '\'', '|', '>']
 		for c in badChars:
 			key = key.replace(c,'')
+			
+		# Windows (NTFS) does not allow colons.	
+		key = key.replace(':', ';')
+		
 		return key
 		
 #	def fetch(self, key):
@@ -200,7 +206,7 @@ class DataManager(object):
 	
 	def loadjson(self, key):
 		filename = self.constructFilename(key)
-		logger.debug('Loading {0} to {1}'.format(key, filename))
+		logger.debug('Loading {0} from {1}'.format(key, filename))
 		infile = gzip.open(filename, 'rb')
 		obj = json.loads(infile.read())
 		infile.close()
@@ -211,7 +217,7 @@ class DataManager(object):
 	
 	def loadpickle(self, key):
 		filename = self.constructFilename(key)
-		logger.debug('Loading {0} to {1}'.format(key, filename))
+		logger.debug('Loading {0} from {1}'.format(key, filename))
 		infile = gzip.open(filename, 'rb')
 		obj = cPickle.loads(infile.read())
 		infile.close()

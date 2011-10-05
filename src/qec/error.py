@@ -9,6 +9,18 @@ _strLookup = ('I', 'Z', 'X', 'Y')
 
 xType = 'X'
 zType = 'Z'
+_dualTable = {xType: zType,
+			 zType: xType}
+
+def dualType(etype):
+	'''
+	Returns the dual of the given error type.
+	>>> dualType(xType)
+	'Z'
+	>>> dualType(zType)
+	'X'
+	'''
+	return _dualTable[etype]
 
 class PauliError(object):
 	'''
@@ -64,12 +76,14 @@ class PauliError(object):
 		'''
 		Concatenate with another error.
 		This is equivalent of taking the tensor product.
-		>>> str(PauliError(1,0) + PauliError(1,1))
-		'YZ'
+		>>> str(PauliError(0,1) + PauliError(1,1))
+		'ZY'
+		>>> str(PauliError(1,0) + PauliError(0,0))
+		'XI'
 		'''
-		shift = max(bits.numbits(other[xType]), bits.numbits(other[zType]))
-		return PauliError(self[xType]<<shift + other[xType],
-						  self[zType]<<shift + other[zType])
+		shift = max(bits.numbits(other[xType]), bits.numbits(other[zType]), 1)
+		return PauliError((self[xType]<<shift) + other[xType],
+						  (self[zType]<<shift) + other[zType])
 		
 	def __str__(self):
 		X = self[xType]
@@ -80,12 +94,13 @@ class PauliError(object):
 			X >>= 1
 			Z >>= 1
 			
-		if '' == s:
+		if 0 == len(s):
 			s = ['I']
 		return ''.join(reversed(s))
 	
 	def __repr__(self):
-		return 'PauliError({0:b},{1:b})'.format(self[xType], self[zType])
+		return str(self)
+		#return 'PauliError({0:b},{1:b})'.format(self[xType], self[zType])
 
 class Pauli(object):
 	'''

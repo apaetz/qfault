@@ -1,5 +1,6 @@
 from util.counterUtils import sumLocs
 import operator
+from util import counterUtils
 
 
 class Locations(object):
@@ -32,6 +33,9 @@ class Locations(object):
 		
 	def getTotals(self):
 		return LocationCount._fromDict(sumLocs(self))
+	
+	def blocknames(self):
+		return counterUtils.allBlocks(self)
 	
 	
 class LocationCount(tuple):
