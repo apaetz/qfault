@@ -75,6 +75,9 @@ class ED422State(ED422Code):
     added to the stabilizer generators.
     '''
     
+    #TODO: this is probably not the best way to initialize.
+    # Instead, allow the user to specify the logical operator
+    # for each logical qubits. e.g., ED422State(Pauli.X, Pauli.Z)
     def __init__(self, logicalStabX=0, logicalStabZ=0):
         super(ED422State, self).__init__()
         self.logical = dict()
@@ -97,7 +100,6 @@ class ED422State(ED422Code):
             logical = self.logical[error.dualType(etype)]
             s += bits.parity(e[etype] & logical, 4)
             
-        print 'e=', str(e), 's=', s
         return s
     
     def _isLogicalError(self, e, eType):

@@ -19,6 +19,8 @@ class SubsetIterator:
     def __iter__(self):
         if self.subsetsize == 0:
             return [[]].__iter__()
+        if self.subsetsize == len(self.universe):
+            return [self.universe].__iter__()
         
         self.a = range(self.subsetsize)    # a is used to store the indices of the subset
         self.a[-1] -= 1        # decrement the last index so first increment will return first subset

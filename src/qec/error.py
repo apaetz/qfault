@@ -24,6 +24,14 @@ def dualType(etype):
 
 class PauliError(object):
 	'''
+	An n-qubit Pauli error, for arbitrary n.
+	Does not account for overall phase factors.
+	
+	This class does not impose a particular ordering
+	(i.e, ascending or descending) on the qubits.
+	However, a good convention is to specify qubit
+	zero as the LSB, and qubit (n-1) as the MSB.
+	
 	>>> str(PauliError(0b110, 0b011))
 	'XYZ'
 	'''

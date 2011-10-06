@@ -39,7 +39,7 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 	import countParallel
 	pool = countParallel.getPool()
 	
-	lSets = [ls for ls in util.counterUtils.SubsetIterator(locations, k)]
+	lSets = [ls for ls in iteration.SubsetIterator(locations, k)]
 	lSetSlices = countParallel.packTasks(100, lSets, [1] * len(lSets))
 	lsResults = []
 	
@@ -59,7 +59,7 @@ class DefaultErrorKeyGenerator(object):
 		return e
 
 
-@fetchable
+#@fetchable
 def countErrors(k, locations, blocknames, xbits, zbits, noise, keyGenerator=DefaultErrorKeyGenerator):
 	""" Identical to countErrors1BlockYZ(), except that the locations may now span two blocks.
 	When considering both Y and Z errors, there can be (for encoded |0>) as many as 2^44
