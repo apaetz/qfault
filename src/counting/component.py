@@ -36,14 +36,14 @@ class Component(object):
 	and _postCount().
 	'''
 
-	def __init__(self, kGood, kBest=0, nickname=None, subcomponents=[]):
+	def __init__(self, kGood, kBest=0, nickname=None, subcomponents={}):
 		'''
 		Constructor
 		'''
 		self.kGood = kGood
 		self.kBest = kBest
 		self._nickname = nickname
-		self._subs = {}
+		self._subs = subcomponents
 		
 	def __set__(self, name, component):
 		self._subs[name] = component
@@ -107,6 +107,9 @@ class Component(object):
 		if None != self._nickname:
 			rep += self._nickname
 		rep += ')'
+		rep += str(self.kGood)
+		if 0 != self.kBest:
+			rep += str(self.kBest)
 		return rep
 	
 class SyndromeKeyGenerator(object):
@@ -124,6 +127,12 @@ class SyndromeKeyGenerator(object):
 class PrepZero(Component):
 	
 	def __init__(self, kGood, kBest, locations, code):
+		# The number of faulty locations cannot exceed the total
+		# number of locations.
+		n = len(locations)
+		kBest = min(kBest, n)
+		kGood = min(kGood, n)
+		
 		super(PrepZero, self).__init__(kGood, kBest, nickname=str(locations))
 		self.locations = locations
 		self.code = code
@@ -140,6 +149,16 @@ class PrepZero(Component):
 			counts[pauli] = [countErrors(k, reduced, blocknames, 0, 0, noise[pauli], keyGenerator) 
 							 for k in range(kGood+1)]
 		return CountedBlock(str(self.locations), self.code, counts)
+		
+class TransCNOT(Component):
+	'''
+	Transversal Controlled-NOT.
+	'''
+	
+	def __init__(self, kGood, kBest, ctrl, targ, nickname='trans CNOT'):
+		super(TransCNOT, self).__init__(kGood, kBest, nickname, subcomponents={'ctrl': ctrl, 'targ': targ})
+		
+	TODO
 		
 class VerifyX(Component):
 	
