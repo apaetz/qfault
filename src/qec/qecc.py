@@ -5,6 +5,7 @@ Created on Mar 3, 2010
 '''
 #from qec.Error import CompoundError
 from qec.error import Pauli
+import qec.error as error
 
 class Qecc(object):
     '''
@@ -46,6 +47,12 @@ class StabilizerCode(Qecc):
     
     def getSyndrome(self, e):
         raise NotImplementedError
+    
+    def syndromeLength(self):
+        '''
+        Returns the number of bits in the syndrome.
+        '''
+        return len(self.stabilizerGenerators())
        
     def stabilizerGenerators(self):
         '''
@@ -57,7 +64,7 @@ class CssCode(StabilizerCode):
     def __init__(self, name, n, k, d):
         super(CssCode, self).__init__(name, n, k, d)
         
-    def getSyndrome(self, e, paulis=(Pauli.X, Pauli.Z)):
+    def getSyndrome(self, e, types=(error.xType, error.zType)):
         '''
         Since X and Z stabilizers are distinct for CSS codes, it
         is possible to return just the 'X-part' or just the 'Z-part'
@@ -65,6 +72,9 @@ class CssCode(StabilizerCode):
         and similiarly for just the 'Z-part'.
         '''
         raise NotImplementedError
+    
+    def syndromeLength(self, types=(error.xType, error.zType)):
+        pass
     
     def decodeError(self, e):
         bits = self._isLogicalError(e[Pauli.X], Pauli.X) + 2*self._isLogicalError(e[Pauli.Z], Pauli.Z)

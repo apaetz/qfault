@@ -6,11 +6,13 @@ Created on May 1, 2011
 from abc import abstractmethod, ABCMeta
 from block import CountedBlock
 from util.cache import fetchable
-from countErrors import propagateAndReduceZero, convolveABB
+from countErrors import filterAndPropagate, convolveABB
 from qec.error import Pauli
-from counting.countErrors import countErrors
+from counting.countErrors import countErrors, countBlocksBySyndrome
 from util import counterUtils
 import operator
+from counting.location import Locations
+from counting.block import Block
 
 class Component(object):
 	'''
@@ -50,6 +52,23 @@ class Component(object):
 	
 	def __get__(self, name):
 		return self._subs[name]
+	
+	def locations(self):
+		'''
+		Returns the set of locations contained in the component (and all sub-components).
+		:rtype: :class:`Locations`
+		'''
+		locs = Locations()
+		for sub in self._subs:
+			locs += sub.locations()
+		return locs + self.internalLocations()
+	
+	def internalLocations(self):
+		'''
+		Returns the set of locations contained in the component *excluding* any sub-components.
+		:rtype: :class:`Locations`
+		'''
+		return Locations()
 		
 	@fetchable
 	def count(self, noise):
@@ -112,53 +131,79 @@ class Component(object):
 			rep += str(self.kBest)
 		return rep
 	
-class SyndromeKeyGenerator(object):
+class CountableComponent(Component):
+	'''
+	This is a component which, in addition to (or instead of) having sub-components,
+	also has its own physical locations that must be counted.
+	'''
 	
-	def __init__(self, code, paulis):
-		self._code = code
-		self._paulis = paulis
-		
-	def getKey(self,e):
-		return self._code.getSyndrome(e, self._paulis)
-	
-	def __repr__(self):
-		return str(self._code) + ''.join(str(p) for p in self._paulis)
-		
-class PrepZero(Component):
-	
-	def __init__(self, kGood, kBest, locations, code):
+	def __init__(self, locations, codes, kGood, kBest=0, nickname=None, subcomponents={}):
 		# The number of faulty locations cannot exceed the total
 		# number of locations.
 		n = len(locations)
 		kBest = min(kBest, n)
 		kGood = min(kGood, n)
+		if None == nickname:
+			nickname=str(locations)
+		super(CountableComponent, self).__init__(kGood, kBest, nickname=nickname)
 		
-		super(PrepZero, self).__init__(kGood, kBest, nickname=str(locations))
 		self.locations = locations
-		self.code = code
+		blocknames = list(locations.blocknames())
+		self.blocks = tuple([Block(name, codes[name]) for name in blocknames])
 		
-	def _count(self, noise):				
+		# Construct
+		codeList = [block.code for block in self.blocks]
+		self.code = reduce(operator.add, codeList[1:], codeList[0])
+		
+	def _count(self, noise):
+		# First, count the sub-components.
+		subcounts = super(CountableComponent, self)._count(noise)
+			
+		# Now count the internal locations.
 		counts = {}
 		for pauli, kGood in [(Pauli.X, self.kGood), (Pauli.Z, self.kGood), (Pauli.X*Pauli.Z, self.kBest)]:
-			reduced = propagateAndReduceZero(self.locations, self.code, pauli)
-			blocknames = reduced.blocknames()
-			if 1 != len(blocknames):
-				raise Exception('Logical |0> should be only a single block.')
-			
-			keyGenerator = SyndromeKeyGenerator(self.code, pauli.types())
-			counts[pauli] = [countErrors(k, reduced, blocknames, 0, 0, noise[pauli], keyGenerator) 
-							 for k in range(kGood+1)]
-		return CountedBlock(str(self.locations), self.code, counts)
+			counts[pauli] = countBlocksBySyndrome(self.locations, self.blocks, pauli, noise[pauli], kGood)
+				
+		cb = CountedBlock(self.nickname(), self.code, counts)
+		if 0 == len(subcounts):
+			# There are no sub-component counts. So we can just return the
+			# internal counts.
+			return cb
+		
+		subcounts[self.nickname()] = cb 
+		return subcounts
+
+class PrepZero(CountableComponent):
+	
+	def __init__(self, kGood, kBest, locations, code):
+		blocknames = list(locations.blocknames())
+		if 1 != len(blocknames):
+			raise Exception('Logical |0> should be only a single block, not {0}'.format(len(blocknames)))
+
+		super(PrepZero, self).__init__(locations, {blocknames[0]: code}, kGood, kBest)
 		
 class TransCNOT(Component):
 	'''
 	Transversal Controlled-NOT.
 	'''
 	
-	def __init__(self, kGood, kBest, ctrl, targ, nickname='trans CNOT'):
-		super(TransCNOT, self).__init__(kGood, kBest, nickname, subcomponents={'ctrl': ctrl, 'targ': targ})
+	def __init__(self, kGood, kBest, ctrlCode, targCode):
+		n = ctrlCode.blockLength()
+		if n != targCode.blockLength():
+			raise Exception('Control ({0}) and target ({1}) blocklengths do not match.'.format(n, targCode.blockLength()))
 		
-	TODO
+		nickname='transCNOT.'+str(n)
+		super(TransCNOT, self).__init__(kGood, kBest, nickname)		
+		self._ctrlCode = ctrlCode
+		self._targCode = targCode
+		
+	def internalLocations(self):
+		n = self._ctrlCode.blockLength()
+		return Locations([counterUtils.loccnot('ctrl', i, 'targ', i) for i in range(n)], self.nickname())
+		
+	def _count(self, noise):
+		pass
+		
 		
 class VerifyX(Component):
 	

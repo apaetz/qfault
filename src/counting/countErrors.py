@@ -13,6 +13,8 @@ from util.cache import fetchable
 from util.listutils import nonZeroIndices
 import logging
 import util.counterUtils
+import math
+import operator
 
 
 logging.basicConfig(level=logging.INFO,
@@ -53,14 +55,65 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 			
 	return counts
 
+
+def countBlocksBySyndrome(locations, blocks, pauli, noise, kMax):
+	filtered = filterAndPropagate(locations, pauli)
+	
+	keyGenerator = SyndromeKeyGenerator(blocks, pauli.types())
+	counts = [countErrors(k, filtered, noise, keyGenerator) for k in range(kMax+1)]
+	
+	return counts
+
 class DefaultErrorKeyGenerator(object):
 	
 	def getKey(self,e):
 		return e
+	
+	def __repr__(self):
+		return 'default_key'
+	
+class SyndromeKeyGenerator(object):
+	
+	def __init__(self, blocks, paulis):
+		self._blocks = blocks
+		self._paulis = paulis
+		
+		#self._bits = {block.name: block.getCode().syndromeLength(paulis) for block in blocks}
+		
+		if 1 == len(blocks):
+			self.getKey = self.oneBlockKey
+		else:
+			self.getKey = self.tupleKey
+		
+	def oneBlockKey(self, blockErrors):
+		block = self._blocks[0]
+		key = block.code.getSyndrome(blockErrors[block.name], self._paulis)
+		return key
+
+	def concatenatedKey(self, blockErrors):
+		bits = self._bits
+		paulis = self._paulis
+		# Concatenate the errors on each block into a single bit string.
+		appendSyndrome = lambda s, block: (s << bits[block.name]) + block.code.getSyndrome(blockErrors[block.name], paulis)
+		key = reduce(appendSyndrome, self._blocks, 0)
+		return key
+
+	def tupleKey(self, blockErrors):
+		paulis = self._paulis
+		# Concatenate the errors on each block into a single bit string.
+		#appendSyndrome = lambda s, block: (s << bits[block.name]) + block.code.getSyndrome(blockErrors[block.name], paulis)
+		#key = reduce(appendSyndrome, self._blocks, 0)
+		key = tuple(block.code.getSyndrome(blockErrors[block.name], paulis) for block in self._blocks)
+		return key
+	
+	def __repr__(self):
+		blocks = self._blocks[0].name.join('.' + block.name for block in self._blocks)
+		paulis = ''.join(str(p) for p in self._paulis)
+		return 'syndrome_' + blocks + paulis
 
 
 #@fetchable
-def countErrors(k, locations, blocknames, xbits, zbits, noise, keyGenerator=DefaultErrorKeyGenerator):
+def countErrors(k, locations, noise, keyGenerator=DefaultErrorKeyGenerator):
 	""" Identical to countErrors1BlockYZ(), except that the locations may now span two blocks.
 	When considering both Y and Z errors, there can be (for encoded |0>) as many as 2^44
 	syndromes across two blocks.  In order to manage this, counts are kept in dictionaries
@@ -74,12 +127,12 @@ def countErrors(k, locations, blocknames, xbits, zbits, noise, keyGenerator=Defa
 	TODO: This documentation is old. Update documentation.
 	
 	"""
-		
-	extraArgs = [blocknames, xbits, zbits, noise, keyGenerator]
+	
+	extraArgs = [locations.blocknames(), noise, keyGenerator]
 	return countErrorsParallel(k, locations, countLocationSets, extraArgs)
 
 
-def countLocationSets(lSets, blocknames, xbits, zbits, noise, keyGenerator):
+def countLocationSets(lSets, blocknames, noise, keyGenerator):
 
 	counts = {}
 	
@@ -121,12 +174,8 @@ def countLocationSets(lSets, blocknames, xbits, zbits, noise, keyGenerator):
 				if e[zType] & 2:
 					Z = [Z[i] ^ l['Z2']['Z'][name] for i,name in enumerate(blocknames)]
 
-			# Concatenate the errors on each block into a single bit string.
-			X = reduce(lambda x, i: (x << xbits[i]) + X[i], range(1,len(X)), X[0])
-			Z = reduce(lambda z, i: (z << zbits[i]) + Z[i], range(1,len(Z)), Z[0])
-			
-			totalError = PauliError(X,Z)
-			errorKey = keyGenerator.getKey(totalError)
+			blockErrors = {name: PauliError(X[i], Z[i]) for i,name in enumerate(blocknames)}
+			errorKey = keyGenerator.getKey(blockErrors)
 			counts[errorKey] = counts.get(errorKey, 0) + totalWeight
 
 	return counts
@@ -336,15 +385,14 @@ def convolveABA(countsAB, countsA, bitsA=12, bitsB=12):
 #			l[pauli+'2'][pauli][name] = code.getSyndrome(l[pauli+'2'][pauli][name])
 
 
-def propagateAndReduceZero(locations, code, pauli):
+def filterAndPropagate(locations, pauli):
 	# |+> preparations and X-basis measurements cannot cause X errors
 	# (and similarly for Z). So they need not be counted.
 	if pauli != Pauli.Y:
 		locations = locations.filterAgainst('meas' + str(pauli))
 		locations = locations.filterAgainst('prep' + str(pauli))
 	util.counterUtils.propagateAllErrors(locations)
-	#reduceAllErrorSyndromesZero(locations, code)
-	
+		
 	return locations
 
 

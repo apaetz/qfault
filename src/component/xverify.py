@@ -21,7 +21,7 @@
 '''
 
 from counting.convert import zCountsFromXZCounts, rescaleXZCounts
-from counting.countErrors import propagateAndReduceZero, propagateAndReduceZeroX, \
+from counting.countErrors import filterAndPropagate, propagateAndReduceZeroX, \
 	countXerrorsZero, countXerrorsZeroZero, convolveABB, convolveCountsPostselectX, \
 	CountResult, propagateAndReduceZeroXZ, countXZErrorsZero, countXZErrorsZeroZero, \
 	convolveXZPostselectX, convolveXZRejectedX, countZerrorsZero, \
@@ -41,7 +41,7 @@ def locationsCMVX(type):
 	locationsCM = [util.counterUtils.loccnot('A', i, 'B', i) for i in range(23)] + \
 				  [util.counterUtils.locZmeas('B', i) for i in range(23)]
 	locationsCM = Locations(locationsCM, 'verifyX-CM')
-	locationsRCM = propagateAndReduceZero(locationsCM, type)
+	locationsRCM = filterAndPropagate(locationsCM, type)
 
 	return locationsRCM
 

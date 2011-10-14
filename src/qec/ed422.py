@@ -60,6 +60,9 @@ class ED422Code(CssCode):
              
         return s 
     
+    def syndromeLength(self, types=(error.xType, error.zType)):
+        return 2 * len(types)
+    
     def _isLogicalError(self, e, eType):
         # This code detects weight-one errors.  Weight-three errors are
         # equivalent to weight-one errors.  Weight-four errors are 
@@ -101,6 +104,11 @@ class ED422State(ED422Code):
             s += bits.parity(e[etype] & logical, 4)
             
         return s
+    
+    def syndromeLength(self, types=(error.xType, error.zType)):
+        l = super(ED422State, self).syndromeLength(types)
+        return l + sum(bool(self.logical[eType]) for eType in types)
+        
     
     def _isLogicalError(self, e, eType):
         # A logical error occurs if the error anticommutes with
