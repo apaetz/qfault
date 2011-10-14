@@ -24,7 +24,7 @@ from util.counterUtils import PartitionIterator, convolvedSum
 from counting.probability import calcPrBadVZ, prAcceptZPoly
 from component.xverify import countXVerifyXOnly, countXVerifyZOnly, \
 	countXVerifyXZ
-from counting.countErrors import propagateAndReduceZero, countXerrorsZero, \
+from counting.countErrors import filterAndPropagate, countXerrorsZero, \
 	CountResult, countZerrorsZeroZero, convolveCountsPostselectZ, \
 	countXZErrorsZeroZero, convolveDict, convolveXZPostselectZ, convolveXZRejectedZ
 from counting.countParallel import convolve
@@ -46,7 +46,7 @@ def locationsRCMVZ(type):
 	locationsCM = [util.counterUtils.loccnot('B', i, 'A', i) for i in range(23)] + \
 				  [util.counterUtils.locXmeas('B', i) for i in range(23)]
 	locationsRCM = Locations(locationsR0 + locationsR1 + locationsCM, 'verifyZ-rcm')
-	locationsRCM = propagateAndReduceZero(locationsRCM, type)
+	locationsRCM = filterAndPropagate(locationsRCM, type)
 
 	return locationsRCM
 
