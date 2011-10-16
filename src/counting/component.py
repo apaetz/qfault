@@ -70,7 +70,7 @@ class Component(object):
 		'''
 		return Locations()
 		
-	@fetchable
+	#@fetchable
 	def count(self, noise):
 		'''
 		Counts errors in the component.
@@ -122,10 +122,10 @@ class Component(object):
 		return full
 	
 	def __repr__(self):
-		rep = str(self.__class__.__name__) + '('
+		rep = str(self.__class__.__name__) + '-'
 		if None != self._nickname:
 			rep += self._nickname
-		rep += ')'
+		rep += '-'
 		rep += str(self.kGood)
 		if 0 != self.kBest:
 			rep += str(self.kBest)
@@ -151,9 +151,8 @@ class CountableComponent(Component):
 		blocknames = list(locations.blocknames())
 		self.blocks = tuple([Block(name, codes[name]) for name in blocknames])
 		
-		# Construct
-		codeList = [block.code for block in self.blocks]
-		self.code = reduce(operator.add, codeList[1:], codeList[0])
+	def internalLocations(self):
+		return self.locations
 		
 	def _count(self, noise):
 		# First, count the sub-components.
@@ -164,7 +163,7 @@ class CountableComponent(Component):
 		for pauli, kGood in [(Pauli.X, self.kGood), (Pauli.Z, self.kGood), (Pauli.X*Pauli.Z, self.kBest)]:
 			counts[pauli] = countBlocksBySyndrome(self.locations, self.blocks, pauli, noise[pauli], kGood)
 				
-		cb = CountedBlock(self.nickname(), self.code, counts)
+		cb = CountedBlock(counts, subblocks=self.blocks, name=self.nickname())
 		if 0 == len(subcounts):
 			# There are no sub-component counts. So we can just return the
 			# internal counts.
@@ -173,16 +172,13 @@ class CountableComponent(Component):
 		subcounts[self.nickname()] = cb 
 		return subcounts
 
-class PrepZero(CountableComponent):
+class Prep(CountableComponent):
 	
 	def __init__(self, kGood, kBest, locations, code):
 		blocknames = list(locations.blocknames())
-		if 1 != len(blocknames):
-			raise Exception('Logical |0> should be only a single block, not {0}'.format(len(blocknames)))
-
-		super(PrepZero, self).__init__(locations, {blocknames[0]: code}, kGood, kBest)
+		super(Prep, self).__init__(locations, {name: code for name in blocknames}, kGood, kBest)
 		
-class TransCNOT(Component):
+class TransCNOT(CountableComponent):
 	'''
 	Transversal Controlled-NOT.
 	'''
@@ -193,16 +189,28 @@ class TransCNOT(Component):
 			raise Exception('Control ({0}) and target ({1}) blocklengths do not match.'.format(n, targCode.blockLength()))
 		
 		nickname='transCNOT.'+str(n)
-		super(TransCNOT, self).__init__(kGood, kBest, nickname)		
-		self._ctrlCode = ctrlCode
-		self._targCode = targCode
+		print 'nickname=', nickname
+		locs = Locations([counterUtils.loccnot('ctrl', i, 'targ', i) for i in range(n)], nickname)
+		codes = {'ctrl': ctrlCode, 'targ': targCode}
+		super(TransCNOT, self).__init__(locs, codes, kGood, kBest, nickname)
 		
-	def internalLocations(self):
-		n = self._ctrlCode.blockLength()
-		return Locations([counterUtils.loccnot('ctrl', i, 'targ', i) for i in range(n)], self.nickname())
+class Bell(Component):
+	
+	def __init__(self, kGood, kBest, plus, zero, code):
+		super(Bell, self).__init__(kGood, kBest, subcomponents={'|+>': plus, '|0>': zero})
+		self._code = code
 		
 	def _count(self, noise):
-		pass
+		prepCounts = super(Bell, self)._count(noise)
+		
+		# Sanity check.  Both of the input blocks must be states of the
+		# 
+		prepCodes = [block.getCode() for block in prepCounts]
+		if not all(issubclass(code, self._code) for code in prepCodes):
+			raise Exception('One of {0} is not a state of {1}'.format(prepCodes, self._code))
+	
+		
+		
 		
 		
 class VerifyX(Component):
@@ -216,40 +224,40 @@ class VerifyX(Component):
 		self.prepAName = zeroPrepA.nickname()
 		self.prepBName = zeroPrepB.nickname()
 		
-	def _convolve(self, counts):
-		results = {}
-		
-		countsA = counts[self.prepAName]
-		countsB = counts[self.prepBName]
-		countsCM = counts[self.cmName]
-		
-		# First, X-error counts.
-		countsBCM = convolve(countsCM[Pauli.X], 
-						     countsB[Pauli.X], 
-						     convolveFcn=convolveABB, 
-						     kMax=self.kGood)
-		
-		countsVerified = convolve(countsA[Pauli.X], 
-								  countsBCM, 
-								  convolveFcn=convolveCountsPostselectX, 
-								  kMax=self.kGood)
-		
-		results[Pauli.X] = countsVerified
-		
-
-		# Now Z errors.
-		
-		# TODO.  Need to reduce CM counts over two blocks to
-		# marginal counts over just block A.  This will require
-		# constructing the 2-block counts a bit differently.
-		# i.e., 2-block counts are indexed by [s1][s2] rather
-		# than a single index for the entire syndrome.
-		countsVerify = convolve(countsPrepB, countsC, kMax=kGood)
-		countsVerified = convolve(countsPrepA, countsVerify, kMax=kGood)
-	
-		
-		
-		return CountedBlock(str(countsA), countsA.getCode, results)
+#	def _convolve(self, counts):
+#		results = {}
+#		
+#		countsA = counts[self.prepAName]
+#		countsB = counts[self.prepBName]
+#		countsCM = counts[self.cmName]
+#		
+#		# First, X-error counts.
+#		countsBCM = convolve(countsCM[Pauli.X], 
+#						     countsB[Pauli.X], 
+#						     convolveFcn=convolveABB, 
+#						     kMax=self.kGood)
+#		
+#		countsVerified = convolve(countsA[Pauli.X], 
+#								  countsBCM, 
+#								  convolveFcn=convolveCountsPostselectX, 
+#								  kMax=self.kGood)
+#		
+#		results[Pauli.X] = countsVerified
+#		
+#
+#		# Now Z errors.
+#		
+#		# TODO.  Need to reduce CM counts over two blocks to
+#		# marginal counts over just block A.  This will require
+#		# constructing the 2-block counts a bit differently.
+#		# i.e., 2-block counts are indexed by [s1][s2] rather
+#		# than a single index for the entire syndrome.
+#		countsVerify = convolve(countsPrepB, countsC, kMax=kGood)
+#		countsVerified = convolve(countsPrepA, countsVerify, kMax=kGood)
+#	
+#		
+#		
+#		return CountedBlock(str(countsA), countsA.getCode, results)
 		
 		
 	

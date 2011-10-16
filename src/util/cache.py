@@ -93,7 +93,7 @@ class fetchable(object):
 	def __init__(self, func):
 		self.func = func
 		self.fetched = False
-		self.dm = DataManager()
+		#self.dm = DataManager()
 	
 	def __call__(self, *args, **kwargs):
 		key = self.GetKey(self.func.func_name, args, kwargs)
@@ -104,14 +104,15 @@ class fetchable(object):
 		key = self.GetKey(funcName, args, kwargs)
 		return self._fetch(key, tuple([obj]) + args, kwargs)
 	
-	def _fetch(self, key, args, kwargs):		
+	def _fetch(self, key, args, kwargs):
+		dm = DataManager()	
 		try:
-			data = self.dm.load(key)
+			data = dm.load(key)
 			self.fetched = True
 		except IOError:
 			logger.debug('Fetch of {0} failed. Computing from scratch.'.format(key))
 			data = self.func(*args, **kwargs)
-			self.dm.save(data, key)
+			dm.save(data, key)
 				
 		return data
 
