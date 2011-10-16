@@ -5,7 +5,7 @@ Created on May 3, 2011
 '''
 import unittest
 import golay
-from counting.component import PrepZero
+from counting.component import Prep
 
 
 class TestPrepZero(unittest.TestCase):
@@ -16,7 +16,7 @@ class TestPrepZero(unittest.TestCase):
 		kGood = 1
 		kBest = 1
 		code = golay.golayCode.
-		prep = PrepZero(kGood, kBest, locations, code) 
+		prep = Prep(kGood, kBest, locations, code) 
 
 
 if __name__ == "__main__":

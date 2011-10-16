@@ -37,102 +37,72 @@ class ED422Code(CssCode):
     The other set of logical operators is: IXIX, IIZZ.
     '''
 
+    _generators = {error.xType: Pauli.X+Pauli.X+Pauli.X+Pauli.X,
+                   error.zType: Pauli.Z+Pauli.Z+Pauli.Z+Pauli.Z}
+    
+    _logicalOps = (
+                   # Qubit 1
+                   {error.xType: Pauli.I+Pauli.I+Pauli.X+Pauli.X,
+                    error.zType: Pauli.I+Pauli.Z+Pauli.I+Pauli.Z},
+                   # Qubit 2
+                   {error.xType: Pauli.I+Pauli.X+Pauli.I+Pauli.X,
+                    error.zType: Pauli.I+Pauli.I+Pauli.Z+Pauli.Z},
+                   )
 
     def __init__(self):
         '''
         Constructor
         '''
         super(ED422Code, self).__init__('[[4,2,2]]', 4, 2, 2)
-        
-    def reduceError(self, e):
-        r = dict()
-        for pauli in [Pauli.X, Pauli.Z]:
-            if bits.weight(e[pauli], 4) > 2:
-                r[pauli] = e[pauli] ^ 0xF
-
-        return PauliError(r[Pauli.X], r[Pauli.Z])
+     
+    def stabilizerGenerators(self, types=(error.xType, error.zType)):
+        return tuple(self._generators[t] for t in types)
     
-    def getSyndrome(self, e, types=(error.xType, error.zType)):
-        s = 0
-        for etype in types:
-            s << 1
-            s += bits.parity(e[etype], 4)
-             
-        return s 
+    def logicalOperator(self, qubit, eType):
+        return self._logicalOps[qubit][eType]
     
-    def syndromeLength(self, types=(error.xType, error.zType)):
-        return 2 * len(types)
+#    def reduceError(self, e):
+#        r = dict()
+#        for pauli in [Pauli.X, Pauli.Z]:
+#            if bits.weight(e[pauli], 4) > 2:
+#                r[pauli] = e[pauli] ^ 0xF
+#
+#        return PauliError(r[Pauli.X], r[Pauli.Z])
+    
+#    def getSyndrome(self, e, types=(error.xType, error.zType)):
+#        '''
+#        >>> ED422Code().getSyndrome(Pauli.X)
+#        2
+#        >>> ED422Code().getSyndrome(Pauli.Z)
+#        1
+#        >>> ED422Code().getSyndrome(Pauli.Y)
+#        3
+#        >>> ED422Code().getSyndrome(Pauli.Y, error.xType)
+#        1
+#        >>> ED422Code().getSyndrome(Pauli.Y, error.zType)
+#        1
+#        >>> ED422Code().getSyndrome(Pauli.X, error.zType)
+#        0
+#        >>> ED422Code().getSyndrome(Pauli.Z, error.xType)
+#        0
+#        '''
+#        s = 0
+#        for etype in types:
+#            s <<= 1
+#            s += bits.parity(e[etype], 4)
+#             
+#        return s 
+    
+#    def syndromeLength(self, types=(error.xType, error.zType)):
+#        return 2 * len(types)
     
     def _isLogicalError(self, e, eType):
         # This code detects weight-one errors.  Weight-three errors are
         # equivalent to weight-one errors.  Weight-four errors are 
         # equivalent to weight-zero errors.  Thus the only undetectable
         # logical errors are weight-two.
-        return 2 == bits.weight(e, 4)
+        return 2 == bits.weight(e)
     
-class ED422State(ED422Code):
-    '''
-    Abstract class for [[4,2,2]] stabilizer states.
-    
-    Initialize by specifying the logical operators that are
-    added to the stabilizer generators.
-    '''
-    
-    #TODO: this is probably not the best way to initialize.
-    # Instead, allow the user to specify the logical operator
-    # for each logical qubits. e.g., ED422State(Pauli.X, Pauli.Z)
-    def __init__(self, logicalStabX=0, logicalStabZ=0):
-        super(ED422State, self).__init__()
-        self.logical = dict()
-        self.logical[error.xType] = logicalStabX
-        self.logical[error.zType] = logicalStabZ
-        
-    def reduceError(self, e):
-        e1 = super(ED422State, self).reduceError(e)
-        e2 = super(ED422State, self).reduceError(PauliError(e[Pauli.X] ^ self.logical[Pauli.X],
-                                                            e[Pauli.Z] ^ self.logical[Pauli.Z]))
-        
-        if weight(e2) < weight(e1):
-            return e2
-        return e1
-       
-    def getSyndrome(self, e, types=(error.xType, error.zType)):
-        s = super(ED422State, self).getSyndrome(e, types)
-        for etype in types:
-            s << 1
-            logical = self.logical[error.dualType(etype)]
-            s += bits.parity(e[etype] & logical, 4)
-            
-        return s
-    
-    def syndromeLength(self, types=(error.xType, error.zType)):
-        l = super(ED422State, self).syndromeLength(types)
-        return l + sum(bool(self.logical[eType]) for eType in types)
-        
-    
-    def _isLogicalError(self, e, eType):
-        # A logical error occurs if the error anticommutes with
-        # any of the logical operators (which are *not* stabilizer
-        # generators).
-        
-        # We want the logical operator corresponding to the dual of eType.
-        # For example, if eType == Pauli.Z and XXII is the logical-X operator
-        # in the stabilizer, then the logical-X operator that we want is
-        # XIXI.
-        logical = self.logical[error.dualType(eType)] ^ 0b0110
-        
-        return bits.parity(e & logical, 4)
-        
-        
-    
-class ED422ZeroPlus(ED422State):
-    '''
-    Stabilizer state |0>|+> for the [[4,2,2]] code.
-    '''
-    
-    def __init__(self):
-        super(ED422ZeroPlus, self).__init__(logicalStabX=0b0101, logicalStabZ=0b0101)
-        self.name += ' |0>|+>'
-        
 if __name__ == '__main__':
-    print prepare(Pauli.Z, Pauli.X)
+    import doctest
+    doctest.testmod()

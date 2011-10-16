@@ -43,6 +43,20 @@ class PauliError(object):
 		
 	def types(self):
 		return [etype for etype in [xType, zType] if self[etype]]
+	
+	def commutesWith(self, other):
+		'''
+		Returns True if the commutator with 'other' is zero, and False otherwise.
+		
+		>>> YY = PauliError(0b11,0b11)
+		>>> YZ = PauliError(0b10,0b11)
+		>>> XY = PauliError(0b11,0b01)
+		>>> YY.commutesWith(XY)
+		False
+		>>> YZ.commutesWith(XY)
+		True
+		'''
+		return not bits.parity(self[xType] & other[zType]) ^ bits.parity(self[zType] & other[xType])
 		
 	def __getitem__(self, pauli):
 		'''

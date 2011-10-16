@@ -88,6 +88,7 @@ class SyndromeKeyGenerator(object):
 	def oneBlockKey(self, blockErrors):
 		block = self._blocks[0]
 		key = block.code.getSyndrome(blockErrors[block.name], self._paulis)
+		print 'e=', blockErrors[block.name], 's=', key
 		return key
 
 	def concatenatedKey(self, blockErrors):
@@ -100,10 +101,8 @@ class SyndromeKeyGenerator(object):
 
 	def tupleKey(self, blockErrors):
 		paulis = self._paulis
-		# Concatenate the errors on each block into a single bit string.
-		#appendSyndrome = lambda s, block: (s << bits[block.name]) + block.code.getSyndrome(blockErrors[block.name], paulis)
-		#key = reduce(appendSyndrome, self._blocks, 0)
 		key = tuple(block.code.getSyndrome(blockErrors[block.name], paulis) for block in self._blocks)
+		#print 'blockErrors=', blockErrors, 'key=', key
 		return key
 	
 	def __repr__(self):
@@ -154,9 +153,9 @@ def countLocationSets(lSets, blocknames, noise, keyGenerator):
 				e = errorLookup[j][eIndexes[j]]
 				
 				totalWeight *= noise.getWeight(l,e)
-				#print 'l=', l
+				print 'l=', l
 				#print 'k=', k, 'j=', j, 'eIndex=', eIndexes[j]
-				#print 'e=', e, 'weight=', totalWeight
+				print 'e=', e, 'weight=', totalWeight
 				
 				# X-error at location l on qubit 1 (i.e., IX, or IY, or XX, etc.)
 				if e[xType] & 1:

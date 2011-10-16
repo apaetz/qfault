@@ -1,25 +1,46 @@
 '''
-Created on 2011-08-29
+Some simple functions for counting and manipulating bits.
+Some code was copied and adapted from http://wiki.python.org/moin/BitManipulation.
 
+TODO: speed up with Cython or pyrex?
+
+Created on 2011-08-29
 @author: adam
 '''
-import gmpy
+import warnings
 
-def weight(e, n = 32):
-    """Returns the Hamming weight of the 32-bit integer e.
+def weight(x, n=0):
+    '''
+    Returns the Hamming weight x.
     
-    >>> weight(3)
-    2
-    """
+    Note: bitlength argument (n) is deprecated.
+    
+    >>> weight(0b10101)
+    3
+    '''
+    if __debug__ and 0 != n:
+        warnings.warn('Bitlength argument is deprecated', category=DeprecationWarning)
+        
     s = 0
-    for _ in range(n):
-        if (e & 1):
-            s = s+1
-        e = e>>1
-    return s
+    while(x):
+        x &= x - 1  # Clears the LSB
+        s += 1
+    return(s)
 
-def parity(e, n = 32):
-    return weight(e,n) & 1
+
+def parity(e, n = 0):
+    '''
+    Returns the parity (sum modulo 2) of x.
+    
+    >>> parity(0b1101)
+    1
+    >>> parity(0b110101)
+    0
+    '''
+    if __debug__ and 0 != n:
+        warnings.warn('Bitlength argument is deprecated', category=DeprecationWarning)
+
+    return weight(e) & 1
 
 def getBits(e, n = 32):
     bits = [0] * weight(e, n)
@@ -33,8 +54,12 @@ def getBits(e, n = 32):
 
 def numbits(x):
     '''
-    >>> msbIndex(1<<42)
-    42
+    Returns the (base-one) index of the most significant 1-bit of x.
+    
+    >>> numbits(0)
+    0
+    >>> numbits(1<<42)
+    43
     '''
     i = 0
     while x > 0:
@@ -45,7 +70,7 @@ def numbits(x):
 def bitsToStr(e, n = 32):
     """Converts the (32-bit) integer e into a string of bits.
     
-    >>> etostr(11, 6)
+    >>> bitsToStr(11, 6)
     '001011'
     """
     bits = ['0'] * n
@@ -53,3 +78,14 @@ def bitsToStr(e, n = 32):
         if (e>>i)&1: 
             bits[n-1-i] = '1'
     return ''.join(bits)
+
+def listToBits(values):
+    '''
+    >>> listToBits([1,0,1,1])
+    11
+    '''
+    return reduce(lambda s,b: (s << 1) + bool(b), values, 0)
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
