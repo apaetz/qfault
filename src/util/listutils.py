@@ -78,3 +78,26 @@ def nonZeroIndices(list):
 	Returns a list indicies for which list[index] != 0
 	'''
 	return [s for s in xrange(len(list)) if list[s]]
+
+def uniqify(seq):
+	'''
+	Returns a list identical to seq, except with all duplicate
+	elements removed.  Relative ordering is preserved.
+	
+	Code copied from http://www.peterbe.com/plog/uniqifiers-benchmark.
+	
+	>>> uniqify([1,1,3,2,3])
+	[1, 3, 2]
+	'''
+
+	seen = {} 
+	result = [] 
+	for item in seq: 
+		if item in seen: continue 
+		seen[item] = 1 
+		result.append(item) 
+	return result
+
+if __name__ == "__main__":
+	import doctest
+	doctest.testmod()

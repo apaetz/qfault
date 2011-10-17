@@ -4,7 +4,7 @@ Created on Mar 3, 2010
 @author: adam
 '''
 #from qec.Error import CompoundError
-from qec.error import Pauli, PauliError
+from qec.error import Pauli
 import qec.error as error
 import itertools
 import operator
@@ -24,7 +24,7 @@ class Qecc(object):
         self.k = k
         self.d = d
         
-    def reduceError(self, e):
+    def hashError(self, e):
         return e;
     
     def getCorrection(self, e):
@@ -49,21 +49,6 @@ class StabilizerCode(Qecc):
     @staticmethod
     def Syndrome(e, generators):
         return bits.listToBits((not e.commutesWith(s)) for s in generators)
-        
-    @staticmethod
-    def Reduce(e, generators):
-        # TODO: more efficient way to compute this?
-        w = bits.weight(e)
-        genRange = range(len(generators))
-        for n in genRange:
-            for indices in itertools.combinations(genRange, n):
-                e1 = reduce(operator.xor, [generators[i] for i in indices], e)
-            w1 = bits.weight(e1)
-            if w1 < w:
-                e = e1
-                w = w1
-            
-        return e
 
     def __init__(self, name, n, k, d):
         super(StabilizerCode, self).__init__(name, n, k, d)
@@ -71,8 +56,8 @@ class StabilizerCode(Qecc):
     def getSyndrome(self, e):
         return self.Syndrome(e, self.stabilizerGenerators())
     
-    def reduceError(self, e):
-        return self.Reduce(e, self.stabilizerGenerators())
+    def hashError(self, e):
+        return self.Hash(e, self.stabilizerGenerators())
         
     def syndromeLength(self):
         '''
@@ -107,18 +92,21 @@ class StabilizerState(StabilizerCode):
         
         name = str(code).join(logicalOpTypes)
         super(StabilizerState, self).__init__(name, code.n, code.k, code.d)
-        self.logicalOps = [code.logicalOperator(i, ltype) for i,ltype in enumerate(logicalOpTypes)]
+        self.lStabs = tuple(code.logicalOperator(i, ltype) for i,ltype in enumerate(logicalOpTypes))
         self.code = code
         
     def stabilizerGenerators(self):
-        return self.code.stabilizerGenerators() + self.logicalOps
+        return self.code.stabilizerGenerators() + self.lStabs
+    
+    def logicalStabilizers(self):
+        return self.lStabs
         
-    def reduceError(self, e):
-        return StabilizerCode.Reduce(self.code.reduceError(e), self.logicalOps)
+    def hashError(self, e):
+        return StabilizerCode.Hash(self.code.hashError(e), self.lStabs)
     
     def getSyndrome(self, e):
         s = self.code.getSyndrome(e)
-        return (s << len(self.logicalOps)) + StabilizerCode.Syndrome(e, self.logicalOps)
+        return (s << len(self.lStabs)) + StabilizerCode.Syndrome(e, self.lStabs)
     
     def logicalOperator(self, qubit, eType):
         return self.code.logicalOperator(qubit,eType)
@@ -170,37 +158,56 @@ class CssState(CssCode):
         name = str(code) + ''.join(logicalOpTypes)
         super(CssState, self).__init__(name, code.n, code.k, code.d)
         
-        self.logicalOps = {error.xType: [], error.zType: []} 
+        self.lStabs = {error.xType: [], error.zType: []} 
         for i,ltype in enumerate(logicalOpTypes):
-            self.logicalOps[ltype].append(code.logicalOperator(i, ltype)) 
+            self.lStabs[ltype].append(code.logicalOperator(i, ltype)) 
         self.code = code
         
     def stabilizerGenerators(self, types=(error.xType, error.zType)):
-        gens = []
+        return self.code.stabilizerGenerators(types) + self.logicalStabilizers(types)
+
+    def logicalStabilizers(self, types=(error.xType, error.zType)):
+        stabs = []
         for t in types:
-            gens += self.logicalOps[t]
-        return self.code.stabilizerGenerators(types) + tuple(gens)
+            stabs += self.lStabs[t]
+        return tuple(stabs)
                
     def logicalOperator(self, qubit, eType):
         return self.code.logicalOperator(qubit,eType)
 
 
         
-#class CompoundCode(Qecc):
-#    
-#    def __init__(self, code1, code2):
-#        super(CompoundCode, self).__init__('{0} : {1}'.format(code1.name, code2.name),
-#                                           code1.n + code2.n,
-#                                           code1.k + code2.k,
-#                                           min(code1.d, code2.d))
-#        self.codes = (code1, code2)
-#
-#    def reduceError(self, e, eType):
-#        return CompoundError(self.codes[0].reduceError(e[0], eType), 
-#                             self.codes[1].reduceError(e[1], eType))
-#    
-#    def getCorrection(self, e, eType):
-#        return self.codes[0].getCorrection(e[0], eType), self.codes[1].getCorrection(e[1], eType)
-#    
-#    def decodeError(self, e, eType):
-#        return self.codes[0].decodeError(e[0], eType), self.codes[1].decodeError(e[1], eType)    
+class BellState(CssCode):
+    
+    def __init__(self, code, plusState, zeroState):
+        super(BellState, self).__init__('Bell-' + str(plusState) + str(zeroState),
+                                        plusState.n + zeroState.n,
+                                        plusState.k + zeroState.k,
+                                        min(plusState.d, zeroState.d))
+        self.code = code
+        self.lstabs = {
+                       error.xType: [(x,x) for x in plusState.logicalStabilizers(error.xType)] + \
+                                    [(Pauli.I,x) for x in plusState.logicalStabilizers(error.xType)],
+                       error.zType: [(z,Pauli.I) for z in plusState.logicalStabilizers(error.zType)] + \
+                                    [(z,z) for z in plusState.logicalStabilizers(error.zType)]
+                      }
+
+
+    def logicalStabilizers(self, types=(error.xType, error.zType)):
+        stabs = []
+        for t in types:
+            stabs += self.lstabs[t]
+        return tuple(stabs)
+                   
+    def logicalOperator(self, qubit, eType):
+        return self.code.logicalOperator(qubit % self.code.k,eType)
+
+    def stabilizerGenerators(self, types=(error.xType, error.zType)):
+        raise NotImplementedError
+        
+    def getSyndrome(self, e, types=(error.xType, error.zType)):
+        dualTypes = tuple(error.dualType(t) for t in types)
+        return tuple(StabilizerCode.Syndrome(e[0], self.stabilizerGenerators(dualTypes)))
+    
+    def syndromeLength(self, types=(error.xType, error.zType)):
+        return len(self.stabilizerGenerators(types))

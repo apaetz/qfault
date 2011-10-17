@@ -7,7 +7,7 @@ from abc import abstractmethod, ABCMeta
 from block import CountedBlock
 from util.cache import fetchable
 from countErrors import filterAndPropagate, convolveABB
-from qec.error import Pauli
+from qec.error import Pauli, PauliError
 from counting.countErrors import countErrors, countBlocksBySyndrome
 from util import counterUtils
 import operator
@@ -194,6 +194,14 @@ class TransCNOT(CountableComponent):
 		codes = {'ctrl': ctrlCode, 'targ': targCode}
 		super(TransCNOT, self).__init__(locs, codes, kGood, kBest, nickname)
 		
+	@staticmethod
+	def PropagateStabilizer(stab, ctrl=True):
+		if ctrl:
+			return stab + PauliError(xbits=stab[error.xType])
+		
+		return PauliError(zbits=stab[error.zType]) + stab
+			
+		
 class Bell(Component):
 	
 	def __init__(self, kGood, kBest, plus, zero, code):
@@ -209,6 +217,9 @@ class Bell(Component):
 		if not all(issubclass(code, self._code) for code in prepCodes):
 			raise Exception('One of {0} is not a state of {1}'.format(prepCodes, self._code))
 	
+	@staticmethod
+	def ConstructBellCode(plusState, zeroState):
+		pass
 		
 		
 		

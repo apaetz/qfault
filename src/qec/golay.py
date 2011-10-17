@@ -20,7 +20,7 @@ class GolayCode(CssCode):
         # TODO: really should make this static        
         self.corrections = GolayCode.generateCorrectionsTable()
     
-    def reduceError(self, e, eType, logical=False):
+    def hashError(self, e, eType, logical=False):
     
         """Reduces the input X or Z error modulo the stabilizers and possibly the logical operator.  
         Returns a minimum-Hamming-weight representative.
@@ -42,7 +42,7 @@ class GolayCode(CssCode):
         return eMin if w1 < w2 else eMinL
         
     def getCorrection(self, e, eType):
-        reduced = self.reduceError(e, eType)        
+        reduced = self.hashError(e, eType)        
         return self.corrections[self.getSyndrome(reduced)]
     
     def decodeError(self, e, eType):
@@ -107,13 +107,13 @@ class GolayZero(GolayCode):
         super(self.__class__, self).__init__()
         self.name = 'GolayZero'
         
-    def reduceError(self, e, eType):
+    def hashError(self, e, eType):
         logical = False
         
         if Pauli.Z == eType:
             logical = True
             
-        return super(GolayZero, self).reduceError(e, eType, logical)
+        return super(GolayZero, self).hashError(e, eType, logical)
     
     def getCorrection(self, e, eType):
         # TODO
@@ -127,13 +127,13 @@ class GolayPlus(GolayCode):
         super(self.__class__, self).__init__()
         self.name = 'GolayPlus'
         
-    def reduceError(self, e, eType):
+    def hashError(self, e, eType):
         logical = False
         
         if Pauli.X == eType:
             logical = True
             
-        return super(GolayPlus, self).reduceError(e, eType, logical)
+        return super(GolayPlus, self).hashError(e, eType, logical)
     
     def getCorrection(self, e, eType):
         # TODO
