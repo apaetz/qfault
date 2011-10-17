@@ -148,7 +148,7 @@ def errorsMerge(e1, e2):
 		errors['Z'][k] = e2['Z'][k]
 	return errors
 
-def reduceError(e, stabilizers):
+def hashError(e, stabilizers):
 	"""Returns a minimum-weight representative for the error e.
 	
 	The error is reduced modulo the stabilizers.  
@@ -156,9 +156,9 @@ def reduceError(e, stabilizers):
 	To speed this up, I might add a third argument shortCircuitWeight=0, and stop the error reduction 
 	as soon as the weight reaches that threshold.
 	
-	>>> reduceError(7, [[0,1],[2]])
+	>>> hashError(7, [[0,1],[2]])
 	0
-	>>> reduceError(15, [[0,1,2],[0,1]])
+	>>> hashError(15, [[0,1,2],[0,1]])
 	8
 	"""
 	if isinstance(stabilizers[0], list):
@@ -688,7 +688,7 @@ def isFaultTolerant(counts, t, corrector):
 		sNonZero = nonZeroIndices(counts[k])
 		for s in sNonZero:
 			e = corrector.getError(s)
-			e = corrector.reduceError(e, logical)
+			e = corrector.hashError(e, logical)
 			if not weight(e) <= k:
 				logger.warning('s={0}, e={1}, w(e)={2}, k={3}'.format(s, e, weight(e), k))
 				success = False		 

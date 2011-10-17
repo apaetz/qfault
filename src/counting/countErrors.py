@@ -7,14 +7,18 @@ This file contains functions counting error propagation within a given set of lo
 
 
 from collections import namedtuple
+from counting.key import SyndromeKeyGenerator, DefaultErrorKeyGenerator, \
+	MultiBlockSyndromeKeyGenerator
 from qec.error import Pauli, PauliError, xType, zType
+from qec.qecc import StabilizerCode
 from util import iteration
 from util.cache import fetchable
 from util.listutils import nonZeroIndices
 import logging
-import util.counterUtils
 import math
 import operator
+import qec.error as error
+import util.counterUtils
 
 
 logging.basicConfig(level=logging.INFO,
@@ -59,56 +63,10 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 def countBlocksBySyndrome(locations, blocks, pauli, noise, kMax):
 	filtered = filterAndPropagate(locations, pauli)
 	
-	keyGenerator = SyndromeKeyGenerator(blocks, pauli.types())
+	keyGenerator = MultiBlockSyndromeKeyGenerator(blocks, pauli.types())
 	counts = [countErrors(k, filtered, noise, keyGenerator) for k in range(kMax+1)]
 	
 	return counts
-
-class DefaultErrorKeyGenerator(object):
-	
-	def getKey(self,e):
-		return e
-	
-	def __repr__(self):
-		return 'default_key'
-	
-class SyndromeKeyGenerator(object):
-	
-	def __init__(self, blocks, paulis):
-		self._blocks = blocks
-		self._paulis = paulis
-		
-		#self._bits = {block.name: block.getCode().syndromeLength(paulis) for block in blocks}
-		
-		if 1 == len(blocks):
-			self.getKey = self.oneBlockKey
-		else:
-			self.getKey = self.tupleKey
-		
-	def oneBlockKey(self, blockErrors):
-		block = self._blocks[0]
-		key = block.code.getSyndrome(blockErrors[block.name], self._paulis)
-		print 'e=', blockErrors[block.name], 's=', key
-		return key
-
-	def concatenatedKey(self, blockErrors):
-		bits = self._bits
-		paulis = self._paulis
-		# Concatenate the errors on each block into a single bit string.
-		appendSyndrome = lambda s, block: (s << bits[block.name]) + block.code.getSyndrome(blockErrors[block.name], paulis)
-		key = reduce(appendSyndrome, self._blocks, 0)
-		return key
-
-	def tupleKey(self, blockErrors):
-		paulis = self._paulis
-		key = tuple(block.code.getSyndrome(blockErrors[block.name], paulis) for block in self._blocks)
-		#print 'blockErrors=', blockErrors, 'key=', key
-		return key
-	
-	def __repr__(self):
-		blocks = self._blocks[0].name.join('.' + block.name for block in self._blocks)
-		paulis = ''.join(str(p) for p in self._paulis)
-		return 'syndrome_' + blocks + paulis
 
 
 #@fetchable
@@ -153,9 +111,9 @@ def countLocationSets(lSets, blocknames, noise, keyGenerator):
 				e = errorLookup[j][eIndexes[j]]
 				
 				totalWeight *= noise.getWeight(l,e)
-				print 'l=', l
+				#print 'l=', l
 				#print 'k=', k, 'j=', j, 'eIndex=', eIndexes[j]
-				print 'e=', e, 'weight=', totalWeight
+				#print 'e=', e, 'weight=', totalWeight
 				
 				# X-error at location l on qubit 1 (i.e., IX, or IY, or XX, etc.)
 				if e[xType] & 1:

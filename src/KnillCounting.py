@@ -8,7 +8,6 @@ from counting import component
 from qec import ed422, qecc, error
 from qec.error import Pauli
 from settings.noise import NoiseModelXZSympy, NoiseModelXSympy, NoiseModelZSympy
-from counting.component import TransCNOT
 
 if __name__ == '__main__':
     from counting import countParallel
