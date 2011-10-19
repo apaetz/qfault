@@ -66,7 +66,7 @@ def countBlocksBySyndrome(locations, blocks, pauli, noise, kMax):
 	keyGenerator = MultiBlockSyndromeKeyGenerator(blocks)
 	counts = [countErrors(k, filtered, noise, keyGenerator) for k in range(kMax+1)]
 	
-	return counts
+	return counts, keyGenerator
 
 
 #@fetchable
@@ -156,6 +156,28 @@ def convolveCountsPostselect(counts1, counts2, syndromeBits):
 		counts[s2a ^ s2b] += counts1[s2b] * counts2[s2]
 	return counts
 
+
+def mapKeys(counts, keymap):
+	mapped = []
+	for kcounts in counts:
+		mapped.append({keymap(e): count for e,count in kcounts.items()})
+		
+	return mapped
+
+def convolveDict(counts1, counts2):
+	'''
+	Convolve counts from two dictionaries.
+	'''
+	counts = {}
+	logger.info('Convolving {0}x{1}'.format(len(counts2), len(counts1)))
+	for key2, count2 in counts2.iteritems():
+		for key1, count1 in counts1.iteritems():
+			key = key1 ^ key2
+			
+			#TODO: not sure if it would be faster to use a try-except block here, instead.
+			counts[key] = counts.get(key, 0) + (count2 * count1)
+	
+	return counts
 
 
 ###################
@@ -291,18 +313,7 @@ def convolveABB(countsAB, countsB):
 	return counts
 
 
-def convolveDict(counts1, counts2):
-	'''
-	Convolve counts from two dictionaries.
-	'''
-	counts = {}
-	logger.info('Convolving {0}x{1}'.format(len(counts2), len(counts1)))
-	for s2, count2 in counts2.iteritems():
-		for s1, count1 in counts1.iteritems():
-			s = s1 ^ s2
-			counts[s] = counts.get(s, 0) + (count2 * count1)
-	
-	return counts
+
 
 def convolveABA(countsAB, countsA, bitsA=12, bitsB=12):
 	'''

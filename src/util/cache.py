@@ -28,7 +28,12 @@ class memoize(object):
 		
 	def __call__(self, *args):
 		key = self.getKey(args)
-		if not self.hasMemo(key):
+		return self._fetch(key)
+	
+	def _fetch(self, key, args):
+		try:
+			return self.getMemo(key)
+		except KeyError:
 			self.setMemo(key, self.func(*args))
 		return self.getMemo(key)
 	
@@ -43,6 +48,23 @@ class memoize(object):
 	
 	def getKey(self, args):
 		return args
+	
+	def _methodCall(self, obj, *args, **kwargs):
+		funcName = ''.join([repr(obj), '.', self.func.func_name])
+		key = self.getKey(tuple([funcName]) + args)
+		return self._fetch(key, tuple([obj]) + args)
+	
+	def __get__(self, obj, objtype):
+		'''
+		Defining __get__ causes memoize to become a descriptor, which means
+		that, when @memoize is applied to an instance method __get__ will
+		be called.  The return value of __get__ is then called to obtain the
+		function value.
+		In this case (when the function is an instance method) we also
+		want to include the instance data in the fetch key.  This is accomplished
+		by calling _methodCall with the appropriate object.
+		'''
+		return functools.partial(self._methodCall, obj)
 	
 class memoizeMutable(memoize):
 	

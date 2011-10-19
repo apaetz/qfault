@@ -7,13 +7,14 @@ from abc import abstractmethod, ABCMeta
 from block import CountedBlock
 from countErrors import filterAndPropagate, convolveABB
 from counting.block import Block
-from counting.countErrors import countErrors, countBlocksBySyndrome
+from counting.countErrors import countErrors, countBlocksBySyndrome, mapKeys
+from counting.countParallel import convolve
 from counting.location import Locations
 from qec.error import Pauli, PauliError, xType, zType
-from util import counterUtils
+from qec.qecc import Codeword
+from util import counterUtils, bits
 from util.cache import fetchable
 import operator
-from qec.qecc import Codeword
 
 class Component(object):
 	'''
@@ -77,8 +78,11 @@ class Component(object):
 		Counts errors in the component.
 		Returns a CountedBlock. 
 		'''
+		print 'Counting', str(self)
 		counts = self._count(noise)
+		print 'Convolving', str(self)
 		block = self._convolve(counts)
+		print 'Post processing', str(self)
 		return self._postCount(block)
 	
 	def _count(self, noise):
@@ -129,7 +133,7 @@ class Component(object):
 		rep += '-'
 		rep += str(self.kGood)
 		if 0 != self.kBest:
-			rep += str(self.kBest)
+			rep += ',' + str(self.kBest)
 		return rep
 	
 class CountableComponent(Component):
@@ -161,10 +165,11 @@ class CountableComponent(Component):
 			
 		# Now count the internal locations.
 		counts = {}
+		keyGens = {}
 		for pauli, kGood in [(Pauli.X, self.kGood), (Pauli.Z, self.kGood), (Pauli.X*Pauli.Z, self.kBest)]:
-			counts[pauli] = countBlocksBySyndrome(self.locations, self.blocks, pauli, noise[pauli], kGood)
+			counts[pauli], keyGens[pauli] = countBlocksBySyndrome(self.locations, self.blocks, pauli, noise[pauli], kGood)
 				
-		cb = CountedBlock(counts, subblocks=self.blocks, name=self.nickname())
+		cb = CountedBlock(counts, keyGens, subblocks=self.blocks, name=self.nickname())
 		if 0 == len(subcounts):
 			# There are no sub-component counts. So we can just return the
 			# internal counts.
@@ -194,66 +199,53 @@ class TransCNOT(CountableComponent):
 		locs = Locations([counterUtils.loccnot('ctrl', i, 'targ', i) for i in range(n)], nickname)
 		codes = {'ctrl': ctrlCode, 'targ': targCode}
 		super(TransCNOT, self).__init__(locs, codes, kGood, kBest, nickname)
-		
-	@staticmethod
-	def PropagateCode(ctrlCode, targCode):
-		'''
-		Assumes that both codes are CSS. (Transversal CNOT is not
-		a valid fault-tolerant operation for non-CSS codes.)
-		'''
-		# Assume that the transversal CNOT acts as a logical CNOT
-		# (otherwise why would we be doing it?).  This means,
-		# in particular, that the code stabilizers on each block are
-		# preserved.  Generators of stabilizer states also contain
-		# logical operators, which are considered separately.
-	
-		rawCode = ctrlCode
-		if isinstance(ctrlCode, Codeword):
-			rawCode = ctrlCode.getCode()
-			
-			
-		rawTargCode = targCode
-		if isinstance(targCode, Codeword):
-			rawTargCode = targCode.getCode()
-			
-		logicalStabilizers = []
-		
-		# Sanity check
-		if rawCode != rawTargCode:
-			raise Exception('Control code {0} and target code {1} must be the same.'.format(rawCode, rawTargCode))
-			
-		targLogicals = [targCode.logicalOperator(i,xType) for i in range(targCode.k)] + \
-					   [targCode.logicalOperator(i,zType) for i in range(targCode.k)]
-					
-		ctrlLogicals = [ctrlCode.logicalOperator(i,xType) for i in range(ctrlCode.k)] + \
-					   [ctrlCode.logicalOperator(i,zType) for i in range(ctrlCode.k)]
-		
-		# Now, propagate each of the logical operators through the CNOT.
-		ctrlLogicals = [TransCNOT.PropagatePauli(l, ctrl=True) for l in ctrlLogicals]
-		targLogicals = [TransCNOT.PropagatePauli(l, ctrl=False) for l in targLogicals]
-		
-	@staticmethod
-	def PropagatePauli(pauli, ctrl=True):
-		if ctrl:
-			return pauli + PauliError(xbits=pauli[xType])
-		
-		return PauliError(zbits=pauli[zType]) + pauli
 			
 		
 class Bell(Component):
 	
-	def __init__(self, kGood, kBest, plus, zero, code):
-		super(Bell, self).__init__(kGood, kBest, subcomponents={'|+>': plus, '|0>': zero})
-		self._code = code
+	plusName = '|+>'
+	zeroName = '|0>'
+	cnotName = 'cnot'
+	
+	def __init__(self, kGood, kBest, plus, zero):
+		super(Bell, self).__init__(kGood, kBest, subcomponents={self.plusName: plus, self.zeroName: zero})
 		
 	def _count(self, noise):
-		prepCounts = super(Bell, self)._count(noise)
+		prepBlocks = super(Bell, self)._count(noise)
 		
-		# Sanity check.  Both of the input blocks must be states of the
-		# 
-		prepCodes = [block.getCode() for block in prepCounts]
-		if not all(issubclass(code, self._code) for code in prepCodes):
-			raise Exception('One of {0} is not a state of {1}'.format(prepCodes, self._code))
+		# Construct a transversal CNOT component from the two input codes.
+		cnot = TransCNOT(self.kGood, self.kBest, prepBlocks[self.plusName].getCode(), prepBlocks[self.zeroName].getCode())
+		prepBlocks[self.cnotName] = cnot.count(noise)
+		
+		return prepBlocks
+	
+	def _convolve(self, blocks):
+		parityChecks = blocks[self.plusName].keyGenerators()
+		
+		# Masks that identify X stabilizers and operators, and Z stabilizers
+		# and operators.
+		xmask = bits.listToBits((0 == check[zType]) for check in parityChecks)
+		zmask = bits.listToBits((0 == check[xType]) for check in parityChecks)
+		
+		kMax = {Pauli.X: self.kGood, Pauli.Z: self.kGood, Pauli.Y: self.kBest}
+		
+		blockShift = len(parityChecks)
+		
+		convolved = {}
+		for pauli in [Pauli.X, Pauli.Z, Pauli.Y]: 	
+			# Propagate the preparation errors through the CNOT.
+			countsPlus = mapKeys(blocks[self.plusName].counts()[pauli], lambda e: (e << blockShift) + (e & xmask))
+			countsZero = mapKeys(blocks[self.zeroName].counts()[pauli], lambda e: ((e & zmask) << blockShift) + e)
+			
+			# Now convolve.
+			convolved[pauli] = convolve(countsPlus, countsZero, kMax=kMax[pauli])
+			convolved[pauli] = convolve(convolved[pauli], blocks[self.cnotName].counts()[pauli], kMax=kMax[pauli])
+			
+		cnotBlock = blocks[self.cnotName]
+		return CountedBlock(convolved, cnotBlock.keyGenerators(), code=cnotBlock.getCode(), name=self.nickname())
+			
+			
+		
 	
 	@staticmethod
 	def ConstructBellCode(plusState, zeroState):

@@ -8,6 +8,7 @@ Created on 2011-08-29
 @author: adam
 '''
 import warnings
+import util.cython.bits as cbits
 
 def weight(x, n=0):
     '''
@@ -85,6 +86,12 @@ def listToBits(values):
     11
     '''
     return reduce(lambda s,b: (s << 1) + bool(b), values, 0)
+#    s = 0
+#    for b in values:
+#        s = (s<<1) + bool(b)
+#    return s
+    #return cbits.cython_listToBits(values)
+    
 
 if __name__ == '__main__':
     import doctest

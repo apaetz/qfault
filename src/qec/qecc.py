@@ -9,6 +9,7 @@ import qec.error as error
 import itertools
 import operator
 from util import bits
+from util.cache import memoize
 
 class Qecc(object):
     '''
@@ -24,26 +25,26 @@ class Qecc(object):
         self.k = k
         self.d = d
         
-    def hashError(self, e):
-        '''
-        TODO: more precise name for this?
-        
-        Returns a value that:
-          1. Uniquely identifies the error relative to the code.
-             That is, let e' = unHashError(hashError(e)), then
-             getCorrection(e) == getCorrection(e') and 
-             decodeError(e) == decodeError(e').
-          2. Is a homomorphism under XOR, i.e., 
-             hashError(e1 ^ e2) == hashError(e1) ^ hashError(e2)
-        '''
-        return e
-    
-    def unHashError(self, h):
-        '''
-        For h = hashError(e), returns an error e' such that
-        e and e' are equivalent relative to the code.
-        '''
-        return h
+#    def hashError(self, e):
+#        '''
+#        TODO: more precise name for this?
+#        
+#        Returns a value that:
+#          1. Uniquely identifies the error relative to the code.
+#             That is, let e' = unHashError(hashError(e)), then
+#             getCorrection(e) == getCorrection(e') and 
+#             decodeError(e) == decodeError(e').
+#          2. Is a homomorphism under XOR, i.e., 
+#             hashError(e1 ^ e2) == hashError(e1) ^ hashError(e2)
+#        '''
+#        return e
+#    
+#    def unHashError(self, h):
+#        '''
+#        For h = hashError(e), returns an error e' such that
+#        e and e' are equivalent relative to the code.
+#        '''
+#        return h
     
     def getCorrection(self, e):
         return 0
@@ -71,34 +72,35 @@ class StabilizerCode(Qecc):
     def __init__(self, name, n, k, d):
         super(StabilizerCode, self).__init__(name, n, k, d)
 
+    
     def getSyndrome(self, e):
         return self.Syndrome(e, self.stabilizerGenerators())
     
     def syndromeCorrection(self, s):
         raise NotImplementedError
     
-    def hashError(self, e):
-        return self.Syndrome(e, self.stabilizerGenerators() + self.normalizerGenerators())
-    
-    def unHashError(self, key):
-        normalizers = self.normalizerGenerators()
-        nNorms = len(normalizers)
-        normalizerChecks = key & ((1 << nNorms) - 1)
-        syndrome = key >> nNorms
-        
-        e = self.syndromeCorrection(syndrome)
-        
-        normalizers = self.normalizerGenerators()
-        for i,norm in enumerate(normalizers):
-            if (normalizerChecks & 1) == e.commutesWith(norm):
-                # The normalizer list is formatted so that X and Z
-                # operators are adjacent.  Obtain the dual operator
-                # by flipping the LSB of the index.
-                dual = normalizers[i ^ 1]
-                e *= dual
-            normalizerChecks >>= 1
-            
-        return e
+#    def hashError(self, e):
+#        return self.Syndrome(e, self.stabilizerGenerators() + self.normalizerGenerators())
+#    
+#    def unHashError(self, key):
+#        normalizers = self.normalizerGenerators()
+#        nNorms = len(normalizers)
+#        normalizerChecks = key & ((1 << nNorms) - 1)
+#        syndrome = key >> nNorms
+#        
+#        e = self.syndromeCorrection(syndrome)
+#        
+#        normalizers = self.normalizerGenerators()
+#        for i,norm in enumerate(normalizers):
+#            if (normalizerChecks & 1) == e.commutesWith(norm):
+#                # The normalizer list is formatted so that X and Z
+#                # operators are adjacent.  Obtain the dual operator
+#                # by flipping the LSB of the index.
+#                dual = normalizers[i ^ 1]
+#                e *= dual
+#            normalizerChecks >>= 1
+#            
+#        return e
         
     def syndromeLength(self):
         '''
@@ -146,7 +148,7 @@ class StabilizerState(StabilizerCode, Codeword):
         if code.k != len(logicalOpTypes):
             raise Exception('Number of logical operators ({0}) does not match k={1}'.format(len(logicalOpTypes), code.k))
         
-        name = str(code).join(logicalOpTypes)
+        name = str(code) + ''.join(logicalOpTypes)
         super(StabilizerState, self).__init__(name, code.n, code.k, code.d)
         
         self.code = code

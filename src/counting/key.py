@@ -6,6 +6,7 @@ Created on 2011-10-17
 from qec.error import xType, zType, dualType, PauliError
 from qec.qecc import StabilizerCode, Codeword
 from util import listutils, bits
+from util.cache import memoize
 
 class DefaultErrorKeyGenerator(object):
     
@@ -47,12 +48,16 @@ class SyndromeKeyGenerator(object):
         nStabs = len(code.stabilizerGenerators())
 
         self.code = code
-        self.parityChecks = parityChecks
+        self._parityChecks = parityChecks
         self.nStabs = nStabs
+        
+    def parityChecks(self):
+        return self._parityChecks
     
+    @memoize
     def getKey(self, e):
-        key = StabilizerCode.Syndrome(e, self.parityChecks)
-        #print 'e=', e, 'parityChecks=', self.parityChecks, 'pc={0:b} active={1:b} key={2:b}'.format(pc, self.activeBits, key)
+        key = StabilizerCode.Syndrome(e, self.parityChecks())
+        #print 'e=', e, 'parityChecks=', self.parityChecks(), 'pc={0:b} active={1:b} key={2:b}'.format(pc, self.activeBits, key)
         return key
     
 #    def getError(self, key):
@@ -81,8 +86,7 @@ class SyndromeKeyGenerator(object):
         return PauliError(xbits=decoded[0], zbits=decoded[1])
     
     def __repr__(self):
-        paulis = ''.join(str(p) for p in self._paulis)
-        return 'syndrome_' + str(self.code) + paulis
+        return 'SyndromeKeyGenerator(' + str(self.code) + ')'
     
 class MaskedKeyGenerator(object):
     
@@ -91,6 +95,9 @@ class MaskedKeyGenerator(object):
         
     def mask(self):
         return 0
+    
+    def parityChecks(self):
+        return self._generator.parityChecks()
     
     def getKey(self, e):
         return self._generator.getKey(e) & self.mask()
@@ -101,6 +108,7 @@ class MaskedKeyGenerator(object):
 class StabilizerStateKeyGenerator(MaskedKeyGenerator):
     
     def __init__(self, state):
+        self._state = state
         self.lStabs = set(state.logicalStabilizers())
         code = state.getCode()
         
@@ -117,6 +125,9 @@ class StabilizerStateKeyGenerator(MaskedKeyGenerator):
         
     def mask(self):
         return self._mask
+    
+    def __repr__(self):
+        return 'StabilizerStateKeyGenerator(' + str(self._state) + ')'
     
 class MultiBlockSyndromeKeyGenerator(object):
     '''
@@ -136,6 +147,15 @@ class MultiBlockSyndromeKeyGenerator(object):
             self.getKey = self.oneBlockKey
         else:
             self.getKey = self.tupleKey
+            
+        self.keyLengths = [len(self.generators[block.name].parityChecks()) for block in blocks] 
+        
+    def parityChecks(self):
+        checks = []
+        for block in self._blocks:
+            checks += self.generators[block.name].parityChecks()
+        
+        return checks
         
     def oneBlockKey(self, blockErrors):
         block = self._blocks[0]
@@ -151,14 +171,21 @@ class MultiBlockSyndromeKeyGenerator(object):
 #        return key
 
     def tupleKey(self, blockErrors):
-        key = tuple(self.generators[block.name].getKey(blockErrors[block.name]) for block in self._blocks)
+        gens = self.generators
+        blocks = self._blocks
+        keyLengths = self.keyLengths
+        
+        key = gens[blocks[0].name].getKey(blockErrors[blocks[0].name])
+        for i,block in enumerate(blocks[1:]):
+            key = (key << keyLengths[i-1]) + gens[block.name].getKey(blockErrors[block.name])
+             
+        #key = tuple(self.generators[block.name].getKey(blockErrors[block.name]) for block in self._blocks)
         #print 'blockErrors=', blockErrors, 'key=', key
         return key
     
     def __repr__(self):
-        blocks = self._blocks[0].name.join('.' + block.name for block in self._blocks)
-        paulis = ''.join(str(p) for p in self._paulis)
-        return 'syndrome_' + blocks + paulis
+        gens = tuple(self.generators[block.name] for block in self._blocks)
+        return str(gens)
 
 
 
