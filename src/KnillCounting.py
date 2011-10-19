@@ -15,7 +15,7 @@ if __name__ == '__main__':
     
     prepZ = component.Prep(1, 1, ed422.prepare(Pauli.Z, Pauli.X), 
                            #ed422.ED422ZeroPlus())
-                           qecc.CssState(ed422.ED422Code(), [error.zType, error.xType]))
+                           qecc.StabilizerState(ed422.ED422Code(), [error.zType, error.xType]))
     noise = { Pauli.X: NoiseModelXSympy(),
               Pauli.Z: NoiseModelZSympy(),
               Pauli.Y: NoiseModelXZSympy() 

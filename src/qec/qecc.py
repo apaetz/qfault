@@ -25,7 +25,25 @@ class Qecc(object):
         self.d = d
         
     def hashError(self, e):
-        return e;
+        '''
+        TODO: more precise name for this?
+        
+        Returns a value that:
+          1. Uniquely identifies the error relative to the code.
+             That is, let e' = unHashError(hashError(e)), then
+             getCorrection(e) == getCorrection(e') and 
+             decodeError(e) == decodeError(e').
+          2. Is a homomorphism under XOR, i.e., 
+             hashError(e1 ^ e2) == hashError(e1) ^ hashError(e2)
+        '''
+        return e
+    
+    def unHashError(self, h):
+        '''
+        For h = hashError(e), returns an error e' such that
+        e and e' are equivalent relative to the code.
+        '''
+        return h
     
     def getCorrection(self, e):
         return 0
@@ -35,7 +53,7 @@ class Qecc(object):
            
     def blockLength(self):
         return self.n
-        
+            
     def __str__(self):
         return self.name
     
@@ -56,8 +74,31 @@ class StabilizerCode(Qecc):
     def getSyndrome(self, e):
         return self.Syndrome(e, self.stabilizerGenerators())
     
+    def syndromeCorrection(self, s):
+        raise NotImplementedError
+    
     def hashError(self, e):
-        return self.Hash(e, self.stabilizerGenerators())
+        return self.Syndrome(e, self.stabilizerGenerators() + self.normalizerGenerators())
+    
+    def unHashError(self, key):
+        normalizers = self.normalizerGenerators()
+        nNorms = len(normalizers)
+        normalizerChecks = key & ((1 << nNorms) - 1)
+        syndrome = key >> nNorms
+        
+        e = self.syndromeCorrection(syndrome)
+        
+        normalizers = self.normalizerGenerators()
+        for i,norm in enumerate(normalizers):
+            if (normalizerChecks & 1) == e.commutesWith(norm):
+                # The normalizer list is formatted so that X and Z
+                # operators are adjacent.  Obtain the dual operator
+                # by flipping the LSB of the index.
+                dual = normalizers[i ^ 1]
+                e *= dual
+            normalizerChecks >>= 1
+            
+        return e
         
     def syndromeLength(self):
         '''
@@ -71,14 +112,29 @@ class StabilizerCode(Qecc):
         '''
         raise NotImplementedError
     
-    def logicalOperator(self, qubit, eType):
+    def normalizerGenerators(self):
         '''
-        Returns the logical operator corresponding to an error of eType,
-        on the given qubit.
+        A sequence of normalizer generators ordered by [X1,Z1,X2,Z2,...,Xk,Zk],
+        where Xi (Zi) is the logical X (Z) operator on logical qubit i.
         '''
         raise NotImplementedError
     
-class StabilizerState(StabilizerCode):
+#    def logicalOperator(self, qubit, eType):
+#        '''
+#        Returns the logical operator corresponding to an error of eType,
+#        on the given qubit.
+#        '''
+#        raise NotImplementedError
+    
+class Codeword(Qecc):
+    '''
+    This class is intended as an extra interface that is implemented
+    by codeword states (e.g. stabilizer states).
+    '''
+    def getCode(self):
+        raise NotImplementedError
+    
+class StabilizerState(StabilizerCode, Codeword):
     '''
     Abstract class for stabilizer states.
     
@@ -92,24 +148,46 @@ class StabilizerState(StabilizerCode):
         
         name = str(code).join(logicalOpTypes)
         super(StabilizerState, self).__init__(name, code.n, code.k, code.d)
-        self.lStabs = tuple(code.logicalOperator(i, ltype) for i,ltype in enumerate(logicalOpTypes))
+        
         self.code = code
+        
+        normalizers = code.normalizerGenerators()
+        typeOffset = {error.xType: 0, error.zType: 1}
+        self.lStabs = tuple(normalizers[2*i + typeOffset[etype]] for i,etype in enumerate(logicalOpTypes))
+        
+        # The hash mask eliminates parity checks of logical operators that are in the normalizer
+        # of the code, but are not in the normalizer of the state because the corresponding dual
+        # operator is now in the stabilizer.
+        # TODO: The calculation of the mask here is a bit sticky because it assumes a particular
+        # implementation of StabilizerCode.hashError().  It would be nice to eliminate this
+        # dependency.
+        normMasks = [norm in self.lStabs for norm in code.normalizerGenerators()]
+        self.hashMask = bits.listToBits(([1] * len(code.stabilizerGenerators())) + normMasks)
         
     def stabilizerGenerators(self):
         return self.code.stabilizerGenerators() + self.lStabs
+    
+    def normalizerGenerators(self):
+        return []
     
     def logicalStabilizers(self):
         return self.lStabs
         
     def hashError(self, e):
-        return StabilizerCode.Hash(self.code.hashError(e), self.lStabs)
+        return self.code.hashError(e) & self.hashMask
     
-    def getSyndrome(self, e):
-        s = self.code.getSyndrome(e)
-        return (s << len(self.lStabs)) + StabilizerCode.Syndrome(e, self.lStabs)
+    def unHashError(self, h):
+        return self.code.unHashError(h)
     
-    def logicalOperator(self, qubit, eType):
-        return self.code.logicalOperator(qubit,eType)
+#    def getSyndrome(self, e):
+#        s = self.code.getSyndrome(e)
+#        return (s << len(self.lStabs)) + StabilizerCode.Syndrome(e, self.lStabs)
+    
+#    def logicalOperator(self, qubit, eType):
+#        return self.code.logicalOperator(qubit,eType)
+#    
+    def getCode(self):
+        return self.code
             
 class CssCode(StabilizerCode):
     def __init__(self, name, n, k, d):
@@ -143,38 +221,40 @@ class CssCode(StabilizerCode):
         '''
         raise NotImplementedError
 
-class CssState(CssCode):
-    '''
-    Abstract class for stabilizer states.
-    
-    Initialize by specifying the logical operators that are
-    added to the stabilizer generators.
-    '''
-    
-    def __init__(self, code, logicalOpTypes):
-        if code.k != len(logicalOpTypes):
-            raise Exception('Number of logical operators ({0}) does not match k={1}'.format(len(logicalOpTypes), code.k))
-        
-        name = str(code) + ''.join(logicalOpTypes)
-        super(CssState, self).__init__(name, code.n, code.k, code.d)
-        
-        self.lStabs = {error.xType: [], error.zType: []} 
-        for i,ltype in enumerate(logicalOpTypes):
-            self.lStabs[ltype].append(code.logicalOperator(i, ltype)) 
-        self.code = code
-        
-    def stabilizerGenerators(self, types=(error.xType, error.zType)):
-        return self.code.stabilizerGenerators(types) + self.logicalStabilizers(types)
-
-    def logicalStabilizers(self, types=(error.xType, error.zType)):
-        stabs = []
-        for t in types:
-            stabs += self.lStabs[t]
-        return tuple(stabs)
-               
-    def logicalOperator(self, qubit, eType):
-        return self.code.logicalOperator(qubit,eType)
-
+#class CssState(CssCode, Codeword):
+#    '''
+#    Abstract class for stabilizer states.
+#    
+#    Initialize by specifying the logical operators that are
+#    added to the stabilizer generators.
+#    '''
+#    
+#    def __init__(self, code, logicalOpTypes):
+#        if code.k != len(logicalOpTypes):
+#            raise Exception('Number of logical operators ({0}) does not match k={1}'.format(len(logicalOpTypes), code.k))
+#        
+#        name = str(code) + ''.join(logicalOpTypes)
+#        super(CssState, self).__init__(name, code.n, code.k, code.d)
+#        
+#        self.lStabs = {error.xType: [], error.zType: []} 
+#        for i,ltype in enumerate(logicalOpTypes):
+#            self.lStabs[ltype].append(code.logicalOperator(i, ltype)) 
+#        self.code = code
+#        
+#    def stabilizerGenerators(self, types=(error.xType, error.zType)):
+#        return self.code.stabilizerGenerators(types) + self.logicalStabilizers(types)
+#
+#    def logicalStabilizers(self, types=(error.xType, error.zType)):
+#        stabs = []
+#        for t in types:
+#            stabs += self.lStabs[t]
+#        return tuple(stabs)
+#               
+#    def logicalOperator(self, qubit, eType):
+#        return self.code.logicalOperator(qubit,eType)
+#
+#    def getCode(self):
+#        return self.code
 
         
 class BellState(CssCode):
