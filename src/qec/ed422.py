@@ -42,11 +42,11 @@ class ED422Code(CssCode):
     
     _logicalOps = (
                    # Qubit 1
-                   {error.xType: Pauli.I+Pauli.I+Pauli.X+Pauli.X,
-                    error.zType: Pauli.I+Pauli.Z+Pauli.I+Pauli.Z},
+                   Pauli.I+Pauli.I+Pauli.X+Pauli.X,
+                   Pauli.I+Pauli.Z+Pauli.I+Pauli.Z,
                    # Qubit 2
-                   {error.xType: Pauli.I+Pauli.X+Pauli.I+Pauli.X,
-                    error.zType: Pauli.I+Pauli.I+Pauli.Z+Pauli.Z},
+                   Pauli.I+Pauli.X+Pauli.I+Pauli.X,
+                   Pauli.I+Pauli.I+Pauli.Z+Pauli.Z,
                    )
 
     def __init__(self):
@@ -58,8 +58,8 @@ class ED422Code(CssCode):
     def stabilizerGenerators(self, types=(error.xType, error.zType)):
         return tuple(self._generators[t] for t in types)
     
-    def logicalOperator(self, qubit, eType):
-        return self._logicalOps[qubit][eType]
+    def normalizerGenerators(self):
+        return self._logicalOps
     
 #    def reduceError(self, e):
 #        r = dict()

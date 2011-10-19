@@ -63,7 +63,7 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 def countBlocksBySyndrome(locations, blocks, pauli, noise, kMax):
 	filtered = filterAndPropagate(locations, pauli)
 	
-	keyGenerator = MultiBlockSyndromeKeyGenerator(blocks, pauli.types())
+	keyGenerator = MultiBlockSyndromeKeyGenerator(blocks)
 	counts = [countErrors(k, filtered, noise, keyGenerator) for k in range(kMax+1)]
 	
 	return counts

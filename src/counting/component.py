@@ -5,14 +5,15 @@ Created on May 1, 2011
 '''
 from abc import abstractmethod, ABCMeta
 from block import CountedBlock
-from util.cache import fetchable
 from countErrors import filterAndPropagate, convolveABB
-from qec.error import Pauli, PauliError
-from counting.countErrors import countErrors, countBlocksBySyndrome
-from util import counterUtils
-import operator
-from counting.location import Locations
 from counting.block import Block
+from counting.countErrors import countErrors, countBlocksBySyndrome
+from counting.location import Locations
+from qec.error import Pauli, PauliError, xType, zType
+from util import counterUtils
+from util.cache import fetchable
+import operator
+from qec.qecc import Codeword
 
 class Component(object):
 	'''
@@ -195,11 +196,48 @@ class TransCNOT(CountableComponent):
 		super(TransCNOT, self).__init__(locs, codes, kGood, kBest, nickname)
 		
 	@staticmethod
-	def PropagateStabilizer(stab, ctrl=True):
-		if ctrl:
-			return stab + PauliError(xbits=stab[error.xType])
+	def PropagateCode(ctrlCode, targCode):
+		'''
+		Assumes that both codes are CSS. (Transversal CNOT is not
+		a valid fault-tolerant operation for non-CSS codes.)
+		'''
+		# Assume that the transversal CNOT acts as a logical CNOT
+		# (otherwise why would we be doing it?).  This means,
+		# in particular, that the code stabilizers on each block are
+		# preserved.  Generators of stabilizer states also contain
+		# logical operators, which are considered separately.
+	
+		rawCode = ctrlCode
+		if isinstance(ctrlCode, Codeword):
+			rawCode = ctrlCode.getCode()
+			
+			
+		rawTargCode = targCode
+		if isinstance(targCode, Codeword):
+			rawTargCode = targCode.getCode()
+			
+		logicalStabilizers = []
 		
-		return PauliError(zbits=stab[error.zType]) + stab
+		# Sanity check
+		if rawCode != rawTargCode:
+			raise Exception('Control code {0} and target code {1} must be the same.'.format(rawCode, rawTargCode))
+			
+		targLogicals = [targCode.logicalOperator(i,xType) for i in range(targCode.k)] + \
+					   [targCode.logicalOperator(i,zType) for i in range(targCode.k)]
+					
+		ctrlLogicals = [ctrlCode.logicalOperator(i,xType) for i in range(ctrlCode.k)] + \
+					   [ctrlCode.logicalOperator(i,zType) for i in range(ctrlCode.k)]
+		
+		# Now, propagate each of the logical operators through the CNOT.
+		ctrlLogicals = [TransCNOT.PropagatePauli(l, ctrl=True) for l in ctrlLogicals]
+		targLogicals = [TransCNOT.PropagatePauli(l, ctrl=False) for l in targLogicals]
+		
+	@staticmethod
+	def PropagatePauli(pauli, ctrl=True):
+		if ctrl:
+			return pauli + PauliError(xbits=pauli[xType])
+		
+		return PauliError(zbits=pauli[zType]) + pauli
 			
 		
 class Bell(Component):

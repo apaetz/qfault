@@ -4,7 +4,7 @@ Created on 2011-10-17
 @author: adam
 '''
 from qec.error import xType, zType, dualType, PauliError
-from qec.qecc import StabilizerCode
+from qec.qecc import StabilizerCode, Codeword
 from util import listutils, bits
 
 class DefaultErrorKeyGenerator(object):
@@ -37,52 +37,22 @@ class SyndromeKeyGenerator(object):
     ensure that the error always commutes with the logical operator.
     '''
     
-    def __init__(self, code, paulis):
-        self._paulis = paulis
-        
-        # For each code, determine which logical operators need to be included in the
-        # key.
-        logicals = tuple(code.logicalOperator(i,xType) for i in range(code.k)) + \
-                   tuple(code.logicalOperator(i,zType) for i in range(code.k))
-
-        
-        
+    def __init__(self, code):
+                
         # Ordered list of all parity checks, including logical operators.
         # Some of the stabilizer generators may also be logical operators (e.g,
         # a stabilizer state), so we need to eliminate duplicates.
-        stabs = code.stabilizerGenerators()
-        parityChecks = listutils.uniqify(logicals + stabs)
+        parityChecks = code.stabilizerGenerators() + code.normalizerGenerators()
         
-        stabs = set(stabs)
-        nStabs = len(parityChecks) - len(logicals)
-        
-        # A parity check is active if:
-        # 1. It is in the set of stabilizer generators
-        # or
-        # 2. The corresponding dual operator is not a stabilizer.
-        k = code.k
-        isActive = [(logicals[(2*i)%k] not in stabs) for i in range(len(logicals))] + \
-                   [True] * nStabs
-#        activeMeta = []
-#        
-#        for i in range(len(logicals[xType])):
-#            if logicals[zType][i] not in stabs:
-#                isActive[i] = 1
-#            if not ((logicals[xType][i] in stabs) or (logicals[zType][i] in stabs)):
-#                activeChecks += [logicals[dualType(t)][i] for t in paulis]
-#                activeMeta += [(i,t) for t in paulis]
+        nStabs = len(code.stabilizerGenerators())
 
         self.code = code
-        self.logicals = logicals
         self.parityChecks = parityChecks
-        self.activeChecks = isActive
-        self.activeBits = bits.listToBits(isActive)
         self.nStabs = nStabs
     
     def getKey(self, e):
-        pc = StabilizerCode.Syndrome(e, self.parityChecks)
-        key = pc & self.activeBits
-        #print 'e=', blockErrors[block.name], 's=', key
+        key = StabilizerCode.Syndrome(e, self.parityChecks)
+        #print 'e=', e, 'parityChecks=', self.parityChecks, 'pc={0:b} active={1:b} key={2:b}'.format(pc, self.activeBits, key)
         return key
     
 #    def getError(self, key):
@@ -95,15 +65,17 @@ class SyndromeKeyGenerator(object):
 #        return e
     
     def decode(self, key):
-        syndrome = key & ((1 << len(self.nStabs)) - 1)
-        logicalChecks = key >> self.nStabs
+        normalizers = self.code.normalizerGenerators()
+        nNorms = len(normalizers)
+        logicalChecks = key & ((1 << nNorms) - 1)
+        syndrome = key >> nNorms
         
-        e = self.code.getSyndromeCorrection(syndrome)
+        e = self.code.syndromeCorrection(syndrome)
         
         decoded = (0,0)
-        k = self.code.k
-        for i, check in enumerate(self.logicals):
-            decoded[i/k] += (self.activeChecks[i] * ((logicalChecks & 1) ^ e.commutesWith(check))) << i%k
+        for i, check in self.code.normalizerGenerators():
+            qubit = i/2
+            decoded[i % 2] += ((logicalChecks & 1) ^ e.commutesWith(check)) << qubit
             logicalChecks >>= 1
     
         return PauliError(xbits=decoded[0], zbits=decoded[1])
@@ -112,24 +84,53 @@ class SyndromeKeyGenerator(object):
         paulis = ''.join(str(p) for p in self._paulis)
         return 'syndrome_' + str(self.code) + paulis
     
-class SyndromeKeyConverter(object):
-    '''
-    TODO: this should supply a method for converting from a syndrome key on one block
-    to a syndrome key on another block (with a possibly different stabilizer state).
-    '''
+class MaskedKeyGenerator(object):
     
-    def __init__(self, fromKeyGenerator, toKeyGenerator):
-        pass
+    def __init__(self, generator):
+        self._generator = generator
+        
+    def mask(self):
+        return 0
+    
+    def getKey(self, e):
+        return self._generator.getKey(e) & self.mask()
+    
+    def decode(self, key):
+        return self._generator.decode(key)
+    
+class StabilizerStateKeyGenerator(MaskedKeyGenerator):
+    
+    def __init__(self, state):
+        self.lStabs = set(state.logicalStabilizers())
+        code = state.getCode()
+        
+        # The hash mask eliminates parity checks of logical operators that are in the normalizer
+        # of the code, but are not in the normalizer of the state because the corresponding dual
+        # operator is now in the stabilizer.
+        # TODO: The calculation of the mask here is a bit sticky because it assumes a particular
+        # implementation of SyndromeKeyGenerator.getKey().  It would be nice to eliminate this
+        # dependency.
+        normMasks = [norm in self.lStabs for norm in code.normalizerGenerators()]
+        self._mask = bits.listToBits(([1] * len(code.stabilizerGenerators())) + normMasks)
+        
+        super(StabilizerStateKeyGenerator, self).__init__(SyndromeKeyGenerator(code))
+        
+    def mask(self):
+        return self._mask
     
 class MultiBlockSyndromeKeyGenerator(object):
     '''
     '''
     
-    def __init__(self, blocks, paulis):
+    def __init__(self, blocks):
         self._blocks = blocks
-        self._paulis = paulis
         
-        self.generators = {block.name: SyndromeKeyGenerator(block.code, paulis) for block in blocks}
+        def getGenerator(code):
+            if isinstance(code, Codeword):
+                return StabilizerStateKeyGenerator(code)
+            return SyndromeKeyGenerator(code)
+        
+        self.generators = {block.name: getGenerator(block.code) for block in blocks}
         
         if 1 == len(blocks):
             self.getKey = self.oneBlockKey
