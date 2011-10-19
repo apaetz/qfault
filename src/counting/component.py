@@ -199,6 +199,23 @@ class TransCNOT(CountableComponent):
 		locs = Locations([counterUtils.loccnot('ctrl', i, 'targ', i) for i in range(n)], nickname)
 		codes = {'ctrl': ctrlCode, 'targ': targCode}
 		super(TransCNOT, self).__init__(locs, codes, kGood, kBest, nickname)
+		
+	#TODO: the resulting QECC is still not correct.  Need to come up with a multi-block code representation.
+	
+class TransMeas(CountableComponent):
+	
+	def __init__(self, kGood, kBest, code, basis):
+		n = code.blockLength()
+		nickname = 'transMeas' + str(basis) + str(n)
+		if Pauli.X == basis:
+			loc = counterUtils.locXmeas
+		elif Pauli.Z == basis:
+			loc = counterUtils.locZmeas
+		else:
+			raise Exception('{0}-basis measurement is not supported'.format(basis))
+		
+		locs = Locations([loc('0', i) for i in range(n)], nickname)
+		super(TransMeas, self).__init__(locs, {'0': code}, kGood, kBest, nickname)
 			
 		
 class Bell(Component):
@@ -243,15 +260,36 @@ class Bell(Component):
 			
 		cnotBlock = blocks[self.cnotName]
 		return CountedBlock(convolved, cnotBlock.keyGenerators(), code=cnotBlock.getCode(), name=self.nickname())
-			
-			
-		
 	
 	@staticmethod
 	def ConstructBellCode(plusState, zeroState):
 		pass
+	
+class Teleport(Component):
+	
+	bellName = 'bell'
+	cnotName = 'cnot'
+	measXName = 'measX'
+	measZName = 'measZ'
+	
+	def __init__(self, kGood, kBest, data, bell):
+		code = data.getCode()
+		cnot = TransCNOT(kGood, kBest, code, code)
+		measX = TransMeas(kGood, kBest, code, Pauli.X)
+		measZ = TransMeas(kGood, kBest, code, Pauli.Z)
+		subs = {self.cnotName: cnot, 
+				self.bellName: bell,
+				self.measXName: measX,
+				self.measZName: measZ}
 		
+		super(Teleport, self).__init__(kGood, kBest, subcomponents=subs)
+		self._data = data
 		
+	def _convolve(self, blocks):
+		#TODO
+		pass
+		
+	
 		
 		
 class VerifyX(Component):
