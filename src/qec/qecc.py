@@ -3,13 +3,9 @@ Created on Mar 3, 2010
 
 @author: adam
 '''
-#from qec.Error import CompoundError
 from qec.error import Pauli
 import qec.error as error
-import itertools
-import operator
 from util import bits
-from util.cache import memoize
 
 class Qecc(object):
     '''
@@ -24,27 +20,6 @@ class Qecc(object):
         self.n = n
         self.k = k
         self.d = d
-        
-#    def hashError(self, e):
-#        '''
-#        TODO: more precise name for this?
-#        
-#        Returns a value that:
-#          1. Uniquely identifies the error relative to the code.
-#             That is, let e' = unHashError(hashError(e)), then
-#             getCorrection(e) == getCorrection(e') and 
-#             decodeError(e) == decodeError(e').
-#          2. Is a homomorphism under XOR, i.e., 
-#             hashError(e1 ^ e2) == hashError(e1) ^ hashError(e2)
-#        '''
-#        return e
-#    
-#    def unHashError(self, h):
-#        '''
-#        For h = hashError(e), returns an error e' such that
-#        e and e' are equivalent relative to the code.
-#        '''
-#        return h
     
     def getCorrection(self, e):
         return 0
@@ -156,16 +131,7 @@ class StabilizerState(StabilizerCode, Codeword):
         normalizers = code.normalizerGenerators()
         typeOffset = {error.xType: 0, error.zType: 1}
         self.lStabs = tuple(normalizers[2*i + typeOffset[etype]] for i,etype in enumerate(logicalOpTypes))
-        
-        # The hash mask eliminates parity checks of logical operators that are in the normalizer
-        # of the code, but are not in the normalizer of the state because the corresponding dual
-        # operator is now in the stabilizer.
-        # TODO: The calculation of the mask here is a bit sticky because it assumes a particular
-        # implementation of StabilizerCode.hashError().  It would be nice to eliminate this
-        # dependency.
-        normMasks = [norm in self.lStabs for norm in code.normalizerGenerators()]
-        self.hashMask = bits.listToBits(([1] * len(code.stabilizerGenerators())) + normMasks)
-        
+
     def stabilizerGenerators(self):
         return self.code.stabilizerGenerators() + self.lStabs
     
@@ -175,19 +141,6 @@ class StabilizerState(StabilizerCode, Codeword):
     def logicalStabilizers(self):
         return self.lStabs
         
-    def hashError(self, e):
-        return self.code.hashError(e) & self.hashMask
-    
-    def unHashError(self, h):
-        return self.code.unHashError(h)
-    
-#    def getSyndrome(self, e):
-#        s = self.code.getSyndrome(e)
-#        return (s << len(self.lStabs)) + StabilizerCode.Syndrome(e, self.lStabs)
-    
-#    def logicalOperator(self, qubit, eType):
-#        return self.code.logicalOperator(qubit,eType)
-#    
     def getCode(self):
         return self.code
             
@@ -222,6 +175,8 @@ class CssCode(StabilizerCode):
         of type 'eType', and False otherwise.
         '''
         raise NotImplementedError
+    
+# TODO: create a dummy CSS code for testing.
 
 #class CssState(CssCode, Codeword):
 #    '''
