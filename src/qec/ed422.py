@@ -15,8 +15,10 @@ from util.bits import weight
 # Cnots are given as a list of rounds.
 # Qubits are zero-based.
 cnotPreps = {
-             (Pauli.Z, Pauli.Z): [[(3,0)], [(0,4), (3,2)]],
-             (Pauli.Z, Pauli.X): [[(0,2), (1,3)]]  
+             (Pauli.Z, Pauli.Z): [[(2,0)], [(0,3), (2,1)]],
+             (Pauli.Z, Pauli.X): [[(0,2), (1,3)]],
+             (Pauli.X, Pauli.Z): [[(0,1), (2,3)]],
+             (Pauli.X, Pauli.X): [[(0,1)], [(3,0), (2,1)]]
             }
 
 def prepare(eigen1, eigen2):

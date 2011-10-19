@@ -47,7 +47,7 @@ class CountedBlock(Block):
 	CountedBlock(counts, code=block1.getCode(), name=block1.name) 
 	'''
 	
-	def __init__(self, counts, subblocks=(), code=None, name=None):
+	def __init__(self, counts, keyGenerators, subblocks=(), code=None, name=None):
 		
 		if 0 < len(subblocks):
 			name = subblocks[0].name.join('.' + block.name for block in subblocks[1:])
@@ -56,7 +56,7 @@ class CountedBlock(Block):
 				code = subblocks[0].getCode()
 			else:
 				if None != code:
-					raise Exception('Code {0} is given, but the number of subblocks is nonzero.')
+					raise Exception('A code ({0}), and subblocks ({1}) cannot both be specified.'.format(code, subblocks))
 
 				code = tuple(block.getCode() for block in subblocks)
 			
@@ -64,6 +64,7 @@ class CountedBlock(Block):
 			
 		self._subblocks = subblocks
 		self._counts = counts
+		self._keyGens = keyGenerators
 		
 	def __get__(self, etype):
 		return self._counts[etype]
@@ -76,4 +77,7 @@ class CountedBlock(Block):
 	
 	def subblocks(self):
 		return self._subblocks
+	
+	def keyGenerators(self):
+		return self._keyGens
 		

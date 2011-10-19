@@ -4,6 +4,7 @@ Created on 2010-08-30
 
 @author: adam
 '''
+from counting.countErrors import convolveDict
 
 print 'loading countParallel.'
 
@@ -91,6 +92,9 @@ class DummyResult(object):
 		
 	def get(self):
 		return self._result
+	
+	def ready(self):
+		return True
 
 
 def enableFetchableMultiprocess():
@@ -154,7 +158,7 @@ def asyncFuncWrapper(argList):
 	asyncFcn = argList[0]
 	return asyncFcn(*argList[1:])
 	
-def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=None, convolveFcn=convolveCounts, extraArgs=[], splitListsInto=[2,2]):
+def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=None, convolveFcn=convolveDict, extraArgs=[], splitListsInto=[2,2]):
 	
 	if None == partMax0:
 		partMax0 = len(counts0)-1
@@ -170,8 +174,11 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 	# Collate the results
 	convolved = [0] * (kMax+1)
 
+	sleeptime = 0
 	while (len(resultsList)):
-		time.sleep(1)
+		time.sleep(sleeptime)
+		sleeptime = 1
+		
 		done = [False] * len(resultsList)
 		readyResults = [[] for _ in range(kMax+1)]
 		for i, (k, result) in enumerate(resultsList):
