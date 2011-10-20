@@ -112,7 +112,7 @@ def prMinFailuresOld(kMin, locTotals, noiseModel, kMax=None):
 	return pr
 
 
-def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
+def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	'''
 	Returns Pr[kMin <= k <= kMax], an upper bound on the probability that  between kMin and kMax
 	failures (of any kind) occur at the given locations.
@@ -142,6 +142,8 @@ def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
 	# types. Each product term is computed in parallel.
 	#===============================================================================
 
+	
+	locTotals = locations.getTotals()
 	nTotal = reduce(operator.add, locTotals)
 	if None == kMax:
 		# 10 is arbitrary, but seems to work well.
@@ -297,9 +299,9 @@ def countsAsProbability(counts, likelyhood):
 
 
 
-def prBadPoly(kGood, locTotals, noiseModel, kMax=None):
+def prBadPoly(kGood, locations, noiseModel, kMax=None):
 	# Count up all of the locations
-	return prMinFailures(kGood+1, locTotals, noiseModel, kMax)
+	return prMinFailures(kGood+1, locations, noiseModel, kMax)
 	
 
 

@@ -24,6 +24,7 @@ def run():
     prepBlock = prepZ.count(noise)
     print prepBlock.keyGenerators()
     print prepBlock.counts()
+    print prepZ.prBad(noise)
     
     bell = component.BellPair(kMax, prepX, prepZ, kMax)
     bellBlock = bell.count(noise)
