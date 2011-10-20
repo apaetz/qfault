@@ -13,9 +13,9 @@ from util.polynomial import chebyshevT
 
 class TestMonotonicityPrBad(unittest.TestCase):
 
-	def __init__(self, result, kGood, gMin, gMax, testMethod='testPrBadD1'):
+	def __init__(self, result, kMax, gMin, gMax, testMethod='testPrBadD1'):
 		super(TestMonotonicityPrBad, self).__init__(testMethod)
-		self.kGood = kGood
+		self.kMax = kMax
 		self.gMin = gMin
 		self.gMax = gMax
 		self.result = result
@@ -25,14 +25,14 @@ class TestMonotonicityPrBad(unittest.TestCase):
 		This test checks the non-negativity condition for the first deriviative of the upper bound for Pr[bad].
 		'''
 		B = calcB(self.result.locTotals)
-		assert (self.kGood+1)/self.gMax >= B
+		assert (self.kMax+1)/self.gMax >= B
 
 
 class TestMonotonicityPrAccept(unittest.TestCase):
 
-	def __init__(self, result, kGood, gMin, gMax, testMethod='testPrAcceptD1'):
+	def __init__(self, result, kMax, gMin, gMax, testMethod='testPrAcceptD1'):
 		super(TestMonotonicityPrAccept, self).__init__(testMethod)
-		self.kGood = kGood
+		self.kMax = kMax
 		self.gMin = gMin
 		self.gMax = gMax
 		self.result = result
@@ -49,9 +49,9 @@ class TestMonotonicityPrAccept(unittest.TestCase):
 		
 class TestMonotonicityPrMalig(unittest.TestCase):
 
-	def __init__(self, result, noise, kGood, gMin, gMax, testMethod='testPrMaligD4'):
+	def __init__(self, result, noise, kMax, gMin, gMax, testMethod='testPrMaligD4'):
 		super(TestMonotonicityPrMalig, self).__init__(testMethod)
-		self.kGood = kGood
+		self.kMax = kMax
 		self.gMin = gMin
 		self.gMax = gMax
 		self.result = result
@@ -89,7 +89,7 @@ class TestMonotonicityPrMalig(unittest.TestCase):
 		
 #		
 #	def testPrBadD2(self):
-#		TestMonotonicity.CheckD2(self.kGood, self.gMin, self.gMax, self.result.locTotals)
+#		TestMonotonicity.CheckD2(self.kMax, self.gMin, self.gMax, self.result.locTotals)
 #
 #	def testPrAcceptD1(self):
 #		rejectCounts = self.result.countsRejected
@@ -99,24 +99,24 @@ class TestMonotonicityPrMalig(unittest.TestCase):
 #			print rejectCounts
 #			print self.result.prAccept
 #			TestMonotonicity.CheckNonNegativity(rejectCounts)
-#			TestMonotonicity.CheckD1Tight(self.kGood, self.gMin, self.gMax, self.result.locTotals, rejectCounts)
+#			TestMonotonicity.CheckD1Tight(self.kMax, self.gMin, self.gMax, self.result.locTotals, rejectCounts)
 #
 #	def testPrAcceptD2(self):
 #		rejectCounts = self.result.countsRejected
 #		
 #		# Not all components involve postselection.
 #		if (None != rejectCounts) and (0 != rejectCounts):
-#			#TestMonotonicity.CheckD2Tight(self.kGood, self.gMin, self.gMax, self.result.locTotals, rejectCounts)
+#			#TestMonotonicity.CheckD2Tight(self.kMax, self.gMin, self.gMax, self.result.locTotals, rejectCounts)
 #			TestMonotonicity.CheckD2(0, self.gMin, self.gMax, self.result.locTotals)
 #
 #	@staticmethod
-#	def CheckD1(kGood, gMin, gMax, n):
+#	def CheckD1(kMax, gMin, gMax, n):
 #		B = TestMonotonicity.CalcB(n)
 #		delta = TestMonotonicity.CalcDelta(gMin, gMax)
-#		assert kGood + 1 >= B * gMax / delta
+#		assert kMax + 1 >= B * gMax / delta
 #		
 #	@staticmethod
-#	def CheckD1Tight(kGood, gMin, gMax, n, counts):
+#	def CheckD1Tight(kMax, gMin, gMax, n, counts):
 #		num = sum(counts[k] * (gMin/(1-12*gMin))**k * (k/gMax)/(1-12*gMin) for k in range(len(counts)))
 #		den = sum(counts[k] * (gMin/(1-12*gMin))**k for k in range(len(counts)))
 #		
@@ -124,15 +124,15 @@ class TestMonotonicityPrMalig(unittest.TestCase):
 #		TestMonotonicity.CheckD1(kPrime, gMin, gMax, n)
 #		
 #	@staticmethod
-#	def CheckD2(kGood, gMin, gMax, n):
+#	def CheckD2(kMax, gMin, gMax, n):
 #		B = TestMonotonicity.CalcB(n)
 #		C = TestMonotonicity.CalcC(n)
 #		delta = TestMonotonicity.CalcDelta(gMin, gMax)
-#		#assert kGood * (kGood + 1) >= (gMax / delta)**2 * ((B*(1-12*gMax)/(1-4*gMin))**2 - C)
-#		assert (B*(1-12*gMax))**2 + ((kGood+1)/gMax)**2 >= C + 2*B*(kGood + 1)/gMax
+#		#assert kMax * (kMax + 1) >= (gMax / delta)**2 * ((B*(1-12*gMax)/(1-4*gMin))**2 - C)
+#		assert (B*(1-12*gMax))**2 + ((kMax+1)/gMax)**2 >= C + 2*B*(kMax + 1)/gMax
 #
 #	@staticmethod
-#	def CheckD2Tight(kGood, gMin, gMax, n, counts):
+#	def CheckD2Tight(kMax, gMin, gMax, n, counts):
 #		num = sum(counts[k] * (gMin/(1-12*gMin))**k * (k-1)/(gMax * (1-12*gMin))**2 for k in range(len(counts)))
 #		den = sum(counts[k] * (gMin/(1-12*gMin))**k for k in range(len(counts)))
 #		
@@ -157,12 +157,12 @@ class TestMonotonicityPrMalig(unittest.TestCase):
 #class TestMonotonicityWithEvents(TestMonotonicity):
 #	
 #	def testPrEventD1(self):
-#		TestMonotonicity.CheckD1Tight(self.kGood, self.gMin, self.gMax, self.result.locTotals, self.result.counts)
+#		TestMonotonicity.CheckD1Tight(self.kMax, self.gMin, self.gMax, self.result.locTotals, self.result.counts)
 #		
 #	def testPrEventD2(self):
 #		print self.result.counts
 #		TestMonotonicity.CheckNonNegativity(self.result.counts)
-#		#TestMonotonicity.CheckD2Tight(self.kGood, self.gMin, self.gMax, self.result.locTotals, self.counts)
+#		#TestMonotonicity.CheckD2Tight(self.kMax, self.gMin, self.gMax, self.result.locTotals, self.counts)
 #		TestMonotonicity.CheckD2(0, self.gMin, self.gMax, self.result.locTotals)
 		
 		
@@ -267,61 +267,61 @@ def monotonicitySuite(preps,settings):
 		#prep = prep.filterAgainst('prepX').filterAgainst('measX')
 		#print prep.getTotals()
 		result = CountResult(None,None,prep.getTotals(),0,0)
-		tests = [TestMonotonicityPrBad(result, settingsPrep['kGood'], gMin, gMax, test) \
+		tests = [TestMonotonicityPrBad(result, settingsPrep['kMax'], gMin, gMax, test) \
 				 for test in testNames]
 		suite.addTests(tests)
 	
 	testNames = loader.getTestCaseNames(TestMonotonicityPrAccept)	
-	tests = [TestMonotonicityPrAccept(verifyX1_X, settingsVX['kGood'], gMin, gMax, test)
+	tests = [TestMonotonicityPrAccept(verifyX1_X, settingsVX['kMax'], gMin, gMax, test)
 			 for test in testNames]
 	suite.addTests(tests)
 	
-	tests = [TestMonotonicityPrAccept(verifyX2_X, settingsVX['kGood'], gMin, gMax, test)
+	tests = [TestMonotonicityPrAccept(verifyX2_X, settingsVX['kMax'], gMin, gMax, test)
 			 for test in testNames]
 	suite.addTests(tests)
 	
-	tests = [TestMonotonicityPrAccept(verifyZ_Z, settingsVZ['kGood'], gMin, gMax, test)
+	tests = [TestMonotonicityPrAccept(verifyZ_Z, settingsVZ['kMax'], gMin, gMax, test)
 			 for test in testNames]
 	suite.addTests(tests)
 
-#	tests = [TestMonotonicity(ec_X, settingsEC['kGood'], gMin, gMax, test)
+#	tests = [TestMonotonicity(ec_X, settingsEC['kMax'], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 #	
 #	resultLEC = CountResult(None,None,ec_X.locTotals,0,0)
-#	tests = [TestMonotonicity(resultLEC, settings['kGood-LEC-CNOT'][0], gMin, gMax, test)
+#	tests = [TestMonotonicity(resultLEC, settings['kMax-LEC-CNOT'][0], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 #	
 #	resultLEC = CountResult(None,None,ec_X.locTotals,0,0)
-#	tests = [TestMonotonicity(resultLEC, settings['kGood-LEC-CNOT'][1], gMin, gMax, test)
+#	tests = [TestMonotonicity(resultLEC, settings['kMax-LEC-CNOT'][1], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 
 	
-#	tests = [TestMonotonicity(verifyX1_Z, settingsVX['kGood'], gMin, gMax, test)
+#	tests = [TestMonotonicity(verifyX1_Z, settingsVX['kMax'], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 #	
-#	tests = [TestMonotonicity(verifyX2_Z, settingsVX['kGood'], gMin, gMax, test)
+#	tests = [TestMonotonicity(verifyX2_Z, settingsVX['kMax'], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 #	
-#	tests = [TestMonotonicity(verifyZ_Z, settingsVZ['kGood'], gMin, gMax, test)
+#	tests = [TestMonotonicity(verifyZ_Z, settingsVZ['kMax'], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 
-#	tests = [TestMonotonicity(ec_Z, settingsEC['kGood'], gMin, gMax, test)
+#	tests = [TestMonotonicity(ec_Z, settingsEC['kMax'], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 #
 #	resultLEC = CountResult(None,None,ec_Z.locTotals,0,0)
-#	tests = [TestMonotonicity(resultLEC, settings['kGood-LEC-CNOT'][0], gMin, gMax, test)
+#	tests = [TestMonotonicity(resultLEC, settings['kMax-LEC-CNOT'][0], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 #	
 #	resultLEC = CountResult(None,None,ec_Z.locTotals,0,0)
-#	tests = [TestMonotonicity(resultLEC, settings['kGood-LEC-CNOT'][1], gMin, gMax, test)
+#	tests = [TestMonotonicity(resultLEC, settings['kMax-LEC-CNOT'][1], gMin, gMax, test)
 #			 for test in testNames]
 #	suite.addTests(tests)
 #
@@ -329,12 +329,12 @@ def monotonicitySuite(preps,settings):
 	testNames = loader.getTestCaseNames(TestMonotonicityPrMalig)
 	for E in exRec_X:
 		for result in [E[0]]:
-			tests = [TestMonotonicityPrMalig(result, noise['X'], settings['kGood'], gMin, gMax, test)
+			tests = [TestMonotonicityPrMalig(result, noise['X'], settings['kMax'], gMin, gMax, test)
 					 for test in testNames]
 			suite.addTests(tests)
 	for E in exRec_Z:
 		for result in [E[0]]:
-			tests = [TestMonotonicityPrMalig(result, noise['Z'], settings['kGood'], gMin, gMax, test)
+			tests = [TestMonotonicityPrMalig(result, noise['Z'], settings['kMax'], gMin, gMax, test)
 					 for test in testNames]
 			suite.addTests(tests)
 	
