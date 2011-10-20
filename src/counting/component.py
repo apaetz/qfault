@@ -5,17 +5,15 @@ Created on May 1, 2011
 '''
 from abc import abstractmethod, ABCMeta
 from block import CountedBlock
-from countErrors import filterAndPropagate, convolveABB
 from counting.block import Block
-from counting.countErrors import countErrors, countBlocksBySyndrome, mapKeys
+from counting.countErrors import countBlocksBySyndrome, mapKeys
 from counting.countParallel import convolve
 from counting.location import Locations
-from qec.error import Pauli, PauliError, xType, zType
-from qec.qecc import Codeword
+from qec.error import Pauli, xType, zType
 from util import counterUtils, bits
 from util.cache import fetchable
-import operator
-from copy import copy
+from counting import probability
+
 
 class Component(object):
 	'''
@@ -41,11 +39,11 @@ class Component(object):
 	and _postCount().
 	'''
 
-	def __init__(self, kMax, nickname=None, subcomponents={}):
+	def __init__(self, kGood, nickname=None, subcomponents={}):
 		'''
 		Constructor
 		'''
-		self.kMax = {pauli: kMax.get(pauli, 0) for pauli in (Pauli.X, Pauli.Z, Pauli.Y)}
+		self.kGood = {pauli: kGood.get(pauli, 0) for pauli in (Pauli.X, Pauli.Z, Pauli.Y)}
 		self._nickname = nickname
 		self._subs = subcomponents
 		
@@ -85,6 +83,14 @@ class Component(object):
 		print 'Post processing', str(self)
 		return self._postCount(block)
 	
+	def prBad(self, noise, kMax={pauli: None for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}):
+		prSelf = {pauli: probability.prBadPoly(self.kGood[pauli], self.internalLocations(), noiseModel, kMax[pauli])
+				  for pauli, noiseModel in noise.iteritems()}
+		
+		prByPauli = [sub.prBad(noise, kMax=self.kGood) for sub in self._subs] + [prSelf]
+		
+		return {pauli: sum(pr[pauli] for pr in prByPauli) for pauli in noise}
+	
 	def _count(self, noise):
 		'''
 		Subclass hook.
@@ -113,7 +119,7 @@ class Component(object):
 		
 		convolved = {}			
 		counts = [block.counts() for block in blocks]
-		for pauli, k in self.kMax.iteritems():
+		for pauli, k in self.kGood.iteritems():
 			convolved[pauli] = counts[0][pauli]
 			for count in counts[1:]:
 				convolved[pauli] = convolve(convolved[pauli], count[pauli], kMax=k)
@@ -145,7 +151,7 @@ class Component(object):
 		rep = str(self.__class__.__name__)
 		if None != self._nickname:
 			rep += '-' + self._nickname + '-'
-		rep += str(self.kMax)
+		rep += str(self.kGood)
 		return rep
 	
 class CountableComponent(Component):
@@ -175,7 +181,7 @@ class CountableComponent(Component):
 		# Now count the internal locations.
 		counts = {}
 		keyGens = {}
-		for pauli,k in self.kMax.iteritems():
+		for pauli,k in self.kGood.iteritems():
 			counts[pauli], keyGens[pauli] = countBlocksBySyndrome(self.locations, 
 																  self.blocks, 
 																  pauli, 
@@ -256,7 +262,7 @@ class BellPair(Component):
 		
 		blockShift = len(parityChecks)
 
-		for pauli in self.kMax.keys(): 	
+		for pauli in self.kGood.keys(): 	
 			# Propagate the preparation errors through the CNOT.
 			blocks[self.plusName].counts()[pauli] = mapKeys(blocks[self.plusName].counts()[pauli], 
 														    lambda e: (e << blockShift) + (e & xmask))
@@ -294,7 +300,7 @@ class BellMeas(CountableComponent):
 		parityChecks = blocks[self.measXName].keyGenerators()
 		blockShift = len(parityChecks)
 		
-		for pauli in self.kMax.keys():
+		for pauli in self.kGood.keys():
 			# Extend single block X-basis measurement keys to both blocks.
 			# Z-basis measurements do not need to be modified because they are represented by the LSBs.
 			blocks[self.measXName].counts()[pauli] = mapKeys(blocks[self.measXName].counts()[pauli], 
@@ -350,12 +356,12 @@ class VerifyX(Component):
 #		countsBCM = convolve(countsCM[Pauli.X], 
 #						     countsB[Pauli.X], 
 #						     convolveFcn=convolveABB, 
-#						     kMax=self.kMax)
+#						     kGood=self.kGood)
 #		
 #		countsVerified = convolve(countsA[Pauli.X], 
 #								  countsBCM, 
 #								  convolveFcn=convolveCountsPostselectX, 
-#								  kMax=self.kMax)
+#								  kGood=self.kGood)
 #		
 #		results[Pauli.X] = countsVerified
 #		
@@ -367,8 +373,8 @@ class VerifyX(Component):
 #		# constructing the 2-block counts a bit differently.
 #		# i.e., 2-block counts are indexed by [s1][s2] rather
 #		# than a single index for the entire syndrome.
-#		countsVerify = convolve(countsPrepB, countsC, kMax=kMax)
-#		countsVerified = convolve(countsPrepA, countsVerify, kMax=kMax)
+#		countsVerify = convolve(countsPrepB, countsC, kGood=kGood)
+#		countsVerified = convolve(countsPrepA, countsVerify, kGood=kGood)
 #	
 #		
 #		

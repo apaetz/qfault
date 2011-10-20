@@ -47,33 +47,44 @@ class CountedBlock(Block):
 	CountedBlock(counts, code=block1.getCode(), name=block1.name) 
 	'''
 	
-	def __init__(self, counts, keyGenerators, subblocks=(), code=None, name=None):
+	def __init__(self, counts, keyGenerators, rejectedCounts=None, prAccept=1, subblocks=(), code=None, name=None):
 		
 		if 0 < len(subblocks):
 			name = subblocks[0].name.join('.' + block.name for block in subblocks[1:])
 			
+			if None != code:
+				raise Exception('A code ({0}), and subblocks ({1}) cannot both be specified.'.format(code, subblocks))
+
 			if 1 == len(subblocks):
 				code = subblocks[0].getCode()
 			else:
-				if None != code:
-					raise Exception('A code ({0}), and subblocks ({1}) cannot both be specified.'.format(code, subblocks))
-
 				code = tuple(block.getCode() for block in subblocks)
 			
 		super(CountedBlock, self).__init__(name, code)
 			
 		self._subblocks = subblocks
 		self._counts = counts
+		self._rejected = rejectedCounts
+		self._prAccept = prAccept
 		self._keyGens = keyGenerators
 		
 	def __get__(self, etype):
 		return self._counts[etype]
 	
 	def length(self):
-		return sum(block.getCode() for block in self._subblocks)
+		try:
+			return super(CountedBlock, self).length()
+		except:
+			return sum(code.n for code in self.getCode())
 	
 	def counts(self):
 		return self._counts
+	
+	def rejectedCounts(self):
+		return self._rejected
+	
+	def prAccept(self):
+		return self._prAccept
 	
 	def subblocks(self):
 		return self._subblocks
