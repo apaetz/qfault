@@ -157,7 +157,8 @@ convolve = lambda *args, **kwargs: convolveParallel(defaultPool, *args, **kwargs
 def asyncFuncWrapper(argList):
 	asyncFcn = argList[0]
 	return asyncFcn(*argList[1:])
-	
+
+# TODO: generalize to allow an arbitrary number of counts (instead of just 2).	
 def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=None, convolveFcn=convolveDict, extraArgs=[], splitListsInto=[2,2]):
 	
 	if None == partMax0:

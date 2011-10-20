@@ -15,6 +15,7 @@ from qec.qecc import Codeword
 from util import counterUtils, bits
 from util.cache import fetchable
 import operator
+from copy import copy
 
 class Component(object):
 	'''
@@ -40,12 +41,11 @@ class Component(object):
 	and _postCount().
 	'''
 
-	def __init__(self, kGood, kBest=0, nickname=None, subcomponents={}):
+	def __init__(self, kMax, nickname=None, subcomponents={}):
 		'''
 		Constructor
 		'''
-		self.kGood = kGood
-		self.kBest = kBest
+		self.kMax = {pauli: kMax.get(pauli, 0) for pauli in (Pauli.X, Pauli.Z, Pauli.Y)}
 		self._nickname = nickname
 		self._subs = subcomponents
 		
@@ -79,9 +79,9 @@ class Component(object):
 		Returns a CountedBlock. 
 		'''
 		print 'Counting', str(self)
-		counts = self._count(noise)
+		countedBlocks = self._count(noise)
 		print 'Convolving', str(self)
-		block = self._convolve(counts)
+		block = self._convolve(countedBlocks)
 		print 'Post processing', str(self)
 		return self._postCount(block)
 	
@@ -93,10 +93,9 @@ class Component(object):
 		It is expected that most concrete components will not need to 
 		implement this method. 
 		'''
-		subcounts = [(name, sub.count(noise)) for name, sub in self._subs.iteritems()]
-		return dict(subcounts)
+		return {name: sub.count(noise) for name, sub in self._subs.iteritems()} 
 	
-	def _convolve(self, counts):
+	def _convolve(self, blocks):
 		'''
 		Subclass hook.
 		Combines errors from each of the sub-components.
@@ -105,7 +104,23 @@ class Component(object):
 		
 		Returns a CountedBlock object.
 		'''
-		return counts
+		
+		# The block names won't be used
+		blocks = blocks.values()
+		
+		if 1 == len(blocks):
+			return blocks[0]
+		
+		convolved = {}			
+		counts = [block.counts() for block in blocks]
+		for pauli, k in self.kMax.iteritems():
+			convolved[pauli] = counts[0][pauli]
+			for count in counts[1:]:
+				convolved[pauli] = convolve(convolved[pauli], count[pauli], kMax=k)
+				
+		# Assume that the properties of all of the blocks are the same.
+		propBlock = blocks[0]
+		return CountedBlock(convolved, propBlock.keyGenerators(), code=propBlock.getCode(), name=str(self))
 	
 	def _postCount(self, block):
 		'''
@@ -127,13 +142,10 @@ class Component(object):
 		return full
 	
 	def __repr__(self):
-		rep = str(self.__class__.__name__) + '-'
+		rep = str(self.__class__.__name__)
 		if None != self._nickname:
-			rep += self._nickname
-		rep += '-'
-		rep += str(self.kGood)
-		if 0 != self.kBest:
-			rep += ',' + str(self.kBest)
+			rep += '-' + self._nickname + '-'
+		rep += str(self.kMax)
 		return rep
 	
 class CountableComponent(Component):
@@ -142,15 +154,12 @@ class CountableComponent(Component):
 	also has its own physical locations that must be counted.
 	'''
 	
-	def __init__(self, locations, codes, kGood, kBest=0, nickname=None, subcomponents={}):
+	def __init__(self, locations, codes, kMax, nickname=None, subcomponents={}):
 		# The number of faulty locations cannot exceed the total
 		# number of locations.
-		n = len(locations)
-		kBest = min(kBest, n)
-		kGood = min(kGood, n)
 		if None == nickname:
 			nickname=str(locations)
-		super(CountableComponent, self).__init__(kGood, kBest, nickname=nickname)
+		super(CountableComponent, self).__init__(kMax, nickname=nickname)
 		
 		self.locations = locations
 		blocknames = list(locations.blocknames())
@@ -166,30 +175,30 @@ class CountableComponent(Component):
 		# Now count the internal locations.
 		counts = {}
 		keyGens = {}
-		for pauli, kGood in [(Pauli.X, self.kGood), (Pauli.Z, self.kGood), (Pauli.X*Pauli.Z, self.kBest)]:
-			counts[pauli], keyGens[pauli] = countBlocksBySyndrome(self.locations, self.blocks, pauli, noise[pauli], kGood)
+		for pauli,k in self.kMax.iteritems():
+			counts[pauli], keyGens[pauli] = countBlocksBySyndrome(self.locations, 
+																  self.blocks, 
+																  pauli, 
+																  noise[pauli], 
+																  k)
 				
 		cb = CountedBlock(counts, keyGens, subblocks=self.blocks, name=self.nickname())
-		if 0 == len(subcounts):
-			# There are no sub-component counts. So we can just return the
-			# internal counts.
-			return cb
 		
 		subcounts[self.nickname()] = cb 
 		return subcounts
 
 class Prep(CountableComponent):
 	
-	def __init__(self, kGood, kBest, locations, code):
+	def __init__(self, kMax, locations, code):
 		blocknames = list(locations.blocknames())
-		super(Prep, self).__init__(locations, {name: code for name in blocknames}, kGood, kBest)
+		super(Prep, self).__init__(locations, {name: code for name in blocknames}, kMax)
 		
 class TransCNOT(CountableComponent):
 	'''
 	Transversal Controlled-NOT.
 	'''
 	
-	def __init__(self, kGood, kBest, ctrlCode, targCode):
+	def __init__(self, kMax, ctrlCode, targCode):
 		n = ctrlCode.blockLength()
 		if n != targCode.blockLength():
 			raise Exception('Control ({0}) and target ({1}) blocklengths do not match.'.format(n, targCode.blockLength()))
@@ -198,13 +207,13 @@ class TransCNOT(CountableComponent):
 		print 'nickname=', nickname
 		locs = Locations([counterUtils.loccnot('ctrl', i, 'targ', i) for i in range(n)], nickname)
 		codes = {'ctrl': ctrlCode, 'targ': targCode}
-		super(TransCNOT, self).__init__(locs, codes, kGood, kBest, nickname)
+		super(TransCNOT, self).__init__(locs, codes, kMax, nickname)
 		
 	#TODO: the resulting QECC is still not correct.  Need to come up with a multi-block code representation.
 	
 class TransMeas(CountableComponent):
 	
-	def __init__(self, kGood, kBest, code, basis):
+	def __init__(self, kMax, code, basis):
 		n = code.blockLength()
 		nickname = 'transMeas' + str(basis) + str(n)
 		if Pauli.X == basis:
@@ -215,23 +224,24 @@ class TransMeas(CountableComponent):
 			raise Exception('{0}-basis measurement is not supported'.format(basis))
 		
 		locs = Locations([loc('0', i) for i in range(n)], nickname)
-		super(TransMeas, self).__init__(locs, {'0': code}, kGood, kBest, nickname)
+		super(TransMeas, self).__init__(locs, {'0': code}, kMax, nickname)
 			
 		
-class Bell(Component):
+class BellPair(Component):
 	
 	plusName = '|+>'
 	zeroName = '|0>'
 	cnotName = 'cnot'
 	
-	def __init__(self, kGood, kBest, plus, zero):
-		super(Bell, self).__init__(kGood, kBest, subcomponents={self.plusName: plus, self.zeroName: zero})
+	def __init__(self, kMax, plus, zero, kMaxCnot):
+		super(BellPair, self).__init__(kMax, subcomponents={self.plusName: plus, self.zeroName: zero})
+		self.kMaxCnot = kMaxCnot							
 		
 	def _count(self, noise):
-		prepBlocks = super(Bell, self)._count(noise)
+		prepBlocks = super(BellPair, self)._count(noise)
 		
 		# Construct a transversal CNOT component from the two input codes.
-		cnot = TransCNOT(self.kGood, self.kBest, prepBlocks[self.plusName].getCode(), prepBlocks[self.zeroName].getCode())
+		cnot = TransCNOT(self.kMaxCnot, prepBlocks[self.plusName].getCode(), prepBlocks[self.zeroName].getCode())
 		prepBlocks[self.cnotName] = cnot.count(noise)
 		
 		return prepBlocks
@@ -244,43 +254,69 @@ class Bell(Component):
 		xmask = bits.listToBits((0 == check[zType]) for check in parityChecks)
 		zmask = bits.listToBits((0 == check[xType]) for check in parityChecks)
 		
-		kMax = {Pauli.X: self.kGood, Pauli.Z: self.kGood, Pauli.Y: self.kBest}
-		
 		blockShift = len(parityChecks)
-		
-		convolved = {}
-		for pauli in [Pauli.X, Pauli.Z, Pauli.Y]: 	
+
+		for pauli in self.kMax.keys(): 	
 			# Propagate the preparation errors through the CNOT.
-			countsPlus = mapKeys(blocks[self.plusName].counts()[pauli], lambda e: (e << blockShift) + (e & xmask))
-			countsZero = mapKeys(blocks[self.zeroName].counts()[pauli], lambda e: ((e & zmask) << blockShift) + e)
+			blocks[self.plusName].counts()[pauli] = mapKeys(blocks[self.plusName].counts()[pauli], 
+														    lambda e: (e << blockShift) + (e & xmask))
+			blocks[self.zeroName].counts()[pauli] = mapKeys(blocks[self.zeroName].counts()[pauli], 
+														    lambda e: ((e & zmask) << blockShift) + e)
 			
-			# Now convolve.
-			convolved[pauli] = convolve(countsPlus, countsZero, kMax=kMax[pauli])
-			convolved[pauli] = convolve(convolved[pauli], blocks[self.cnotName].counts()[pauli], kMax=kMax[pauli])
-			
+		# Now convolve.
+		convolved = super(BellPair, self)._convolve(blocks)
+		
+		# The default _convolve() may not assign the correct block properties (i.e., key generators, code).
 		cnotBlock = blocks[self.cnotName]
-		return CountedBlock(convolved, cnotBlock.keyGenerators(), code=cnotBlock.getCode(), name=self.nickname())
+		return CountedBlock(convolved.counts(), cnotBlock.keyGenerators(), code=cnotBlock.getCode(), name=str(convolved))
 	
 	@staticmethod
 	def ConstructBellCode(plusState, zeroState):
 		pass
 	
-class Teleport(Component):
-	
-	bellName = 'bell'
+class BellMeas(CountableComponent):
+
 	cnotName = 'cnot'
 	measXName = 'measX'
 	measZName = 'measZ'
 	
-	def __init__(self, kGood, kBest, data, bell):
-		code = data.getCode()
-		cnot = TransCNOT(kGood, kBest, code, code)
-		measX = TransMeas(kGood, kBest, code, Pauli.X)
-		measZ = TransMeas(kGood, kBest, code, Pauli.Z)
-		subs = {self.cnotName: cnot, 
-				self.bellName: bell,
-				self.measXName: measX,
-				self.measZName: measZ}
+	def __init__(self, kMax, code, kMaxMeasX=None, kMaxMeasZ=None, kMaxCnot=None):
+		if None == kMaxMeasX: kMaxMeasX = kMax
+		if None == kMaxMeasZ: kMaxMeasZ = kMax
+		if None == kMaxCnot: kMaxCnot = kMax
+		
+		subs = {self.cnotName: TransCNOT(kMaxCnot, code, code),
+			    self.measXName: TransMeas(kMaxMeasX, code, Pauli.X),
+			    self.measZName: TransMeas(kMaxMeasZ, code, Pauli.Z)}
+		super(BellMeas, self).__init__(kMax, subcomponents=subs)
+		
+	def _convolve(self, blocks):
+		parityChecks = blocks[self.measXName].keyGenerators()
+		blockShift = len(parityChecks)
+		
+		for pauli in self.kMax.keys():
+			# Extend single block X-basis measurement keys to both blocks.
+			# Z-basis measurements do not need to be modified because they are represented by the LSBs.
+			blocks[self.measXName].counts()[pauli] = mapKeys(blocks[self.measXName].counts()[pauli], 
+															 lambda e: e << blockShift)
+			
+		# Now convolve.
+		convolved = super(BellPair, self)._convolve(blocks)
+		
+		# The default _convolve() may not assign the correct block properties (i.e., key generators, code).
+		cnotBlock = blocks[self.cnotName]
+		return CountedBlock(convolved.counts(), cnotBlock.keyGenerators(), code=cnotBlock.getCode(), name=str(convolved))
+			
+		
+	
+class Teleport(Component):
+	
+	bpName = 'BP'
+	bmName = 'BM'
+	
+	def __init__(self, kGood, kBest, data, bellPair, bellMeas):
+		subs = {self.bpName: bellPair,
+				self.bmName: bellMeas}
 		
 		super(Teleport, self).__init__(kGood, kBest, subcomponents=subs)
 		self._data = data
@@ -314,12 +350,12 @@ class VerifyX(Component):
 #		countsBCM = convolve(countsCM[Pauli.X], 
 #						     countsB[Pauli.X], 
 #						     convolveFcn=convolveABB, 
-#						     kMax=self.kGood)
+#						     kMax=self.kMax)
 #		
 #		countsVerified = convolve(countsA[Pauli.X], 
 #								  countsBCM, 
 #								  convolveFcn=convolveCountsPostselectX, 
-#								  kMax=self.kGood)
+#								  kMax=self.kMax)
 #		
 #		results[Pauli.X] = countsVerified
 #		
@@ -331,8 +367,8 @@ class VerifyX(Component):
 #		# constructing the 2-block counts a bit differently.
 #		# i.e., 2-block counts are indexed by [s1][s2] rather
 #		# than a single index for the entire syndrome.
-#		countsVerify = convolve(countsPrepB, countsC, kMax=kGood)
-#		countsVerified = convolve(countsPrepA, countsVerify, kMax=kGood)
+#		countsVerify = convolve(countsPrepB, countsC, kMax=kMax)
+#		countsVerified = convolve(countsPrepA, countsVerify, kMax=kMax)
 #	
 #		
 #		
