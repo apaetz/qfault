@@ -47,7 +47,7 @@ class CountedBlock(Block):
 	CountedBlock(counts, code=block1.getCode(), name=block1.name) 
 	'''
 	
-	def __init__(self, counts, keyGenerators, rejectedCounts=None, prAccept=1, subblocks=(), code=None, name=None):
+	def __init__(self, counts, keyMeta, rejectedCounts=None, prAccept=1, subblocks=(), code=None, name=None):
 		
 		if 0 < len(subblocks):
 			name = subblocks[0].name.join('.' + block.name for block in subblocks[1:])
@@ -66,7 +66,7 @@ class CountedBlock(Block):
 		self._counts = counts
 		self._rejected = rejectedCounts
 		self._prAccept = prAccept
-		self._keyGens = keyGenerators
+		self._keyMeta = keyMeta
 		
 	def __get__(self, etype):
 		return self._counts[etype]
@@ -89,6 +89,6 @@ class CountedBlock(Block):
 	def subblocks(self):
 		return self._subblocks
 	
-	def keyGenerators(self):
-		return self._keyGens
+	def keyMeta(self):
+		return self._keyMeta
 		

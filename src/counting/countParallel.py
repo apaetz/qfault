@@ -251,19 +251,32 @@ def splitContents(listOrDict, numParts=2):
 	return splitListContents(listOrDict, numParts)
 
 def splitDictContents(d, numParts=2):
+	'''
+	>>> splitDictContents({1:'a', 2:'b', 3:'c'}, 2)
+	[{1: 'a', 2: 'b'}, {3: 'c'}]
+	'''
 	
 	# Special case to avoid costly d.items() call below, if possible.
 	if 1 == numParts:
 		return [d]
 	
+	keys = d.keys()
+	
+	# If the number of elements in the dict is less than the
+	# requested number of parts, then some of the parts will be empty.
+	nonEmptyParts = min(len(keys), numParts)
+	if 0 != nonEmptyParts:
+		chunksize = int(math.ceil(len(keys) / float(nonEmptyParts)))
+	else:
+		chunksize = 1
+		
 	parts = []
-	# Note: items() can be quite slow when the dictionary is large, or when the values contained
-	# in the dictionary consume a lot of memory.
-	items = d.items()
-	chunksize = int(math.ceil(len(items) / float(numParts)))
-	#logger.info('Splitting dictionary of {0} items into {1} chunks of size {2}'.format(len(items), numParts, chunksize))
-	for i in xrange(0, len(items), chunksize):
-		parts.append(dict(items[i:i+chunksize]))
+	for i in xrange(0, len(keys), chunksize):
+		end = min(i + chunksize, len(keys))
+		parts.append({keys[j]: d[keys[j]] for j in xrange(i, end)})
+		
+	# Append any empty parts
+	parts += [{}] * (numParts - nonEmptyParts)
 			
 	return parts
 
