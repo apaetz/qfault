@@ -7,6 +7,7 @@ from qec.error import xType, zType, dualType, PauliError
 from qec.qecc import StabilizerCode, Codeword
 from util import listutils, bits
 from util.cache import memoize
+from collections import OrderedDict
 
 class DefaultErrorKeyGenerator(object):
     
@@ -38,15 +39,20 @@ class SyndromeKeyGenerator(object):
     ensure that the error always commutes with the logical operator.
     '''
     
-    def __init__(self, code):
+    @staticmethod
+    def ParityChecks(stabilizerCode):
+        return stabilizerCode.stabilizerGenerators() + stabilizerCode.normalizerGenerators()
+    
+    def __init__(self, code, blockname):
                 
         # Ordered list of all parity checks, including logical operators.
         # Some of the stabilizer generators may also be logical operators (e.g,
         # a stabilizer state), so we need to eliminate duplicates.
-        parityChecks = code.stabilizerGenerators() + code.normalizerGenerators()
+        parityChecks = self.ParityChecks(code)
         
         nStabs = len(code.stabilizerGenerators())
 
+        self.blockname = blockname
         self.code = code
         self._parityChecks = parityChecks
         self.nStabs = nStabs
@@ -60,6 +66,9 @@ class SyndromeKeyGenerator(object):
         #print 'e=', e, 'parityChecks=', self.parityChecks(), 'pc={0:b} active={1:b} key={2:b}'.format(pc, self.activeBits, key)
         return key
     
+    def keyMeta(self):
+        return SyndromeKeyMeta(self.parityChecks(), [self.blockname])
+    
 #    def getError(self, key):
 #        syndrome, logical = key
 #        e = self.code.getSyndromeCorrection(syndrome)
@@ -69,24 +78,68 @@ class SyndromeKeyGenerator(object):
 #            logical >>= 1
 #        return e
     
-    def decode(self, key):
-        normalizers = self.code.normalizerGenerators()
-        nNorms = len(normalizers)
-        logicalChecks = key & ((1 << nNorms) - 1)
-        syndrome = key >> nNorms
-        
-        e = self.code.syndromeCorrection(syndrome)
-        
-        decoded = (0,0)
-        for i, check in self.code.normalizerGenerators():
-            qubit = i/2
-            decoded[i % 2] += ((logicalChecks & 1) ^ e.commutesWith(check)) << qubit
-            logicalChecks >>= 1
-    
-        return PauliError(xbits=decoded[0], zbits=decoded[1])
+#    def decode(self, key):
+#        normalizers = self.code.normalizerGenerators()
+#        nNorms = len(normalizers)
+#        logicalChecks = key & ((1 << nNorms) - 1)
+#        syndrome = key >> nNorms
+#        
+#        e = self.code.syndromeCorrection(syndrome)
+#        
+#        decoded = (0,0)
+#        for i, check in self.code.normalizerGenerators():
+#            qubit = i/2
+#            decoded[i % 2] += ((logicalChecks & 1) ^ e.commutesWith(check)) << qubit
+#            logicalChecks >>= 1
+#    
+#        return PauliError(xbits=decoded[0], zbits=decoded[1])
     
     def __repr__(self):
         return 'SyndromeKeyGenerator(' + str(self.code) + ')'
+    
+class SyndromeKeyMeta(object):
+    
+    def __init__(self, parityChecks, blocknames):
+        self._parityChecks = tuple(parityChecks)
+        #self._normalizerBits = normalizerBits
+        self._blocks = OrderedDict((name, i) for i,name in enumerate(blocknames))
+
+    def length(self):
+        return len(self.parityChecks()) * len(self._blocks)
+        
+    def parityChecks(self):
+        return self._parityChecks
+    
+    def blocknames(self):
+        return self._blocks.keys()
+    
+    def blockIndex(self, blockname):
+        return self._blocks[blockname]
+    
+    def blockRange(self, blockname):
+        blocklen = len(self.parityChecks())
+        start = self.blockIndex(blockname) * blocklen
+        end = start + blocklen
+        return range(start, end+1)
+#    
+#    def syndromeOf(self, key):
+#        return key >> self._normalizerBits
+#    
+#    def syndromeMask(self):
+#        return  ((1 << self.length()) - 1) ^ ((1 << self._normalizerBits) - 1)
+    
+    def __eq__(self, other):
+        try:
+            return self.parityChecks() == other.parityChecks()
+        except:
+            return False
+        
+    def __hash__(self):
+        return self.parityChecks().__hash__()
+    
+    def __str__(self):
+        return str(self.blocknames()) + str(self.parityChecks())
+
     
 class MaskedKeyGenerator(object):
     
@@ -105,23 +158,26 @@ class MaskedKeyGenerator(object):
     def decode(self, key):
         return self._generator.decode(key)
     
+    def keyMeta(self):
+        return self._generator.keyMeta()
+    
 class StabilizerStateKeyGenerator(MaskedKeyGenerator):
     
-    def __init__(self, state):
+    def __init__(self, state, blockname):
         self._state = state
         self.lStabs = set(state.logicalStabilizers())
         code = state.getCode()
         
-        # The hash mask eliminates parity checks of logical operators that are in the normalizer
+        skg = SyndromeKeyGenerator(code, blockname)
+
+        # The check mask eliminates parity checks of logical operators that are in the normalizer
         # of the code, but are not in the normalizer of the state because the corresponding dual
         # operator is now in the stabilizer.
-        # TODO: The calculation of the mask here is a bit sticky because it assumes a particular
-        # implementation of SyndromeKeyGenerator.getKey().  It would be nice to eliminate this
-        # dependency.
-        normMasks = [norm in self.lStabs for norm in code.normalizerGenerators()]
-        self._mask = bits.listToBits(([1] * len(code.stabilizerGenerators())) + normMasks)
+        maskedChecks = code.stabilizerGenerators() + state.logicalStabilizers()
+        masks = [check in maskedChecks for check in skg.parityChecks()]
+        self._mask = bits.listToBits(masks)
         
-        super(StabilizerStateKeyGenerator, self).__init__(SyndromeKeyGenerator(code))
+        super(StabilizerStateKeyGenerator, self).__init__(skg)
         
     def mask(self):
         return self._mask
@@ -136,58 +192,51 @@ class MultiBlockSyndromeKeyGenerator(object):
     def __init__(self, blocks):
         self._blocks = blocks
         
-        def getGenerator(code):
+        def getGenerator(code, blockname):
             if isinstance(code, Codeword):
-                return StabilizerStateKeyGenerator(code)
-            return SyndromeKeyGenerator(code)
+                return StabilizerStateKeyGenerator(code, blockname)
+            return SyndromeKeyGenerator(code, blockname)
         
-        self.generators = {block.name: getGenerator(block.code) for block in blocks}
+        self.generators = {block.name: getGenerator(block.code, block.name) for block in blocks}
         
+        pcSet = set([g.parityChecks() for g in self.generators.values()])
+        if 1 < len(pcSet):
+            raise Exception('Parity check mismatch. {0}'.format(pcSet))
+        
+        self._parityChecks = pcSet.pop()
+        
+        # oneBlockKey is slightly more efficient.
         if 1 == len(blocks):
             self.getKey = self.oneBlockKey
         else:
-            self.getKey = self.tupleKey
-            
-        self.keyLengths = [len(self.generators[block.name].parityChecks()) for block in blocks] 
+            self.getKey = self.multiBlockKey
         
     def parityChecks(self):
-        checks = []
-        for block in self._blocks:
-            checks += self.generators[block.name].parityChecks()
-        
-        return checks
+        return self._parityChecks
+    
+    def keyMeta(self):
+        return SyndromeKeyMeta(self._parityChecks, [block.name for block in self._blocks])
         
     def oneBlockKey(self, blockErrors):
         block = self._blocks[0]
         e = blockErrors[block.name]
         return self.generators[block.name].getKey(e)
 
-#    def concatenatedKey(self, blockErrors):
-#        bits = self._bits
-#        paulis = self._paulis
-#        # Concatenate the errors on each block into a single bit string.
-#        appendSyndrome = lambda s, block: (s << bits[block.name]) + block.code.getSyndrome(blockErrors[block.name], paulis)
-#        key = reduce(appendSyndrome, self._blocks, 0)
-#        return key
-
-    def tupleKey(self, blockErrors):
+    def multiBlockKey(self, blockErrors):
         gens = self.generators
         blocks = self._blocks
-        keyLengths = self.keyLengths
+        keyShift = len(self._parityChecks)
         
-        key = gens[blocks[0].name].getKey(blockErrors[blocks[0].name])
-        for i,block in enumerate(blocks[1:]):
-            key = (key << keyLengths[i-1]) + gens[block.name].getKey(blockErrors[block.name])
+        key = gens[blocks[-1].name].getKey(blockErrors[blocks[0].name])
+        for block in reversed(blocks[:-1]):
+            key = (key << keyShift) + gens[block.name].getKey(blockErrors[block.name])
              
-        #key = tuple(self.generators[block.name].getKey(blockErrors[block.name]) for block in self._blocks)
         #print 'blockErrors=', blockErrors, 'key=', key
         return key
     
     def __repr__(self):
         gens = tuple(self.generators[block.name] for block in self._blocks)
         return str(gens)
-
-
 
 if __name__ == '__main__':
     pass

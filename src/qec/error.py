@@ -27,10 +27,12 @@ class PauliError(object):
 	An n-qubit Pauli error, for arbitrary n.
 	Does not account for overall phase factors.
 	
-	This class does not impose a particular ordering
+	This class does not impose a particular ordering/endianness
 	(i.e, ascending or descending) on the qubits.
 	However, a good convention is to specify qubit
-	zero as the LSB, and qubit (n-1) as the MSB.
+	zero as the MSB, and qubit (n-1) as the LSB.  This
+	allows the tensor product to be read-off directly
+	from left to right.
 	
 	>>> str(PauliError(0b110, 0b011))
 	'XYZ'
@@ -106,6 +108,21 @@ class PauliError(object):
 		shift = max(bits.numbits(other[xType]), bits.numbits(other[zType]), 1)
 		return PauliError((self[xType]<<shift) + other[xType],
 						  (self[zType]<<shift) + other[zType])
+		
+	def __pow__(self, exp):
+		'''
+		Returns the tensor product of the error with itself 'exp' times.
+		>>> str(PauliError(xbits=1) ** 3)
+		'XXX'
+		'''
+		return sum([self]*(exp-1), self)
+		
+	def __rshift__(self, i):
+		return PauliError(xbits=self[xType] >> i, zbits=self[zType] >> i)
+
+	def __lshift__(self, i):
+		return PauliError(xbits=self[xType] << i, zbits=self[zType] << i)
+
 		
 	def __str__(self):
 		X = self[xType]

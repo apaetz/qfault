@@ -22,14 +22,17 @@ def run():
               Pauli.Y: NoiseModelXZSympy() 
              }
     prepBlock = prepZ.count(noise)
-    print prepBlock.keyGenerators()
+    print prepBlock.keyMeta()
     print prepBlock.counts()
     print prepZ.prBad(noise)
+    print prepZ.prBad(noise)[Pauli.X](.001)
     
-    bell = component.BellPair(kMax, prepX, prepZ, kMax)
-    bellBlock = bell.count(noise)
-    print bellBlock.keyGenerators()
-    print bellBlock.counts()
+    bellPair = component.BellPair(kMax, prepX, prepZ, kMax)
+    bellMeas = component.BellMeas(kMax, ed422.ED422Code(), kMax, kMax, kMax)
+    data = component.Empty(ed422.ED422Code()).count(noise)
+    teleportED = component.TeleportED(kMax, data, bellPair, bellMeas)
+    tedblock = teleportED.count(noise)
+    print tedblock.counts()
     
     #TODO next: construct a 1-ED gadget.
 

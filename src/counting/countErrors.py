@@ -66,7 +66,7 @@ def countBlocksBySyndrome(locations, blocks, pauli, noise, kMax):
 	keyGenerator = MultiBlockSyndromeKeyGenerator(blocks)
 	counts = [countErrors(k, filtered, noise, keyGenerator) for k in range(kMax+1)]
 	
-	return counts, keyGenerator
+	return counts, keyGenerator.keyMeta()
 
 
 #@fetchable
