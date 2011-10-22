@@ -447,6 +447,10 @@ class Teleport(Component):
 		self._data = data
 		
 	def _convolve(self, blocks):
+		# TODO: propagate and convolve the bell-pair and bell-measurement
+		# separately (as a @fetchable method).  Then convolve with the
+		# input. Also, setting the input to be the bottom-most block
+		# will speedup the error propagation slightly.
 		parityChecks = self._data.keyMeta().parityChecks()
 		
 		# Masks that identify X stabilizers and operators, and Z stabilizers

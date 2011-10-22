@@ -276,9 +276,12 @@ def allBlocks(locations):
 			blocks.add(loc['block2'])
 	return blocks
 
+
+propagateNoOpTypes = set(['rest', 'prepX', 'prepZ', 'measX', 'measZ'])
+
 def propagateErrorsThroughLocation(errors, loc):
 	# currently only cnot location types affect the errors, but a natural addition might be Hadamards
-	if loc['type'] in ['rest', 'prepX', 'prepZ', 'measX', 'measZ']:
+	if loc['type'] in propagateNoOpTypes:
 		return errors
 	if loc['type'] == 'cnot':
 		b1, b2 = errors['X'][loc['block1']], errors['X'][loc['block2']]
