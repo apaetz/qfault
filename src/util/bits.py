@@ -8,7 +8,7 @@ Created on 2011-08-29
 @author: adam
 '''
 import warnings
-import util.cython.bits as cbits
+#import util.cython.bits as cbits
 
 def weight(x, n=0):
     '''
