@@ -119,11 +119,11 @@ def concatenate(seq, lengths):
     to the most significant bits of the result).
     >>> cat = concatenate([1, 2, 3], [1, 3, 2])
     >>> '{0:b}'.format(cat)
-    '100110'
+    '101011'
     '''
-    bits = seq[0]
-    for i,l in enumerate(lengths[1:]):
-        bits = (bits << l) + seq[i]
+    bits = 0
+    for i,b in enumerate(seq):
+        bits = (bits << lengths[i]) + b
     return bits
 
 if __name__ == '__main__':

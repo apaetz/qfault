@@ -65,7 +65,7 @@ class SyndromeKeyGenerator(object):
     @memoize
     def getKey(self, e):
         key = StabilizerCode.Syndrome(e, self.parityChecks())
-        #print 'e=', e, 'parityChecks=', self.parityChecks(), 'pc={0:b} active={1:b} key={2:b}'.format(pc, self.activeBits, key)
+        print 'e=', e, 'parityChecks=', self.parityChecks(), 'key={0:b}'.format(key)
         return key
     
     def keyMeta(self):
