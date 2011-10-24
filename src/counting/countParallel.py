@@ -4,7 +4,7 @@ Created on 2010-08-30
 
 @author: adam
 '''
-from counting.countErrors import convolveDict
+from counting.convolve import convolveDict
 
 print 'loading countParallel.'
 

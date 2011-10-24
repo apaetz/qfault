@@ -8,7 +8,7 @@ This file contains functions counting error propagation within a given set of lo
 
 from collections import namedtuple
 from counting.key import SyndromeKeyGenerator, DefaultErrorKeyGenerator, \
-	MultiBlockSyndromeKeyGenerator
+	MultiBlockSyndromeKeyGenerator, extendKeys
 from qec.error import Pauli, PauliError, xType, zType
 from qec.qecc import StabilizerCode
 from util import iteration
@@ -33,14 +33,9 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 
 	counts = {}
 	
-	if 0 == k:
-		# Only possible syndrome with 0 failures is the trivial one
-		counts[0] = 1
-		return counts
-		
-	if 0 == len(locations):
-		# No locations (and at least 1 failure), so all counts must be zero.
-		return counts
+#	if 0 == len(locations):
+#		# No locations (and at least 1 failure), so all counts must be zero.
+#		return counts
 		
 	import countParallel
 	pool = countParallel.getPool()
@@ -68,6 +63,21 @@ def countBlocksBySyndrome(locations, blocks, pauli, noise, kMax):
 	
 	return counts, keyGenerator.keyMeta()
 
+def extendCounts(counts, keyMeta, blocksAfter=0, blocksBefore=0):
+	extCounts = {}
+	oldMeta = keyMeta
+	
+	for pauli, countsForPauli in counts.iteritems():
+		extCountsForPauli = []
+		for countsK in countsForPauli:
+			keymap, keyMeta = extendKeys(countsK.keys(), oldMeta, blocksAfter=blocksAfter, blocksBefore=blocksBefore)
+			extCountsForPauli.append({keymap[key]: count for key,count in countsK.iteritems()})
+			
+		extCounts[pauli] = extCountsForPauli
+		
+	return extCounts, keyMeta
+
+
 
 #@fetchable
 def countErrors(k, locations, noise, keyGenerator=DefaultErrorKeyGenerator):
@@ -85,11 +95,18 @@ def countErrors(k, locations, noise, keyGenerator=DefaultErrorKeyGenerator):
 	
 	"""
 	
-	extraArgs = [locations.blocknames(), noise, keyGenerator]
+	blocknames = locations.blocknames()
+	
+	if 0 == k:
+		# Only possible error with 0 failures is the trivial one
+		error = {name: Pauli.I for name in blocknames}
+		return {keyGenerator.getKey(error): 1}
+		
+	extraArgs = [keyGenerator, blocknames, noise]
 	return countErrorsParallel(k, locations, countLocationSets, extraArgs)
 
 
-def countLocationSets(lSets, blocknames, noise, keyGenerator):
+def countLocationSets(lSets, keyGenerator, blocknames, noise):
 
 	counts = {}
 	
@@ -157,27 +174,7 @@ def convolveCountsPostselect(counts1, counts2, syndromeBits):
 	return counts
 
 
-def mapKeys(counts, keymap):
-	mapped = []
-	for kcounts in counts:
-		mapped.append({keymap(e): count for e,count in kcounts.items()})
-		
-	return mapped
 
-def convolveDict(counts1, counts2):
-	'''
-	Convolve counts from two dictionaries.
-	'''
-	counts = {}
-	logger.info('Convolving {0}x{1}'.format(len(counts2), len(counts1)))
-	for key2, count2 in counts2.iteritems():
-		for key1, count1 in counts1.iteritems():
-			key = key1 ^ key2
-			
-			#TODO: not sure if it would be faster to use a try-except block here, instead.
-			counts[key] = counts.get(key, 0) + (count2 * count1)
-	
-	return counts
 
 
 ###################

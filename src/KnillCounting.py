@@ -12,6 +12,7 @@ from settings.noise import NoiseModelXZSympy, NoiseModelXSympy, NoiseModelZSympy
 
 def run():
     kMax = {pauli: 2 for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}
+    
     prepZ = component.Prep(kMax, ed422.prepare(Pauli.Z, Pauli.X), 
                            #ed422.ED422ZeroPlus())
                            qecc.StabilizerState(ed422.ED422Code(), [error.zType, error.xType]))
@@ -21,9 +22,12 @@ def run():
               Pauli.Z: NoiseModelZSympy(),
               Pauli.Y: NoiseModelXZSympy() 
              }
+    
+    component.Empty(ed422.ED422Code()).count(noise)
+    
     prepBlock = prepZ.count(noise)
-    print prepBlock.keyMeta()
-    print prepBlock.counts()
+    print prepBlock.keyMeta
+    print prepBlock.counts
     print prepZ.prBad(noise)
     print prepZ.prBad(noise)[Pauli.X](.001)
     
@@ -32,7 +36,7 @@ def run():
     data = component.Empty(ed422.ED422Code()).count(noise)
     teleportED = component.TeleportED(kMax, data, bellPair, bellMeas)
     tedblock = teleportED.count(noise)
-    print tedblock.counts()
+    print tedblock.counts
     
     #TODO next: construct a 1-ED gadget.
 

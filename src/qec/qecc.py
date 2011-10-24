@@ -128,9 +128,9 @@ class StabilizerState(StabilizerCode, Codeword):
         
         self.code = code
         
-        normalizers = code.normalizerGenerators()
+        logicalChecks = code.normalizerGenerators()
         typeOffset = {error.xType: 0, error.zType: 1}
-        self.lStabs = tuple(normalizers[2*i + typeOffset[etype]] for i,etype in enumerate(logicalOpTypes))
+        self.lStabs = tuple(logicalChecks[2*i + typeOffset[etype]] for i,etype in enumerate(logicalOpTypes))
 
     def stabilizerGenerators(self):
         return self.code.stabilizerGenerators() + self.lStabs

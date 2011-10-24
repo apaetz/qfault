@@ -3,11 +3,13 @@ Created on 2011-10-17
 
 @author: adam
 '''
-from qec.error import xType, zType, dualType, PauliError
+from collections import OrderedDict
+from counting.convolve import convolveDict
+from qec.error import xType, zType, dualType, PauliError, Pauli
 from qec.qecc import StabilizerCode, Codeword
 from util import listutils, bits
 from util.cache import memoize
-from collections import OrderedDict
+import operator
 
 class DefaultErrorKeyGenerator(object):
     
@@ -99,28 +101,27 @@ class SyndromeKeyGenerator(object):
     
 class SyndromeKeyMeta(object):
     
-    def __init__(self, parityChecks, blocknames):
+    def __init__(self, parityChecks, nblocks=1):
         self._parityChecks = tuple(parityChecks)
-        #self._normalizerBits = normalizerBits
-        self._blocks = OrderedDict((name, i) for i,name in enumerate(blocknames))
+        self.nblocks = nblocks
 
     def length(self):
-        return len(self.parityChecks()) * len(self._blocks)
+        return len(self.parityChecks()) * self.nblocks
         
     def parityChecks(self):
         return self._parityChecks
     
-    def blocknames(self):
-        return self._blocks.keys()
-    
-    def blockIndex(self, blockname):
-        return self._blocks[blockname]
-    
-    def blockRange(self, blockname):
-        blocklen = len(self.parityChecks())
-        start = self.blockIndex(blockname) * blocklen
-        end = start + blocklen
-        return range(start, end+1)
+#    def blocknames(self):
+#        return self._blocks.keys()
+#    
+#    def blockIndex(self, blockname):
+#        return self._blocks[blockname]
+#    
+#    def blockRange(self, blockname):
+#        blocklen = len(self.parityChecks())
+#        start = self.blockIndex(blockname) * blocklen
+#        end = start + blocklen
+#        return range(start, end+1)
 #    
 #    def syndromeOf(self, key):
 #        return key >> self._normalizerBits
@@ -130,15 +131,62 @@ class SyndromeKeyMeta(object):
     
     def __eq__(self, other):
         try:
-            return self.parityChecks() == other.parityChecks()
+            return (self.parityChecks() == other.parityChecks()) and (self.nblocks == other.nblocks) 
         except:
             return False
         
     def __hash__(self):
-        return self.parityChecks().__hash__()
+        return self.parityChecks().__hash__() + self.nblocks
     
     def __str__(self):
-        return str(self.blocknames()) + str(self.parityChecks())
+        return str(self.nblocks) + '*' + str(self.parityChecks())
+    
+    def __repr__(self):
+        return 'SyndromeKeyMeta(' + str(self.parityChecks()) + ',' + str(self.nblocks) + ')'
+
+def extendKeys(keys, keyMeta, blocksBefore=0, blocksAfter=0):
+    before = tuple([0] * blocksBefore)
+    after = tuple([0] * blocksAfter)
+    keymap = {key: before + key + after for key in keys}
+    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
+    
+    return keymap, keyMeta
+
+
+def keyForBlock(key, keyMeta, block):
+    return (key[block],)
+    
+def copyKeys(keys, keyMeta, fromBlock, toBlock, mask=None):
+    '''
+    Copy keys (with the given key metatadata) from one block to another block.  The optional
+    mask specifies which bits of fromBlock are copied.  By default, all bits are copied.
+    '''
+            
+    if None == mask:
+        blocklen = len(keyMeta.parityChecks())
+        # Select all of the bits of fromBlock
+        mask = (1 << blocklen) - 1
+    
+    def newKey(key):
+        newKey = list(key)
+        newKey[toBlock] ^= key[fromBlock] & mask
+        return tuple(newKey)
+    
+    return {key: newKey(key) for key in keys}
+        
+def convolveKeyCounts(counts1, counts2, meta):
+    
+    lengths = [len(meta.parityChecks())] * meta.nblocks
+    
+    counts1 = {bits.concatenate(key, lengths): count for key,count in counts1.iteritems()}
+    counts2 = {bits.concatenate(key, lengths): count for key,count in counts2.iteritems()}
+    
+    counts = convolveDict(counts1, counts2)
+    
+    return {bits.split(keybits, lengths): count for keybits,count in counts.iteritems()}
+    
+    
+    
 
     
 class MaskedKeyGenerator(object):
@@ -191,6 +239,7 @@ class MultiBlockSyndromeKeyGenerator(object):
     
     def __init__(self, blocks):
         self._blocks = blocks
+        self._blocknames = [block.name for block in blocks]
         
         def getGenerator(code, blockname):
             if isinstance(code, Codeword):
@@ -205,32 +254,29 @@ class MultiBlockSyndromeKeyGenerator(object):
         
         self._parityChecks = pcSet.pop()
         
-        # oneBlockKey is slightly more efficient.
-        if 1 == len(blocks):
-            self.getKey = self.oneBlockKey
-        else:
-            self.getKey = self.multiBlockKey
+#        # oneBlockKey is slightly more efficient.
+#        if 1 == len(blocks):
+#            self.getKey = self.oneBlockKey
+#        else:
+#            self.getKey = self.multiBlockKey
         
     def parityChecks(self):
         return self._parityChecks
     
     def keyMeta(self):
-        return SyndromeKeyMeta(self._parityChecks, [block.name for block in self._blocks])
+        return SyndromeKeyMeta(self._parityChecks, len(self._blocknames))
         
-    def oneBlockKey(self, blockErrors):
-        block = self._blocks[0]
-        e = blockErrors[block.name]
-        return self.generators[block.name].getKey(e)
+#    def oneBlockKey(self, blockErrors):
+#        block = self._blocks[0]
+#        e = blockErrors[block.name]
+#        return self.generators[block.name].getKey(e)
 
-    def multiBlockKey(self, blockErrors):
+    def getKey(self, blockErrors):
         gens = self.generators
-        blocks = self._blocks
-        keyShift = len(self._parityChecks)
+        blocknames = self._blocknames
         
-        key = gens[blocks[-1].name].getKey(blockErrors[blocks[0].name])
-        for block in reversed(blocks[:-1]):
-            key = (key << keyShift) + gens[block.name].getKey(blockErrors[block.name])
-             
+        key = tuple(gens[name].getKey(blockErrors.get(name, Pauli.I)) for name in blocknames)
+        
         #print 'blockErrors=', blockErrors, 'key=', key
         return key
     
