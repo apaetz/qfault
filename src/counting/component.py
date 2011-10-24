@@ -4,16 +4,17 @@ Created on May 1, 2011
 @author: Adam
 '''
 from abc import abstractmethod, ABCMeta
-from block import CountedBlock
+from result import CountResult
 from counting.block import Block
-from counting.countErrors import countBlocksBySyndrome, mapKeys
+from counting.countErrors import countBlocksBySyndrome, extendCounts
 from counting.countParallel import convolve
 from counting.location import Locations
 from qec.error import Pauli, xType, zType
-from util import counterUtils, bits
+from util import counterUtils, bits, listutils
 from util.cache import fetchable
-from counting import probability
+from counting import probability, block, key, countErrors
 from qec.qecc import StabilizerCode
+from counting.key import copyKeys, extendKeys, keyForBlock
 
 
 class Component(object):
@@ -70,12 +71,18 @@ class Component(object):
 		:rtype: :class:`Locations`
 		'''
 		return Locations()
+	
+	def outBlocks(self):
+		raise NotImplementedError
+	
+	def subcomponents(self):
+		return self._subs
 		
 	#@fetchable
 	def count(self, noise):
 		'''
 		Counts errors in the component.
-		Returns a CountedBlock. 
+		Returns a CountResult. 
 		'''
 		print 'Counting', str(self)
 		countedBlocks = self._count(noise)
@@ -102,41 +109,48 @@ class Component(object):
 		'''
 		return {name: sub.count(noise) for name, sub in self._subs.iteritems()} 
 	
-	def _convolve(self, blocks):
+	def _convolve(self, results):
 		'''
 		Subclass hook.
 		Combines errors from each of the sub-components.
 		The default implementation simply returns 'counts'.
 		Any non-trivial component will need to implement this method.
 		
-		Returns a CountedBlock object.
+		Returns a CountResult object.
 		'''
 		
-		# The block names won't be used
-		blocks = blocks.values()
+		# The sub-component names won't be used
+		results = results.values()
 		
-		if 1 == len(blocks):
-			return blocks[0]
+		if 1 == len(results):
+			return results[0]
 		
-		convolved = {}			
-		counts = [block.counts() for block in blocks]
+		keyMeta = results[0].keyMeta
+		if not all(r.keyMeta == keyMeta for r in results):
+			raise Exception('Key metadatas are not all identical. {0}'.format([r.keyMeta for r in results]))
+		
+		blocks = results[0].blocks
+		if not all(r.blocks == blocks for r in results):
+			raise Exception('Result blocks are not all identical. {0}'.format([r.blocks for r in results]))
+		
+		convolved = {}
+		counts = [result.counts for result in results]
 		for pauli, k in self.kGood.iteritems():
 			convolved[pauli] = counts[0][pauli]
 			for count in counts[1:]:
-				convolved[pauli] = convolve(convolved[pauli], count[pauli], kMax=k)
+				convolved[pauli] = convolve(convolved[pauli], count[pauli], kMax=k, convolveFcn=key.convolveKeyCounts,
+										    extraArgs=[keyMeta])
 				
-		# Assume that the properties of all of the blocks are the same.
-		propBlock = blocks[0]
-		return CountedBlock(convolved, propBlock.keyMeta(), code=propBlock.getCode(), name=str(self))
+		return CountResult(convolved, keyMeta, blocks)
 	
-	def _postCount(self, block):
+	def _postCount(self, result):
 		'''
 		Subclass hook.
 		Performs (optional) error count post-processing.
 		
-		Returns a CountedBlock object.
+		Returns a CountResult object.
 		'''
-		return block
+		return result
 
 	def nickname(self):
 		return self._nickname
@@ -173,6 +187,9 @@ class CountableComponent(Component):
 		
 	def internalLocations(self):
 		return self.locations
+	
+	def outBlocks(self):
+		return self.blocks
 		
 	def _count(self, noise):
 		# First, count the sub-components.
@@ -192,26 +209,21 @@ class CountableComponent(Component):
 		if len(keyMetas) > 1:
 			raise Exception('Key metadata mismatch. {0}'.format(keyMetas))
 		
-		newCode = self._propagateCodes({block.name: block.getCode() for block in self.blocks})
-		cb = CountedBlock(counts, keyMetas.pop(), code=newCode, name=self.nickname())
+		checks = self._logicalChecks({block.name: block.getCode() for block in self.blocks})
+		cb = CountResult(counts, keyMetas.pop(), self.blocks, logicalChecks=checks, name=self.nickname())
 		
 		subcounts[self.nickname()] = cb 
 		return subcounts
 	
-	def _propagateCodes(self, codes):
-		
-		# In the case that there is only a single block, then a sensible
-		# default is to simply return the code for that block.  It is not
-		# clear how to combine codes from multiple blocks, however.
-		if 1 == len(codes):
-			return [c for c in codes.values()][0]
-		
-		raise NotImplementedError
+	def _logicalChecks(self, codes):
+		return []
 	
 class Empty(CountableComponent):
 	
 	def __init__(self, code, blockname='empty'):
-		super(Empty, self).__init__(Locations([], blockname), [blockname], {blockname: code}, {})
+		# We need at least one location to make the counting functions work properly.
+		locs = Locations([counterUtils.locrest(blockname, 0)], blockname)
+		super(Empty, self).__init__(locs, [blockname], {blockname: code}, {})
 
 class Prep(CountableComponent):
 	
@@ -237,10 +249,53 @@ class TransCnot(CountableComponent):
 		locs = Locations([counterUtils.loccnot(self.ctrlName, i, self.targName, i) for i in range(n)], nickname)
 		codes = {self.ctrlName: ctrlCode, self.targName: targCode}
 		super(TransCnot, self).__init__(locs, blockorder, codes, kGood, nickname)
+		self.blockorder = blockorder
 		
-	def _propagateCodes(self, codes):
+	def _logicalChecks(self, codes):
 		code = TransCnotCode(codes)
 		return code
+	
+	def propagateOperator(self, op):
+		ctrl = self.ctrlName
+		targ = self.targName
+		newOp = {ctrl: op[ctrl] ^ op[targ][zType],
+				 targ: op[targ] ^ op[ctrl][xType]}
+		
+		return newOp
+	
+	def propagateCounts(self, counts, keyMeta, blockname):
+		# Assume that key metadata is identical for all blocks.
+		# This is a safe assumption since each block should be encoded in the
+		# same code, and the parity checks for a given code are fixed.
+		parityChecks = keyMeta.parityChecks()
+		
+		blocknum = self.blockorder.index(blockname)
+		
+		# Extend the single input block to both blocks
+		blocksBefore = 1 * (1 == blocknum)
+		blocksAfter = 1 * (0 == blocknum)
+		counts, keyMeta = countErrors.extendCounts(counts, keyMeta, blocksAfter, blocksBefore)
+		
+		if self.ctrlName == blockname:
+			# We're on the control input.  X errors propagate through to the target
+			# block.
+			mask = bits.listToBits((0 == check[zType]) for check in parityChecks)
+		else:
+			# We're on the target input.  Z errors propagate through to the control
+			# block.
+			mask = bits.listToBits((0 == check[xType]) for check in parityChecks)
+		
+		propagated = {}
+		for pauli, countsForPauli in counts.iteritems():
+			# Propagate the preparation errors through the CNOT.
+			kPropagated = []
+			for kCounts in countsForPauli:
+				keymap = copyKeys(kCounts, keyMeta, blocknum, blocknum ^ 1, mask=mask)
+				kPropagated.append({keymap[key]: count for key,count in kCounts.iteritems()})
+				
+			propagated[pauli] = kPropagated
+		
+		return propagated, keyMeta
 		
 class TransCnotCode(StabilizerCode):
 	
@@ -329,13 +384,13 @@ class TransMeas(CountableComponent):
 		else:
 			raise Exception('{0}-basis measurement is not supported'.format(basis))
 		
-		locs = Locations([loc('0', i) for i in range(n)], nickname)
+		locs = Locations([loc(blockname, i) for i in range(n)], nickname)
 		super(TransMeas, self).__init__(locs, [blockname], {blockname: code}, kGood, nickname)
 		
 	
 class BellPairCnot(TransCnot):
 
-	def _propagateCodes(self, codes):
+	def _logicalChecks(self, codes):
 		return BellPairCode(codes)
 	
 class BellPairCode(TransCnotCode):
@@ -345,56 +400,61 @@ class BellPairCode(TransCnotCode):
 		return TransCnotCode.stabilizerGenerators(self)
 	
 
-
-			
-		
-class BellPair(Component):
+class CnotConvolver(Component):
 	
-	plusName = '|+>'
-	zeroName = '|0>'
+	ctrlName = 'ctrl'
+	targName = 'targ'
 	cnotName = 'cnot'
 	
-	def __init__(self, kGood, plus, zero, kGoodCnot):
-		super(BellPair, self).__init__(kGood, subcomponents={self.plusName: plus, self.zeroName: zero})
-		self.kGoodCnot = kGoodCnot							
-		
-	def _count(self, noise):
-		prepBlocks = super(BellPair, self)._count(noise)
+	def __init__(self, kGood, kGoodCnot, ctrlInput, targInput, ctrlName=ctrlName, targName=targName):
 		
 		# Construct a transversal CNOT component from the two input codes.
-		cnot = BellPairCnot(self.kGoodCnot, prepBlocks[self.plusName].getCode(), prepBlocks[self.zeroName].getCode())
-		prepBlocks[self.cnotName] = cnot.count(noise)
+		ctrlCode = ctrlInput.outBlocks()[0].getCode()
+		targCode = targInput.outBlocks()[0].getCode()
+		cnot = TransCnot(kGoodCnot, ctrlCode, targCode)
 		
-		return prepBlocks
+		super(CnotConvolver, self).__init__(kGood, subcomponents={ctrlName: ctrlInput, 
+																  targName: targInput,
+																  self.cnotName: cnot})
+		self.ctrlName = ctrlName
+		self.targName = targName
+		
+	def outBlocks(self):
+		self.subcomponents()[self.cnotName].outBlocks()
 	
-	def _convolve(self, blocks):
-		# Assume that key metadata is identical for all blocks.
-		# This is a safe assumption since each block should be encoded in the
-		# same code, and the parity checks for a given code are fixed.
-		parityChecks = blocks[self.plusName].keyMeta().parityChecks()
+	def _convolve(self, results):
 		
-		# Masks that identify X stabilizers and operators, and Z stabilizers
-		# and operators.
-		xmask = bits.listToBits((0 == check[zType]) for check in parityChecks)
-		zmask = bits.listToBits((0 == check[xType]) for check in parityChecks)
+		cnot = self.subcomponents()[self.cnotName]
+		ctrlResult = results[self.ctrlName]
+		targResult = results[self.targName]
+		cnotResult = results[self.cnotName]
 		
-		blockShift = len(parityChecks)
-
-		for pauli in self.kGood.keys(): 	
-			# Propagate the preparation errors through the CNOT.
-			# TODO: this assumes a particular ordering of the blocks in the CNOT error keys.
-			# Should use CNOT key metadata to make sure the bit shifting is correct.
-			blocks[self.plusName].counts()[pauli] = mapKeys(blocks[self.plusName].counts()[pauli], 
-														    lambda e: (e << blockShift) + (e & xmask))
-			blocks[self.zeroName].counts()[pauli] = mapKeys(blocks[self.zeroName].counts()[pauli], 
-														    lambda e: ((e & zmask) << blockShift) + e)
-			
+		# First, propagate the input results through the CNOT	
+		ctrlResult.counts, ctrlResult.keyMeta = cnot.propagateCounts(ctrlResult.counts,
+															 ctrlResult.keyMeta,
+															 cnot.ctrlName)
+		targResult.counts, targResult.keyMeta = cnot.propagateCounts(targResult.counts,
+															 targResult.keyMeta,
+															 cnot.targName)
+		
+		ctrlResult.blocks = cnotResult.blocks
+		targResult.blocks = cnotResult.blocks
+					
 		# Now convolve.
-		convolved = super(BellPair, self)._convolve(blocks)
+		convolved = super(CnotConvolver, self)._convolve(results)
 		
-		# The default _convolve() may not assign the correct block properties (i.e., key generators, code).
-		cnotBlock = blocks[self.cnotName]
-		return CountedBlock(convolved.counts(), cnotBlock.keyMeta(), code=cnotBlock.getCode(), name=str(convolved))
+		# The default _convolve() may not assign the correct key metadata.
+		convolved.keyMeta = cnotResult.keyMeta
+		return convolved
+			
+		
+class BellPair(CnotConvolver):
+	
+	ctrlName = '|+>'
+	targName = '|0>'
+
+	def __init__(self, kGood, plus, zero, kGoodCnot):
+		super(BellPair, self).__init__(kGood, kGoodCnot, plus, zero, self.ctrlName, self.targName)
 	
 	
 class BellMeas(Component):
@@ -409,28 +469,40 @@ class BellMeas(Component):
 		if None == kGoodCnot: kGoodCnot = kGood
 		
 		subs = {self.cnotName: TransCnot(kGoodCnot, code, code),
-			    self.measXName: TransMeas(kGoodMeasX, code, Pauli.X),
-			    self.measZName: TransMeas(kGoodMeasZ, code, Pauli.Z)}
+			    self.measXName: TransMeas(kGoodMeasX, code, Pauli.X, self.measXName),
+			    self.measZName: TransMeas(kGoodMeasZ, code, Pauli.Z, self.measZName)}
 		
 		super(BellMeas, self).__init__(kGood, subcomponents=subs)
+		self.code = code
 		
-	def _convolve(self, blocks):
-		blockShift = blocks[self.measXName].keyMeta().length()
+	def outBlocks(self):
+		measX = Block(self.measXName, self.code)
+		measZ = Block(self.measZName, self.code)
+		return (measX, measZ)
+	
+	def propagateCounts(self, counts, keyMeta, blockname):
+		cnot = self.subcomponents()[self.cnotName]
+		namemap = {self.measXName: cnot.ctrlName, self.measZName: cnot.targName}
+		return cnot.propagateCounts(counts, keyMeta, namemap[blockname])
 		
-		for pauli in self.kGood.keys():
-			# Extend single block X-basis measurement keys to both blocks.
-			# Z-basis measurements do not need to be modified because they are represented by the LSBs.
-			# TODO: this assumes a particular ordering of the blocks in the CNOT error keys.
-			# Should use CNOT key metadata to make sure the bit shifting is correct.
-			blocks[self.measXName].counts()[pauli] = mapKeys(blocks[self.measXName].counts()[pauli], 
-															 lambda e: e << blockShift)
+	def _convolve(self, results):
+		
+		cnot = results[self.cnotName]
+		measX = results[self.measXName]
+		measZ = results[self.measZName]
+		
+		measX.counts, measX.keyMeta = extendCounts(measX.counts, measX.keyMeta, blocksAfter=1)
+		measZ.counts, measZ.keyMeta = extendCounts(measZ.counts, measZ.keyMeta, blocksBefore=1)
+			
+		measX.blocks = cnot.blocks
+		measZ.blocks = cnot.blocks
 			
 		# Now convolve.
-		convolved = super(BellMeas, self)._convolve(blocks)
+		convolved = super(BellMeas, self)._convolve(results)
 		
-		# The default _convolve() may not assign the correct code.
-		cnotBlock = blocks[self.cnotName]
-		return CountedBlock(convolved.counts(), cnotBlock.keyMeta(), code=cnotBlock.getCode(), name=str(convolved))
+		# The default _convolve() may not assign the correct key metadata
+		convolved.keyMeta = results[self.cnotName].keyMeta
+		return convolved
 			
 		
 	
@@ -439,65 +511,85 @@ class Teleport(Component):
 	bpName = 'BP'
 	bmName = 'BM'
 	
-	def __init__(self, kGood, data, bellPair, bellMeas):
+	def __init__(self, kGood, data, bellPair, bellMeas, bpMeasBlock=1):
 		subs = {self.bpName: bellPair,
 				self.bmName: bellMeas}
 		
 		super(Teleport, self).__init__(kGood, subcomponents=subs)
 		self._data = data
+		self._bpMeasBlock = bpMeasBlock
 		
-	def _convolve(self, blocks):
-		# TODO: propagate and convolve the bell-pair and bell-measurement
-		# separately (as a @fetchable method).  Then convolve with the
-		# input. Also, setting the input to be the bottom-most block
-		# will speedup the error propagation slightly.
-		parityChecks = self._data.keyMeta().parityChecks()
+	def outBlocks(self):
+		return self._data.blocks
+		
+	@staticmethod
+	def _convolveBPBM(bellPair, bellMeas, bpMeasBlock, kGood):
+		parityChecks = bellPair.keyMeta().parityChecks()
 		
 		# Masks that identify X stabilizers and operators, and Z stabilizers
 		# and operators.
-		xmask = bits.listToBits((0 == check[zType]) for check in parityChecks)
-		
-		blockShift = len(parityChecks)
+		zmask = bits.listToBits((0 == check[xType]) for check in parityChecks)
 
-		for pauli in self.kGood.keys(): 	
-			# Propagate the input errors through the CNOT.
-			# TODO: this assumes a particular ordering of the blocks in the bell-pair
-			# and bell-measurement error keys.
-			# Should use CNOT key metadata to make sure the bit shifting is correct.
-			self._data.counts()[pauli] = mapKeys(self._data.counts()[pauli], 
-												 lambda e: (e << blockShift) + (e & xmask))
-			
-		blocks['input'] = self._data
-		convolved = super(Teleport, self)._convolve(blocks)
+		for pauli in kGood.keys():
+			# Propagate half of the bell pair through the CNOT of the bell measurement.
+			bellPair.counts()[pauli] = copyKeys(bellPair.counts()[pauli], bellPair.keyMeta(), bpMeasBlock, 2, zmask)
+
 		
-		return CountedBlock(convolved.counts(), convolved.keyMeta(), code=self._data.getCode(), name=str(convolved))
+		
+	def _convolve(self, results):
+		# Propagate the input through the CNOT of the Bell measurement.
+		bellMeas = self.subcomponents()[self.bmName]
+		self._data.counts, self._data.keyMeta = bellMeas.propagateCounts(self._data.counts, 
+																		 self._data.keyMeta,
+																		 bellMeas.measXName)
+		#self._data.blocks = results[self.bmName].blocks			
+		results['input'] = self._data
+		
+		# Extend each of the results over all three blocks.
+		bpRes = results[self.bpName]
+		bpBlocksAfter = self._bpMeasBlock
+		bpRes.counts, bpRes.keyMeta = extendCounts(bpRes.counts, bpRes.keyMeta, bpBlocksAfter, not bpBlocksAfter)
+
+		bmRes = results[self.bmName]
+		bmRes.counts, bmRes.keyMeta = extendCounts(bmRes.counts, bmRes.keyMeta, not bpBlocksAfter, bpBlocksAfter)
+
+		inRes = results['input']
+		inRes.counts, inRes.keyMeta = extendCounts(inRes.counts, inRes.keyMeta, not bpBlocksAfter, bpBlocksAfter)
+		
+		if bpBlocksAfter:
+			blocks = bpRes.blocks + inRes.blocks
+		else:
+			blocks = inRes.blocks + bpRes.blocks
+			
+		bpRes.blocks = bmRes.blocks = inRes.blocks = blocks
+
+		return super(Teleport, self)._convolve(results)
+
 	
 class TeleportED(Teleport):
 	
-	def _postCount(self, block):
+	def _postCount(self, result):
 		'''
 		Post-select for the trivial syndrome on the two measured blocks.
 		'''
-		counts = block.counts()
-		keyMeta = block.keyMeta()
-		stabilizers = set(block.getCode().stabilizerGenerators())
+		counts = result.counts
+		keyMeta = result.keyMeta
+		stabilizers = set(result.blocks[0].getCode().stabilizerGenerators())
 		blockChecks = keyMeta.parityChecks()
-		parityChecks = []
-		shifts = [keyMeta.blockRange(name)[0] for name in keyMeta.blocknames()]
-		for shift in shifts:
-			checks = [(check << shift) for check in blockChecks]
-			parityChecks = checks + parityChecks
+		parityChecks = blockChecks
 		
 		syndromeBits = [i for i,check in enumerate(parityChecks) if check in stabilizers]
 		rejectMask = bits.listToBits(syndromeBits)
 		
 		for pauli in counts:
 			for k,count in enumerate(counts[pauli]):
-				accepted = {key: c for key,c in count.iteritems() if 0 == (c & rejectMask)}
+				# TODO compute the actual block numbers to check.
+				# TODO also check logical operators that are in the stabilizer.
+				accepted = {keyForBlock(key, keyMeta, 2): c for key,c in count.iteritems() if 0 == (key[1] & rejectMask)}
 				counts[pauli][k] = accepted
 			
 		# TODO: rejected counts, prAccept, code, etc.
-		return block
+		return result
 		
 		
 class VerifyX(Component):
@@ -544,7 +636,7 @@ class VerifyX(Component):
 #	
 #		
 #		
-#		return CountedBlock(str(countsA), countsA.getCode, results)
+#		return CountResult(str(countsA), countsA.getCode, results)
 		
 		
 	

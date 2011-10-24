@@ -62,6 +62,9 @@ def numbits(x):
     >>> numbits(1<<42)
     43
     '''
+    
+    warnings.warn('Deprecated.  Use x.bit_length(), instead.', category=DeprecationWarning)
+    
     i = 0
     while x > 0:
         x >>= 1
@@ -92,6 +95,36 @@ def listToBits(values):
 #    return s
     #return cbits.cython_listToBits(values)
     
+def split(bits, lengths):
+    '''
+    Split the given value into a tuple according to the given bit lengths.
+    The tuple ordering is big endian (the most significant bits are mapped
+    to the first item in the tuple).
+    >>> split(0b110100, [1,2,3])
+    (1, 2, 4)
+    '''
+    n = len(lengths)
+    items = [0] * n
+    for i in reversed(range(n)):
+        l = lengths[i]
+        items[i] = bits & ((1 << l) - 1)
+        bits >>= l
+        
+    return tuple(items)
+
+def concatenate(seq, lengths):
+    '''
+    Concatenate the sequence of values according to the given bit lengths.
+    The resulting value is big endian (the first item of the sequence maps
+    to the most significant bits of the result).
+    >>> cat = concatenate([1, 2, 3], [1, 3, 2])
+    >>> '{0:b}'.format(cat)
+    '100110'
+    '''
+    bits = seq[0]
+    for i,l in enumerate(lengths[1:]):
+        bits = (bits << l) + seq[i]
+    return bits
 
 if __name__ == '__main__':
     import doctest
