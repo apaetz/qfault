@@ -13,7 +13,7 @@ from qec.error import Pauli, xType, zType
 from util import counterUtils, bits, listutils
 from util.cache import fetchable
 from counting import probability, block, key, countErrors
-from qec.qecc import StabilizerCode
+from qec.qecc import StabilizerCode, StabilizerState
 from counting.key import copyKeys, extendKeys, keyForBlock
 
 
@@ -135,7 +135,8 @@ class Component(object):
 		
 		convolved = {}
 		counts = [result.counts for result in results]
-		for pauli, k in self.kGood.iteritems():
+		for pauli in counts[0].keys():
+			k = self.kGood[pauli]
 			convolved[pauli] = counts[0][pauli]
 			for count in counts[1:]:
 				convolved[pauli] = convolve(convolved[pauli], count[pauli], kMax=k, convolveFcn=key.convolveKeyCounts,
@@ -198,12 +199,12 @@ class CountableComponent(Component):
 		# Now count the internal locations.
 		counts = {}
 		keyMetas = set()
-		for pauli,k in self.kGood.iteritems():
+		for pauli, pauliNoise in noise.iteritems():
 			counts[pauli], meta = countBlocksBySyndrome(self.locations, 
 														self.blocks, 
 														pauli, 
-														noise[pauli], 
-														k)
+														pauliNoise, 
+														self.kGood[pauli])
 			keyMetas.add(meta)
 				
 		if len(keyMetas) > 1:
@@ -247,7 +248,12 @@ class TransCnot(CountableComponent):
 		nickname='transCNOT.'+str(n)
 		print 'nickname=', nickname
 		locs = Locations([counterUtils.loccnot(self.ctrlName, i, self.targName, i) for i in range(n)], nickname)
+		
+		if isinstance(ctrlCode, StabilizerState): ctrlCode = ctrlCode.getCode()
+		if isinstance(targCode, StabilizerState): targCode = targCode.getCode()
+		
 		codes = {self.ctrlName: ctrlCode, self.targName: targCode}
+		
 		super(TransCnot, self).__init__(locs, blockorder, codes, kGood, nickname)
 		self.blockorder = blockorder
 		
@@ -264,9 +270,6 @@ class TransCnot(CountableComponent):
 		return newOp
 	
 	def propagateCounts(self, counts, keyMeta, blockname):
-		# Assume that key metadata is identical for all blocks.
-		# This is a safe assumption since each block should be encoded in the
-		# same code, and the parity checks for a given code are fixed.
 		parityChecks = keyMeta.parityChecks()
 		
 		blocknum = self.blockorder.index(blockname)
@@ -279,11 +282,11 @@ class TransCnot(CountableComponent):
 		if self.ctrlName == blockname:
 			# We're on the control input.  X errors propagate through to the target
 			# block.
-			mask = bits.listToBits((0 == check[zType]) for check in parityChecks)
+			mask = bits.listToBits((0 == check[xType]) for check in parityChecks)
 		else:
 			# We're on the target input.  Z errors propagate through to the control
 			# block.
-			mask = bits.listToBits((0 == check[xType]) for check in parityChecks)
+			mask = bits.listToBits((0 == check[zType]) for check in parityChecks)
 		
 		propagated = {}
 		for pauli, countsForPauli in counts.iteritems():

@@ -22,9 +22,6 @@ def run():
               Pauli.Z: NoiseModelZSympy(),
               Pauli.Y: NoiseModelXZSympy() 
              }
-    
-    component.Empty(ed422.ED422Code()).count(noise)
-    
     prepBlock = prepZ.count(noise)
     print prepBlock.keyMeta
     print prepBlock.counts
@@ -37,9 +34,6 @@ def run():
     teleportED = component.TeleportED(kMax, data, bellPair, bellMeas)
     tedblock = teleportED.count(noise)
     print tedblock.counts
-    
-    #TODO next: construct a 1-ED gadget.
-
 
 if __name__ == '__main__':
     from counting import countParallel

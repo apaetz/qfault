@@ -144,7 +144,7 @@ def numSlots():
 
 def getPool():
 	if None == defaultPool:
-		return Pool(1)
+		return DummyPool()
 	return defaultPool
 
 def setPool(pool):
@@ -152,7 +152,7 @@ def setPool(pool):
 	defaultPool = pool
 
 
-convolve = lambda *args, **kwargs: convolveParallel(defaultPool, *args, **kwargs)
+convolve = lambda *args, **kwargs: convolveParallel(getPool(), *args, **kwargs)
 
 def asyncFuncWrapper(argList):
 	asyncFcn = argList[0]

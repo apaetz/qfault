@@ -132,6 +132,17 @@ class DepolarizingNoiseModelSympy(DepolarizingNoiseModel):
 		coeffs = [sum(weights), 0]
 		sympoly = sympoly1d(coeffs)		
 		return SymPolyWrapper(sympoly)
+	
+class CountingNoiseModel(DepolarizingNoiseModelSympy):
+	
+	def getWeight(self, loc, error):
+		return 1
+	
+	def errorList(self, loc):
+		try:
+			return errorListX[loc['type']]
+		except KeyError:
+			return []
 		
 class UpperBoundNoiseModelSympy(DepolarizingNoiseModelSympy):
 	'''

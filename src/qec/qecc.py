@@ -51,9 +51,6 @@ class StabilizerCode(Qecc):
     def getSyndrome(self, e):
         return self.Syndrome(e, self.stabilizerGenerators())
     
-    def syndromeCorrection(self, s):
-        raise NotImplementedError
-    
 #    def hashError(self, e):
 #        return self.Syndrome(e, self.stabilizerGenerators() + self.normalizerGenerators())
 #    
@@ -96,12 +93,29 @@ class StabilizerCode(Qecc):
         '''
         raise NotImplementedError
     
+    def syndromeCorrection(self, s):
+        raise NotImplementedError
+    
 #    def logicalOperator(self, qubit, eType):
 #        '''
 #        Returns the logical operator corresponding to an error of eType,
 #        on the given qubit.
 #        '''
 #        raise NotImplementedError
+    
+class TrivialStablizerCode(StabilizerCode):
+    
+    def __init__(self):
+        super(TrivialStablizerCode, self).__init__('Trivial', 1, 1, 0)
+        
+    def stabilizerGenerators(self):
+        return tuple([])
+    
+    def normalizerGenerators(self):
+        return (Pauli.X, Pauli.Z)
+    
+    def syndromeCorrection(self, s):
+        return 0
     
 class Codeword(Qecc):
     '''
