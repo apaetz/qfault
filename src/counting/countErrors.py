@@ -11,7 +11,7 @@ from counting.key import SyndromeKeyGenerator, DefaultErrorKeyGenerator, \
 	MultiBlockSyndromeKeyGenerator, extendKeys
 from qec.error import Pauli, PauliError, xType, zType
 from qec.qecc import StabilizerCode
-from util import iteration
+from util import iteration, counterUtils
 from util.cache import fetchable
 from util.listutils import nonZeroIndices
 import logging
@@ -55,37 +55,29 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 	return counts
 
 
-def countBlocksBySyndrome(locations, blocks, pauli, noise, kMax):
-	filtered = filterAndPropagate(locations, pauli)
+def countBlocksBySyndrome(locations, blocks, noise, kMax):
+	counterUtils.propagateAllErrors(locations)
 	
 	keyGenerator = MultiBlockSyndromeKeyGenerator(blocks)
-	counts = [countErrors(k, filtered, noise, keyGenerator) for k in range(kMax+1)]
+	counts = [countErrors(k, locations, noise, keyGenerator) for k in range(kMax+1)]
 	
 	return counts, keyGenerator.keyMeta()
 
 def extendCounts(counts, keyMeta, blocksAfter=0, blocksBefore=0):
-	extCounts = {}
+	extCounts = []
 	oldMeta = keyMeta
 	
-	for pauli, countsForPauli in counts.iteritems():
-		extCountsForPauli = []
-		for countsK in countsForPauli:
-			keymap, keyMeta = extendKeys(countsK.keys(), oldMeta, blocksAfter=blocksAfter, blocksBefore=blocksBefore)
-			extCountsForPauli.append({keymap[key]: count for key,count in countsK.iteritems()})
-			
-		extCounts[pauli] = extCountsForPauli
+	for countsK in counts:
+		keymap, keyMeta = extendKeys(countsK.keys(), oldMeta, blocksAfter=blocksAfter, blocksBefore=blocksBefore)
+		extCounts.append({keymap[key]: count for key,count in countsK.iteritems()})
 		
 	return extCounts, keyMeta
 
 def mapCounts(counts, keymap):
-	newCounts = {}
-	
-	for pauli, countsForPauli in counts.iteritems():
-		newCountsForPauli = []
-		for countsK in countsForPauli:
-			newCountsForPauli.append({keymap(key): count for key,count in countsK.iteritems()})
-			
-		newCounts[pauli] = newCountsForPauli
+
+	newCounts = []
+	for countsK in counts:
+		newCounts.append({keymap(key): count for key,count in countsK.iteritems()})
 		
 	return newCounts
 
@@ -363,13 +355,14 @@ def convolveABA(countsAB, countsA, bitsA=12, bitsB=12):
 #			l[pauli+'2'][pauli][name] = code.getSyndrome(l[pauli+'2'][pauli][name])
 
 
-def filterAndPropagate(locations, pauli):
+
+def pauliFilter(locations, pauli):
+	# TODO: this function doesn't belong here.  Where should it go?
 	# |+> preparations and X-basis measurements cannot cause X errors
 	# (and similarly for Z). So they need not be counted.
 	if pauli != Pauli.Y:
 		locations = locations.filterAgainst('meas' + str(pauli))
 		locations = locations.filterAgainst('prep' + str(pauli))
-	util.counterUtils.propagateAllErrors(locations)
 		
 	return locations
 

@@ -20,38 +20,38 @@ class TestTeleport(unittest.TestCase):
 
 	def testX(self):
 		kGood = {Pauli.X: 1, Pauli.Z: 1}
-		noise = { Pauli.X: CountingNoiseModelX() }
+		noise = CountingNoiseModelX()
 		
 		code = TrivialStablizerCode()
 		plus = Prep(kGood, Locations([counterUtils.locXprep('|+>', 0)], '|+>'), StabilizerState(code, [xType]))
 		zero = Prep(kGood, Locations([counterUtils.locZprep('|0>', 0)], '|0>'), StabilizerState(code, [zType]))
 		bellPair = BellPair(kGood, plus, zero, kGood)
 		bellMeas = BellMeas(kGood, code)
-		data = Empty(code, 'data').count(noise)
+		data = Empty(code, 'data').count(noise, Pauli.X)
 		
 		teleport = Teleport(kGood, data, bellPair, bellMeas)
-		result = teleport.count(noise)
+		result = teleport.count(noise, Pauli.X)
 		
-		expectedCounts = {Pauli.X: [{(0, 0, 0): 1}, {(1, 0, 0): 1, (1, 1, 0): 1, (0, 1, 0): 3, (0, 0, 1): 2, (0, 1, 1): 1}]}
+		expectedCounts = [{(0, 0, 0): 1}, {(1, 0, 0): 1, (1, 1, 0): 1, (0, 1, 0): 3, (0, 0, 1): 2, (0, 1, 1): 1}]
 		assert result.counts == expectedCounts
 		
 		#print result.counts
 		
 	def testZ(self):
 		kGood = {Pauli.Z: 1}
-		noise = { Pauli.Z: CountingNoiseModelZ() }
+		noise = CountingNoiseModelZ()
 		
 		code = TrivialStablizerCode()
 		plus = Prep(kGood, Locations([counterUtils.locXprep('|+>', 0)], '|+>'), StabilizerState(code, [xType]))
 		zero = Prep(kGood, Locations([counterUtils.locZprep('|0>', 0)], '|0>'), StabilizerState(code, [zType]))
 		bellPair = BellPair(kGood, plus, zero, kGood)
 		bellMeas = BellMeas(kGood, code)
-		data = Empty(code, 'data').count(noise)
+		data = Empty(code, 'data').count(noise, Pauli.Z)
 		
 		teleport = Teleport(kGood, data, bellPair, bellMeas)
-		result = teleport.count(noise)
+		result = teleport.count(noise, Pauli.Z)
 		
-		expectedCounts = {Pauli.Z: [{(0, 0, 0): 1}, {(2, 0, 0): 2, (0, 2, 0): 1, (2, 2, 0): 3, (0, 0, 2): 1, (2, 2, 2): 1}]}
+		expectedCounts = [{(0, 0, 0): 1}, {(2, 0, 0): 2, (0, 2, 0): 1, (2, 2, 0): 3, (0, 0, 2): 1, (2, 2, 2): 1}]
 		assert result.counts == expectedCounts
 		
 		#print result.counts

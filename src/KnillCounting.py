@@ -18,21 +18,25 @@ def run():
                            qecc.StabilizerState(ed422.ED422Code(), [error.zType, error.xType]))
     prepX = component.Prep(kMax, ed422.prepare(Pauli.X, Pauli.Z), 
                            qecc.StabilizerState(ed422.ED422Code(), [error.xType, error.zType]))
-    noise = { Pauli.X: NoiseModelXSympy(),
+    noises = { Pauli.X: NoiseModelXSympy(),
               Pauli.Z: NoiseModelZSympy(),
               Pauli.Y: NoiseModelXZSympy() 
              }
-    prepBlock = prepZ.count(noise)
+    
+    pauli = Pauli.X
+    noise = noises[pauli]
+    
+    prepBlock = prepZ.count(noise, pauli)
     print prepBlock.keyMeta
     print prepBlock.counts
-    print prepZ.prBad(noise)
-    print prepZ.prBad(noise)[Pauli.X](.001)
+    print prepZ.prBad(noise, pauli)
+    print prepZ.prBad(noise, pauli)(.001)
     
     bellPair = component.BellPair(kMax, prepX, prepZ, kMax)
     bellMeas = component.BellMeas(kMax, ed422.ED422Code(), kMax, kMax, kMax)
-    data = component.Empty(ed422.ED422Code()).count(noise)
+    data = component.Empty(ed422.ED422Code()).count(noise, pauli)
     teleportED = component.TeleportED(kMax, data, bellPair, bellMeas)
-    tedblock = teleportED.count(noise)
+    tedblock = teleportED.count(noise, pauli)
     print tedblock.counts
 
 if __name__ == '__main__':
