@@ -6,7 +6,7 @@ Created on May 1, 2011
 from abc import abstractmethod, ABCMeta
 from result import CountResult
 from counting.block import Block
-from counting.countErrors import countBlocksBySyndrome, extendCounts
+from counting.countErrors import countBlocksBySyndrome, extendCounts, mapCounts
 from counting.countParallel import convolve
 from counting.location import Locations
 from qec.error import Pauli, xType, zType
@@ -14,7 +14,8 @@ from util import counterUtils, bits, listutils
 from util.cache import fetchable
 from counting import probability, block, key, countErrors
 from qec.qecc import StabilizerCode, StabilizerState
-from counting.key import copyKeys, extendKeys, keyForBlock
+from counting.key import copyKeys, extendKeys, keyForBlock, keyCopier,\
+	keySplitter, keyConcatenator, keyExtender
 
 
 class Component(object):
@@ -98,6 +99,14 @@ class Component(object):
 		prByPauli = [sub.prBad(noise, kMax=self.kGood) for sub in self._subs] + [prSelf]
 		
 		return {pauli: sum(pr[pauli] for pr in prByPauli) for pauli in noise}
+	
+	def propagateCounts(self, counts, keyMeta, blockname):
+		propagator, keyMeta = self.keyPropagator(keyMeta, blockname)
+		propagated = mapCounts(counts, propagator)		
+		return propagated, keyMeta
+	
+	def keyPropagator(self, keyMeta, blockname):
+		return (lambda key: key, keyMeta)
 	
 	def _count(self, noise):
 		'''
@@ -269,15 +278,15 @@ class TransCnot(CountableComponent):
 		
 		return newOp
 	
-	def propagateCounts(self, counts, keyMeta, blockname):
+	def keyPropagator(self, keyMeta, blockname):
 		parityChecks = keyMeta.parityChecks()
 		
 		blocknum = self.blockorder.index(blockname)
 		
 		# Extend the single input block to both blocks
-		blocksBefore = 1 * (1 == blocknum)
-		blocksAfter = 1 * (0 == blocknum)
-		counts, keyMeta = countErrors.extendCounts(counts, keyMeta, blocksAfter, blocksBefore)
+		before = 1 * (1 == blocknum)
+		after = 1 * (0 == blocknum)
+		extender, keyMeta = keyExtender(keyMeta, blocksBefore=before, blocksAfter=after)
 		
 		if self.ctrlName == blockname:
 			# We're on the control input.  X errors propagate through to the target
@@ -288,17 +297,12 @@ class TransCnot(CountableComponent):
 			# block.
 			mask = bits.listToBits((0 == check[zType]) for check in parityChecks)
 		
-		propagated = {}
-		for pauli, countsForPauli in counts.iteritems():
-			# Propagate the preparation errors through the CNOT.
-			kPropagated = []
-			for kCounts in countsForPauli:
-				keymap = copyKeys(kCounts, keyMeta, blocknum, blocknum ^ 1, mask=mask)
-				kPropagated.append({keymap[key]: count for key,count in kCounts.iteritems()})
-				
-			propagated[pauli] = kPropagated
+		copier = keyCopier(keyMeta, blocknum, not blocknum, mask=mask)
+	
+		def propagator(key):
+			return copier(extender(key))
 		
-		return propagated, keyMeta
+		return propagator, keyMeta
 		
 class TransCnotCode(StabilizerCode):
 	
@@ -482,11 +486,11 @@ class BellMeas(Component):
 		measX = Block(self.measXName, self.code)
 		measZ = Block(self.measZName, self.code)
 		return (measX, measZ)
-	
-	def propagateCounts(self, counts, keyMeta, blockname):
+
+	def keyPropagator(self, keyMeta, blockname):
 		cnot = self.subcomponents()[self.cnotName]
 		namemap = {self.measXName: cnot.ctrlName, self.measZName: cnot.targName}
-		return cnot.propagateCounts(counts, keyMeta, namemap[blockname])
+		return cnot.keyPropagator(keyMeta, namemap[blockname])
 		
 	def _convolve(self, results):
 		
@@ -514,7 +518,7 @@ class Teleport(Component):
 	bpName = 'BP'
 	bmName = 'BM'
 	
-	def __init__(self, kGood, data, bellPair, bellMeas, bpMeasBlock=1):
+	def __init__(self, kGood, data, bellPair, bellMeas, bpMeasBlock=0):
 		subs = {self.bpName: bellPair,
 				self.bmName: bellMeas}
 		
@@ -526,20 +530,34 @@ class Teleport(Component):
 		return self._data.blocks
 		
 	@staticmethod
-	def _convolveBPBM(bellPair, bellMeas, bpMeasBlock, kGood):
-		parityChecks = bellPair.keyMeta().parityChecks()
+	def _convolveBP(bellMeas, bellPairResult, bpMeasBlock):
+		# TODO: this implementation is wrong.
+		# The structure is correct, but need to compute which blocks
+		# go where.
 		
-		# Masks that identify X stabilizers and operators, and Z stabilizers
-		# and operators.
-		zmask = bits.listToBits((0 == check[xType]) for check in parityChecks)
+		bpMeta = bellPairResult.keyMeta
+		splitter, meta0, meta1 = keySplitter(bpMeta, 1)
+		bpSplitMeta = (meta0, meta1)
+		bmPropagator, bmMeta = bellMeas.keyPropagator(bpSplitMeta[bpMeasBlock], bellMeas.measZName)
+		concatenator, propMeta = keyConcatenator(bmMeta, bpSplitMeta[not bpMeasBlock])
+		
+		def propagator(key):
+			bpKeys = splitter(key)
+			key = concatenator(bmPropagator(bpKeys[bpMeasBlock]), bpKeys[not bpMeasBlock])
+			return key
 
-		for pauli in kGood.keys():
-			# Propagate half of the bell pair through the CNOT of the bell measurement.
-			bellPair.counts()[pauli] = copyKeys(bellPair.counts()[pauli], bellPair.keyMeta(), bpMeasBlock, 2, zmask)
+		bellPairResult.counts = mapCounts(bellPairResult.counts, propagator)
+		bellPairResult.keyMeta = propMeta
+		
+		return bellPairResult
 
 		
 		
 	def _convolve(self, results):
+		results[self.bpName] = self._convolveBP(self.subcomponents()[self.bmName],
+											    results[self.bpName], 
+											    self._bpMeasBlock)
+		
 		# Propagate the input through the CNOT of the Bell measurement.
 		bellMeas = self.subcomponents()[self.bmName]
 		self._data.counts, self._data.keyMeta = bellMeas.propagateCounts(self._data.counts, 
@@ -551,7 +569,6 @@ class Teleport(Component):
 		# Extend each of the results over all three blocks.
 		bpRes = results[self.bpName]
 		bpBlocksAfter = self._bpMeasBlock
-		bpRes.counts, bpRes.keyMeta = extendCounts(bpRes.counts, bpRes.keyMeta, bpBlocksAfter, not bpBlocksAfter)
 
 		bmRes = results[self.bmName]
 		bmRes.counts, bmRes.keyMeta = extendCounts(bmRes.counts, bmRes.keyMeta, not bpBlocksAfter, bpBlocksAfter)

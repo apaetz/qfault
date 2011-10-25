@@ -138,11 +138,22 @@ class CountingNoiseModel(DepolarizingNoiseModelSympy):
 	def getWeight(self, loc, error):
 		return 1
 	
+class CountingNoiseModelX(CountingNoiseModel):
+	
 	def errorList(self, loc):
 		try:
 			return errorListX[loc['type']]
 		except KeyError:
 			return []
+		
+class CountingNoiseModelZ(CountingNoiseModel):
+	
+	def errorList(self, loc):
+		try:
+			return errorListZ[loc['type']]
+		except KeyError:
+			return []
+
 		
 class UpperBoundNoiseModelSympy(DepolarizingNoiseModelSympy):
 	'''
