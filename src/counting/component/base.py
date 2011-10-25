@@ -84,19 +84,19 @@ class Component(object):
         return self._subs
         
     @fetchable
-    def count(self, noise, pauli):
+    def count(self, noiseModels, pauli):
         '''
         Counts errors in the component.
         Returns a CountResult. 
         '''
         logger.info('Counting ' + str(self) + ': ' + str(pauli))
-        countedBlocks = self._count(noise, pauli)
+        results = self._count(noiseModels, pauli)
         
         logger.debug('Convolving ' + str(self))
-        result = self._convolve(countedBlocks, pauli)
+        result = self._convolve(results, noiseModels, pauli)
         
         logger.debug('Post processing ' + str(self))
-        return self._postCount(result)
+        return self._postCount(result, noiseModels, pauli)
     
     def prBad(self, noise, pauli, kMax=None):
         prSelf = probability.prBadPoly(self.kGood[pauli], self.internalLocations(pauli), noise, kMax)
@@ -115,7 +115,7 @@ class Component(object):
     def keyPropagator(self, keyMeta, blockname):
         return (lambda key: key, keyMeta)
     
-    def _count(self, noise, pauli):
+    def _count(self, noiseModels, pauli):
         '''
         Subclass hook.
         Counts the errors in each sub-component and returns the counts
@@ -123,9 +123,9 @@ class Component(object):
         It is expected that most concrete components will not need to 
         implement this method. 
         '''
-        return {name: sub.count(noise, pauli) for name, sub in self._subs.iteritems()} 
+        return {name: sub.count(noiseModels, pauli) for name, sub in self._subs.iteritems()} 
     
-    def _convolve(self, results, pauli):
+    def _convolve(self, results, noiseModels, pauli):
         '''
         Subclass hook.
         Combines errors from each of the sub-components.
@@ -157,7 +157,7 @@ class Component(object):
             
         return CountResult(convolved, keyMeta, blocks)
     
-    def _postCount(self, result):
+    def _postCount(self, result, noiseModels, pauli):
         '''
         Subclass hook.
         Performs (optional) error count post-processing.
@@ -205,13 +205,13 @@ class CountableComponent(Component):
     def outBlocks(self):
         return self.blocks
         
-    def _count(self, noise, pauli):
+    def _count(self, noiseModels, pauli):
         # First, count the sub-components.
-        subcounts = super(CountableComponent, self)._count(noise, pauli)
+        subcounts = super(CountableComponent, self)._count(noiseModels, pauli)
             
         # Now count the internal locations.
         locations = self.internalLocations(pauli)
-        counts, meta = countBlocksBySyndrome(locations, self.blocks, noise, self.kGood[pauli])
+        counts, meta = countBlocksBySyndrome(locations, self.blocks, noiseModels[pauli], self.kGood[pauli])
         
         cb = CountResult(counts, meta, self.blocks, name=self.nickname())
         
@@ -221,8 +221,6 @@ class CountableComponent(Component):
 class Empty(CountableComponent):
     
     def __init__(self, code, blockname=''):
-        # We need at least one location to make the counting functions work properly.
-        locs = Locations([counterUtils.locrest(blockname, 0)], blockname)
         locs = Locations([], blockname)
         super(Empty, self).__init__(locs, [blockname], {blockname: code}, {})
 
