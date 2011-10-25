@@ -47,7 +47,7 @@ def prMinFailuresOld(kMin, locTotals, noiseModel, kMax=None):
 	Computes the an upper bound on the probability that at least kMin failures occur for the given
 	numbers of locations.
 	'''
-	logger.info('Computing poly for {0}, {1}, {2}, {3}'.format(kMin, locTotals, noiseModel, kMax))
+	logger.debug('Computing poly for {0}, {1}, {2}, {3}'.format(kMin, locTotals, noiseModel, kMax))
 	
 	
 	if None == kMax:
@@ -154,7 +154,7 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 		
 	kMax = min(kMax, nTotal) + 1
 	
-	logger.info('Computing Pr[{0} <= k <= {1}] for {2}, {3}'.format(kMin, kMax, locTotals, noiseModel))
+	logger.debug('Computing Pr[{0} <= k <= {1}] for {2}, {3}'.format(kMin, kMax, locTotals, noiseModel))
 	
 	
 	nCnot = locTotals.cnot
@@ -181,7 +181,8 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	
 	weightList = []
 	for l in locsList:
-		w = sum(noiseModel.getWeight(l,e) for e in range(noiseModel.numErrors(l)))
+		nErrors = len(noiseModel.errorList(l))
+		w = sum(noiseModel.getWeight(l,e) for e in range(nErrors))
 		weightList.append(w)
 
 	# This should look something like (1-12g)^nCnot * (1-8g)^nRest * ...

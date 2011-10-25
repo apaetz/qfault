@@ -71,7 +71,7 @@ class NoiseModel(object):
 		DEPRECATED
 		Use errorList(), instead.
 		'''
-		warnings.warn('Deprectated.  Use errorList(), instead.')
+		warnings.warn('Use errorList(), instead.', category=DeprecationWarning)
 		return len(self.errorList(loc))
 	
 	@abstractmethod

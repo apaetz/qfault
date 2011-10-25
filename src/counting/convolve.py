@@ -5,9 +5,6 @@ Created on 2011-10-23
 '''
 import logging
 
-logging.basicConfig(level=logging.INFO,
-                    format='[%(asctime)s] %(process)d %(levelname)-8s %(name)s: %(message)s')
-
 logger = logging.getLogger('counting.convolve')
 
 def convolveDict(counts1, counts2):
@@ -20,7 +17,7 @@ def convolveDict(counts1, counts2):
     {0: 1, 1: 2, 2: 3, 3: 6}
     '''
     counts = {}
-    logger.info('convolving dictionaries {0}x{1}'.format(len(counts2), len(counts1)))
+    logger.debug('convolving dictionaries {0}x{1}'.format(len(counts2), len(counts1)))
     for key2, count2 in counts2.iteritems():
         for key1, count1 in counts1.iteritems():
             key = key1 ^ key2
