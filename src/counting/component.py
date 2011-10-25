@@ -17,7 +17,9 @@ from qec.qecc import StabilizerCode, StabilizerState
 from result import CountResult
 from util import counterUtils, bits, listutils
 from util.cache import fetchable
+import logging
 
+logger = logging.getLogger('component')
 
 class Component(object):
 	'''
@@ -77,6 +79,9 @@ class Component(object):
 	def outBlocks(self):
 		raise NotImplementedError
 	
+	def logicalStabilizers(self):
+		return tuple([])
+	
 	def subcomponents(self):
 		return self._subs
 		
@@ -86,11 +91,13 @@ class Component(object):
 		Counts errors in the component.
 		Returns a CountResult. 
 		'''
-		print 'Counting', str(self)
+		logger.info('Counting ' + str(self) + ': ' + str(pauli))
 		countedBlocks = self._count(noise, pauli)
-		print 'Convolving', str(self)
+		
+		logger.debug('Convolving ' + str(self))
 		block = self._convolve(countedBlocks, pauli)
-		print 'Post processing', str(self)
+		
+		logger.debug('Post processing ' + str(self))
 		return self._postCount(block)
 	
 	def prBad(self, noise, pauli, kMax={pauli: None for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}):
@@ -204,20 +211,17 @@ class CountableComponent(Component):
 		locations = self.internalLocations(pauli)
 		counts, meta = countBlocksBySyndrome(locations, self.blocks, noise, self.kGood[pauli])
 		
-		checks = self._logicalChecks({block.name: block.getCode() for block in self.blocks})
-		cb = CountResult(counts, meta, self.blocks, logicalChecks=checks, name=self.nickname())
+		cb = CountResult(counts, meta, self.blocks, name=self.nickname())
 		
 		subcounts[self.nickname()] = cb
 		return subcounts
 	
-	def _logicalChecks(self, codes):
-		return []
-	
 class Empty(CountableComponent):
 	
-	def __init__(self, code, blockname='empty'):
+	def __init__(self, code, blockname=''):
 		# We need at least one location to make the counting functions work properly.
 		locs = Locations([counterUtils.locrest(blockname, 0)], blockname)
+		locs = Locations([], blockname)
 		super(Empty, self).__init__(locs, [blockname], {blockname: code}, {})
 
 class Prep(CountableComponent):
@@ -240,7 +244,6 @@ class TransCnot(CountableComponent):
 			raise Exception('Control ({0}) and target ({1}) blocklengths do not match.'.format(n, targCode.blockLength()))
 		
 		nickname='transCNOT.'+str(n)
-		print 'nickname=', nickname
 		locs = Locations([counterUtils.loccnot(self.ctrlName, i, self.targName, i) for i in range(n)], nickname)
 		
 		if isinstance(ctrlCode, StabilizerState): ctrlCode = ctrlCode.getCode()
@@ -577,10 +580,16 @@ class TeleportED(Teleport):
 		syndromeBits = [i for i,check in enumerate(parityChecks) if check in stabilizers]
 		rejectMask = bits.listToBits(syndromeBits)
 		
+		# The Teleport component blocks are setup as follows:
+		# block 0 - Transversal X-basis measurement
+		# block 1 - Transversal Z-basis measurement
+		# block 2 - Teleported data
+		def accept(key):
+			# TODO also check additional normalizers.
+			return not(key[0] & rejectMask) and not(key[1] & rejectMask)
+		
 		for k,count in enumerate(counts):
-			# TODO compute the actual block numbers to check.
-			# TODO also check logical operators that are in the stabilizer.
-			accepted = {keyForBlock(key, keyMeta, 2): c for key,c in count.iteritems() if 0 == (key[1] & rejectMask)}
+			accepted = {keyForBlock(key, keyMeta, 2): c for key,c in count.iteritems() if accept(key)}
 			counts[k] = accepted
 			
 		# TODO: rejected counts, prAccept, code, etc.

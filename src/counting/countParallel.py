@@ -5,9 +5,6 @@ Created on 2010-08-30
 @author: adam
 '''
 from counting.convolve import convolveDict
-
-print 'loading countParallel.'
-
 from multiprocessing.pool import Pool
 from util.counterUtils import convolveCounts, PartitionIterator
 from util.listutils import addLists, addDicts
@@ -157,8 +154,7 @@ convolve = lambda *args, **kwargs: convolveParallel(getPool(), *args, **kwargs)
 def asyncFuncWrapper(argList):
 	asyncFcn = argList[0]
 	return asyncFcn(*argList[1:])
-
-# TODO: generalize to allow an arbitrary number of counts (instead of just 2).	
+	
 def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=None, convolveFcn=convolveDict, extraArgs=[], splitListsInto=[2,2]):
 	
 	if None == partMax0:
@@ -192,7 +188,7 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 		
 		resultsToProcess = sum(len(r) for r in readyResults)
 		if resultsToProcess:
-			logger.info('Now processing {0} results. {1} results remain to be convolved.'.format(resultsToProcess, len(resultsList)))
+			logger.debug('Now processing {0} results. {1} results remain to be convolved.'.format(resultsToProcess, len(resultsList)))
 		
 		for k in range(len(readyResults)):
 			ready = readyResults.pop(0)
@@ -205,7 +201,7 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 			else:
 				addFunc = addLists
 			
-			logger.info('Summing contents of {0} lists of size {1} for k={2}'.format(len(ready), len(ready[0]), k))
+			logger.debug('Summing contents of {0} lists of size {1} for k={2}'.format(len(ready), len(ready[0]), k))
 			if 0 != convolved[k]:
 				ready += [convolved[k]]
 			
@@ -217,12 +213,12 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 #	for k in range(len(resultsList)):
 #		results = resultsList.pop(0)
 #		results = results.get()
-#		logger.info('Summing contents of {0} lists of size {1} for k={2}'.format(len(results), len(results[0]), k))
+#		logger.debug('Summing contents of {0} lists of size {1} for k={2}'.format(len(results), len(results[0]), k))
 #		if type(results[0]) is dict:
 #			convolved.append(addDicts(*results))
 #		else:
 #			convolved.append(addLists(*results))
-#		logger.info('Completed parallel convolution for k={0}'.format(k))
+#		logger.debug('Completed parallel convolution for k={0}'.format(k))
 	
 	return convolved
 
@@ -233,7 +229,7 @@ def distributeConvolutions(pool, counts0, counts1, partMax0, partMax1, kMax, con
 	# Distribute the work
 	results = []
 	for k in reversed(range(kMax+1)):
-		logger.info('Parallel Convolving {0} in {1}x{2} parts'.format(k, splitListsInto[0], splitListsInto[1]))
+		logger.debug('Parallel Convolving {0} in {1}x{2} parts'.format(k, splitListsInto[0], splitListsInto[1]))
 		
 		for k0, k1 in PartitionIterator(k, 2, [partMax0, partMax1]):
 			for count0Part in count0Parts[k0]:
@@ -304,7 +300,7 @@ def splitListContents(l, numParts=2):
 			end = listLen
 		else:
 			end = offset + partLen
-		logger.info('Splitting into part {0} [{1}:{2}]'.format(partNum, offset, end))
+		logger.debug('Splitting into part {0} [{1}:{2}]'.format(partNum, offset, end))
 		contents = l[offset:end]
 		
 		# If the contents of this part are all zeros, then it is useless.
@@ -326,7 +322,7 @@ def packTasks(nSlots, tasks, costs):
 	totalCost = sum(costs)
 	targetCost = totalCost / nSlots
 	
-	logger.info('totalCost={0}, targetCost={1}'.format(totalCost, targetCost))
+	logger.debug('totalCost={0}, targetCost={1}'.format(totalCost, targetCost))
 	
 	taskSlices = []
 	for _ in range(nSlots):
