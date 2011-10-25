@@ -50,7 +50,7 @@ class Teleport(Component):
         
         return bellPairResult
         
-    def _convolve(self, results, pauli):
+    def _convolve(self, results, noiseModels, pauli):
         results[self.bpName] = self._convolveBP(self.subcomponents()[self.bmName],
                                                 results[self.bpName], 
                                                 self._bpMeasBlock)
@@ -100,10 +100,12 @@ class TeleportED(Teleport):
         
         return prSelf * super(TeleportED, self).prAccept(noiseModels, kMax)
     
-    def _postCount(self, result):
+    def _postCount(self, result, noiseModels, pauli):
         '''
         Post-select for the trivial syndrome on the two measured blocks.
         '''
+        
+        # TODO: compute and apply XZ corrections
         result.counts, result.rejected = self._postselect(result)
         return result
         

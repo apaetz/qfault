@@ -173,7 +173,7 @@ class CnotConvolver(Component):
     def outBlocks(self):
         self.subcomponents()[self.cnotName].outBlocks()
     
-    def _convolve(self, results, pauli):
+    def _convolve(self, results, noiseModels, pauli):
         
         cnot = self.subcomponents()[self.cnotName]
         ctrlResult = results[self.ctrlName]
