@@ -4,18 +4,19 @@ Created on May 1, 2011
 @author: Adam
 '''
 from abc import abstractmethod, ABCMeta
-from result import CountResult
+from copy import copy
+from counting import probability, block, key, countErrors
 from counting.block import Block
 from counting.countErrors import countBlocksBySyndrome, extendCounts, mapCounts
 from counting.countParallel import convolve
+from counting.key import copyKeys, extendKeys, keyForBlock, keyCopier, \
+	keySplitter, keyConcatenator, keyExtender
 from counting.location import Locations
 from qec.error import Pauli, xType, zType
+from qec.qecc import StabilizerCode, StabilizerState
+from result import CountResult
 from util import counterUtils, bits, listutils
 from util.cache import fetchable
-from counting import probability, block, key, countErrors
-from qec.qecc import StabilizerCode, StabilizerState
-from counting.key import copyKeys, extendKeys, keyForBlock, keyCopier,\
-	keySplitter, keyConcatenator, keyExtender
 
 
 class Component(object):
@@ -80,25 +81,22 @@ class Component(object):
 		return self._subs
 		
 	#@fetchable
-	def count(self, noise):
+	def count(self, noise, pauli):
 		'''
 		Counts errors in the component.
 		Returns a CountResult. 
 		'''
 		print 'Counting', str(self)
-		countedBlocks = self._count(noise)
+		countedBlocks = self._count(noise, pauli)
 		print 'Convolving', str(self)
-		block = self._convolve(countedBlocks)
+		block = self._convolve(countedBlocks, pauli)
 		print 'Post processing', str(self)
 		return self._postCount(block)
 	
-	def prBad(self, noise, kMax={pauli: None for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}):
-		prSelf = {pauli: probability.prBadPoly(self.kGood[pauli], self.internalLocations(), noiseModel, kMax[pauli])
-				  for pauli, noiseModel in noise.iteritems()}
-		
-		prByPauli = [sub.prBad(noise, kMax=self.kGood) for sub in self._subs] + [prSelf]
-		
-		return {pauli: sum(pr[pauli] for pr in prByPauli) for pauli in noise}
+	def prBad(self, noise, pauli, kMax={pauli: None for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}):
+		prSelf = probability.prBadPoly(self.kGood[pauli], self.internalLocations(pauli), noise, kMax[pauli])
+		prSubs = [sub.prBad(noise, pauli, kMax=self.kGood) for sub in self._subs] + [prSelf]
+		return sum(prSubs) + prSelf
 	
 	def propagateCounts(self, counts, keyMeta, blockname):
 		propagator, keyMeta = self.keyPropagator(keyMeta, blockname)
@@ -108,7 +106,7 @@ class Component(object):
 	def keyPropagator(self, keyMeta, blockname):
 		return (lambda key: key, keyMeta)
 	
-	def _count(self, noise):
+	def _count(self, noise, pauli):
 		'''
 		Subclass hook.
 		Counts the errors in each sub-component and returns the counts
@@ -116,9 +114,9 @@ class Component(object):
 		It is expected that most concrete components will not need to 
 		implement this method. 
 		'''
-		return {name: sub.count(noise) for name, sub in self._subs.iteritems()} 
+		return {name: sub.count(noise, pauli) for name, sub in self._subs.iteritems()} 
 	
-	def _convolve(self, results):
+	def _convolve(self, results, pauli):
 		'''
 		Subclass hook.
 		Combines errors from each of the sub-components.
@@ -142,15 +140,12 @@ class Component(object):
 		if not all(r.blocks == blocks for r in results):
 			raise Exception('Result blocks are not all identical. {0}'.format([r.blocks for r in results]))
 		
-		convolved = {}
 		counts = [result.counts for result in results]
-		for pauli in counts[0].keys():
-			k = self.kGood[pauli]
-			convolved[pauli] = counts[0][pauli]
-			for count in counts[1:]:
-				convolved[pauli] = convolve(convolved[pauli], count[pauli], kMax=k, convolveFcn=key.convolveKeyCounts,
-										    extraArgs=[keyMeta])
-				
+		convolved = counts[0]
+		k = self.kGood[pauli]
+		for count in counts[1:]:
+			convolved = convolve(convolved, count, kMax=k, convolveFcn=key.convolveKeyCounts, extraArgs=[keyMeta])
+			
 		return CountResult(convolved, keyMeta, blocks)
 	
 	def _postCount(self, result):
@@ -195,34 +190,24 @@ class CountableComponent(Component):
 		self.locations = locations
 		self.blocks = tuple([Block(name, codes[name]) for name in blocknames])
 		
-	def internalLocations(self):
-		return self.locations
+	def internalLocations(self, pauli):
+		return countErrors.pauliFilter(copy(self.locations), pauli)
 	
 	def outBlocks(self):
 		return self.blocks
 		
-	def _count(self, noise):
+	def _count(self, noise, pauli):
 		# First, count the sub-components.
-		subcounts = super(CountableComponent, self)._count(noise)
+		subcounts = super(CountableComponent, self)._count(noise, pauli)
 			
 		# Now count the internal locations.
-		counts = {}
-		keyMetas = set()
-		for pauli, pauliNoise in noise.iteritems():
-			counts[pauli], meta = countBlocksBySyndrome(self.locations, 
-														self.blocks, 
-														pauli, 
-														pauliNoise, 
-														self.kGood[pauli])
-			keyMetas.add(meta)
-				
-		if len(keyMetas) > 1:
-			raise Exception('Key metadata mismatch. {0}'.format(keyMetas))
+		locations = self.internalLocations(pauli)
+		counts, meta = countBlocksBySyndrome(locations, self.blocks, noise, self.kGood[pauli])
 		
 		checks = self._logicalChecks({block.name: block.getCode() for block in self.blocks})
-		cb = CountResult(counts, keyMetas.pop(), self.blocks, logicalChecks=checks, name=self.nickname())
+		cb = CountResult(counts, meta, self.blocks, logicalChecks=checks, name=self.nickname())
 		
-		subcounts[self.nickname()] = cb 
+		subcounts[self.nickname()] = cb
 		return subcounts
 	
 	def _logicalChecks(self, codes):
@@ -429,7 +414,7 @@ class CnotConvolver(Component):
 	def outBlocks(self):
 		self.subcomponents()[self.cnotName].outBlocks()
 	
-	def _convolve(self, results):
+	def _convolve(self, results, pauli):
 		
 		cnot = self.subcomponents()[self.cnotName]
 		ctrlResult = results[self.ctrlName]
@@ -448,12 +433,7 @@ class CnotConvolver(Component):
 		targResult.blocks = cnotResult.blocks
 					
 		# Now convolve.
-		convolved = super(CnotConvolver, self)._convolve(results)
-		
-		# The default _convolve() may not assign the correct key metadata.
-		convolved.keyMeta = cnotResult.keyMeta
-		return convolved
-			
+		return super(CnotConvolver, self)._convolve(results, pauli)			
 		
 class BellPair(CnotConvolver):
 	
@@ -492,7 +472,7 @@ class BellMeas(Component):
 		namemap = {self.measXName: cnot.ctrlName, self.measZName: cnot.targName}
 		return cnot.keyPropagator(keyMeta, namemap[blockname])
 		
-	def _convolve(self, results):
+	def _convolve(self, results, pauli):
 		
 		cnot = results[self.cnotName]
 		measX = results[self.measXName]
@@ -505,11 +485,7 @@ class BellMeas(Component):
 		measZ.blocks = cnot.blocks
 			
 		# Now convolve.
-		convolved = super(BellMeas, self)._convolve(results)
-		
-		# The default _convolve() may not assign the correct key metadata
-		convolved.keyMeta = results[self.cnotName].keyMeta
-		return convolved
+		return super(BellMeas, self)._convolve(results, pauli)
 			
 		
 	
@@ -553,7 +529,7 @@ class Teleport(Component):
 
 		
 		
-	def _convolve(self, results):
+	def _convolve(self, results, pauli):
 		results[self.bpName] = self._convolveBP(self.subcomponents()[self.bmName],
 											    results[self.bpName], 
 											    self._bpMeasBlock)
@@ -583,7 +559,7 @@ class Teleport(Component):
 			
 		bpRes.blocks = bmRes.blocks = inRes.blocks = blocks
 
-		return super(Teleport, self)._convolve(results)
+		return super(Teleport, self)._convolve(results, pauli)
 
 	
 class TeleportED(Teleport):
@@ -601,12 +577,11 @@ class TeleportED(Teleport):
 		syndromeBits = [i for i,check in enumerate(parityChecks) if check in stabilizers]
 		rejectMask = bits.listToBits(syndromeBits)
 		
-		for pauli in counts:
-			for k,count in enumerate(counts[pauli]):
-				# TODO compute the actual block numbers to check.
-				# TODO also check logical operators that are in the stabilizer.
-				accepted = {keyForBlock(key, keyMeta, 2): c for key,c in count.iteritems() if 0 == (key[1] & rejectMask)}
-				counts[pauli][k] = accepted
+		for k,count in enumerate(counts):
+			# TODO compute the actual block numbers to check.
+			# TODO also check logical operators that are in the stabilizer.
+			accepted = {keyForBlock(key, keyMeta, 2): c for key,c in count.iteritems() if 0 == (key[1] & rejectMask)}
+			counts[k] = accepted
 			
 		# TODO: rejected counts, prAccept, code, etc.
 		return result
