@@ -10,8 +10,14 @@ import json as json
 import os.path
 import functools
 
-logger = logging.getLogger('cache')
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger('util.cache')
+
+fetchEnabled = True
+
+def enableFetch(enable=True):
+	global fetchEnabled
+	fetchEnabled = enable
+	logger.info('Fetching enabled=' + str(fetchEnabled))
 
 class memoize(object):
 	'''
@@ -127,6 +133,9 @@ class fetchable(object):
 		return self._fetch(key, tuple([obj]) + args, kwargs)
 	
 	def _fetch(self, key, args, kwargs):
+		if not fetchEnabled:
+			return self.func(*args, **kwargs)
+			
 		dm = DataManager()	
 		try:
 			data = dm.load(key)
@@ -203,7 +212,7 @@ class DataManager(object):
 		outfile.write(json.dumps(obj))
 		outfile.close()
 		
-		logger.info('Saved {0} to {1}'.format(key, filename))
+		logger.debug('Saved {0} to {1}'.format(key, filename))
 	
 		return key
 	
@@ -217,7 +226,7 @@ class DataManager(object):
 		outfile.write(cPickle.dumps(obj, 2))
 		outfile.close()
 		
-		logger.info('Saved {0} to {1}'.format(key, filename))
+		logger.debug('Saved {0} to {1}'.format(key, filename))
 	
 		return key
 	
@@ -254,8 +263,6 @@ class DataManager(object):
 		return os.path.exists(filename)
 
 if __name__ == '__main__':
-	
-
 	
 	@fetchable
 	def fetchFunc(a1, a2, a3='arg3'):

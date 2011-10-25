@@ -86,6 +86,9 @@ class NoiseModel(object):
 		Returns the interval [gMin,gMax] over which the noise model is defined.
 		'''
 		return (self._gMin, self._gMax)
+	
+	def __str__(self):
+		return '[{0}, {1}]'.format(self._gMin, self._gMax)
 					
 	def __repr__(self):
 		return str(self)

@@ -294,7 +294,8 @@ def boundedFailureWeights(kMin, locTotals, noiseModel, kMax):
 
 
 def countsAsProbability(counts, likelyhood):
-	return sum(counts[k] * (likelyhood ** k) for k in range(len(counts)))
+	countSums = [sum(countsK.values()) for countsK in counts]
+	return sum(countSums[k] * (likelyhood ** k) for k in range(len(countSums)))
 
 
 

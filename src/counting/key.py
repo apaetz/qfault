@@ -184,7 +184,7 @@ def keyConcatenator(keyMeta1, keyMeta2):
     
     return cat, meta
 
-def keyForBlock(key, keyMeta, block):
+def keyForBlock(key, block, keyMeta):
     return (key[block],)
     
 def keyCopier(keyMeta, fromBlock, toBlock, mask=None):
