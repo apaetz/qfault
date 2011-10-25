@@ -77,6 +77,18 @@ def extendCounts(counts, keyMeta, blocksAfter=0, blocksBefore=0):
 		
 	return extCounts, keyMeta
 
+def mapCounts(counts, keymap):
+	newCounts = {}
+	
+	for pauli, countsForPauli in counts.iteritems():
+		newCountsForPauli = []
+		for countsK in countsForPauli:
+			newCountsForPauli.append({keymap(key): count for key,count in countsK.iteritems()})
+			
+		newCounts[pauli] = newCountsForPauli
+		
+	return newCounts
+
 
 
 #@fetchable
@@ -150,7 +162,7 @@ def countLocationSets(lSets, keyGenerator, blocknames, noise):
 
 			blockErrors = {name: PauliError(X[i], Z[i]) for i,name in enumerate(blocknames)}
 			errorKey = keyGenerator.getKey(blockErrors)
-			print 'blockErrors=', blockErrors, 'key=', errorKey
+			#print 'blockErrors=', blockErrors, 'key=', errorKey
 			counts[errorKey] = counts.get(errorKey, 0) + totalWeight
 
 	return counts

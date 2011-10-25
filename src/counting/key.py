@@ -65,7 +65,7 @@ class SyndromeKeyGenerator(object):
     @memoize
     def getKey(self, e):
         key = StabilizerCode.Syndrome(e, self.parityChecks())
-        print 'e=', e, 'parityChecks=', self.parityChecks(), 'key={0:b}'.format(key)
+        #print 'e=', e, 'parityChecks=', self.parityChecks(), 'key={0:b}'.format(key)
         return key
     
     def keyMeta(self):
@@ -152,10 +152,59 @@ def extendKeys(keys, keyMeta, blocksBefore=0, blocksAfter=0):
     
     return keymap, keyMeta
 
+def keyExtender(keyMeta, blocksBefore=0, blocksAfter=0):
+    before = tuple([0] * blocksBefore)
+    after = tuple([0] * blocksAfter)
+    def extendKey(key):
+        return before + key + after
+    
+    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
+    
+    return extendKey, keyMeta
+
+def keySplitter(keyMeta, splitBlock):
+    
+    meta1 = SyndromeKeyMeta(keyMeta.parityChecks(), splitBlock)
+    meta2 = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks - splitBlock)
+    
+    def split(key):
+        return key[:splitBlock], key[splitBlock:]
+
+    return split, meta1, meta2
+
+def keyConcatenator(keyMeta1, keyMeta2):
+    
+    if keyMeta1.parityChecks() != keyMeta2.parityChecks():
+        raise Exception('Incompatible keys {0}, {1}'.format(keyMeta1, keyMeta2))
+    
+    meta = SyndromeKeyMeta(keyMeta1.parityChecks(), keyMeta1.nblocks + keyMeta2.nblocks)
+    
+    def cat(key1, key2):
+        return key1 + key2
+    
+    return cat, meta
 
 def keyForBlock(key, keyMeta, block):
     return (key[block],)
     
+def keyCopier(keyMeta, fromBlock, toBlock, mask=None):
+    '''
+    Copy keys (with the given key metatadata) from one block to another block.  The optional
+    mask specifies which bits of fromBlock are copied.  By default, all bits are copied.
+    '''
+            
+    if None == mask:
+        blocklen = len(keyMeta.parityChecks())
+        # Select all of the bits of fromBlock
+        mask = (1 << blocklen) - 1
+    
+    def newKey(key):
+        newKey = list(key)
+        newKey[toBlock] ^= key[fromBlock] & mask
+        return tuple(newKey)
+    
+    return newKey
+
 def copyKeys(keys, keyMeta, fromBlock, toBlock, mask=None):
     '''
     Copy keys (with the given key metatadata) from one block to another block.  The optional
