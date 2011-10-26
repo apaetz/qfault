@@ -49,7 +49,7 @@ class BellMeas(Component):
         namemap = {self.measXName: cnot.ctrlName, self.measZName: cnot.targName}
         return cnot.keyPropagator(keyMeta, namemap[blockname])
         
-    def _convolve(self, results, pauli):
+    def _convolve(self, results, noiseModels, pauli):
         
         cnot = results[self.cnotName]
         measX = results[self.measXName]
@@ -62,4 +62,4 @@ class BellMeas(Component):
         measZ.blocks = cnot.blocks
             
         # Now convolve.
-        return super(BellMeas, self)._convolve(results, pauli)
+        return super(BellMeas, self)._convolve(results, noiseModels, pauli)

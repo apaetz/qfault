@@ -29,6 +29,9 @@ class CnotExRec(Component):
                         }
         super(CnotExRec, self).__init__(kGood, subcomponents=subcomponents)
         
+    def _count(self, noiseModels, pauli):
+        pass
+        
     def _convolve(self, results, pauli):
         
         cnot = self[self.cnotName]

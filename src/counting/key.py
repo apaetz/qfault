@@ -332,6 +332,32 @@ class MultiBlockSyndromeKeyGenerator(object):
     def __repr__(self):
         gens = tuple(self.generators[block.name] for block in self._blocks)
         return str(gens)
+    
+    
+class SyndromeKeyDecoder(object):
+    
+    def __init__(self, code):
+        self._code = code
+        
+#    def decode(self, key):
+#        normalizers = self.code.normalizerGenerators()
+#        nNorms = len(normalizers)
+#        logicalChecks = key & ((1 << nNorms) - 1)
+#        syndrome = key >> nNorms
+#        
+#        e = self.code.syndromeCorrection(syndrome)
+#        
+#        decoded = (0,0)
+#        for i, check in self.code.normalizerGenerators():
+#            qubit = i/2
+#            decoded[i % 2] += ((logicalChecks & 1) ^ e.commutesWith(check)) << qubit
+#            logicalChecks >>= 1
+#    
+#        return PauliError(xbits=decoded[0], zbits=decoded[1])
+
+    def decode(self, key):
+        self._code.decodeSyndrome(key)
+        
 
 if __name__ == '__main__':
     pass
