@@ -192,7 +192,7 @@ class CnotConvolver(Component):
         targResult.blocks = cnotResult.blocks
                     
         # Now convolve.
-        return super(CnotConvolver, self)._convolve(results, pauli)            
+        return super(CnotConvolver, self)._convolve(results, noiseModels, pauli)            
 
     
 class TransMeas(CountableComponent):
@@ -202,10 +202,26 @@ class TransMeas(CountableComponent):
         nickname = 'transMeas' + str(basis) + str(n)
         if Pauli.X == basis:
             loc = counterUtils.locXmeas
+            self._basisType = xType
         elif Pauli.Z == basis:
             loc = counterUtils.locZmeas
+            self._basisType = zType
         else:
             raise Exception('{0}-basis measurement is not supported'.format(basis))
         
         locs = Locations([loc(blockname, i) for i in range(n)], nickname)
         super(TransMeas, self).__init__(locs, [blockname], {blockname: code}, kGood, nickname)
+        
+        self._basis = basis
+        
+    def keyPropagator(self, keyMeta, blockname):
+        parityChecks = keyMeta.parityChecks()
+        
+        # Eliminate bits corresponding to checks of the same type as the
+        # measurement.  These errors/syndromes cannot be detected.
+        mask = bits.listToBits((0 == check[self._basisType]) for check in parityChecks)
+        
+        def propagate(key):
+            return key & mask
+        
+        return propagate

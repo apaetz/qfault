@@ -12,7 +12,7 @@ from counting.location import Locations
 from counting.result import CountResult
 from qec.error import Pauli
 from util import counterUtils
-from util.cache import fetchable
+from util.cache import fetchable, memoize
 import logging
 import operator
 
@@ -51,10 +51,10 @@ class Component(object):
         self._nickname = nickname
         self._subs = subcomponents
         
-    def __set__(self, name, component):
+    def __setitem__(self, name, component):
         self._subs[name] = component
     
-    def __get__(self, name):
+    def __getitem__(self, name):
         return self._subs[name]
     
     def locations(self, pauli=Pauli.Y):
@@ -229,3 +229,27 @@ class Prep(CountableComponent):
     def __init__(self, kGood, locations, code):
         blocknames = list(locations.blocknames())
         super(Prep, self).__init__(locations, blocknames, {name: code for name in blocknames}, kGood)
+        
+class InputDependentComponent(Component):
+
+    def count(self, noiseModels, pauli, inputResult):
+        logger.info('Counting ' + str(self) + ': ' + str(pauli))
+        results = self._count(noiseModels, pauli)
+        
+        logger.debug('Convolving ' + str(self))
+        result = self._convolve(results, noiseModels, pauli, inputResult)
+        
+        logger.debug('Post processing ' + str(self))
+        return self._postCount(result, noiseModels, pauli)
+        
+    @memoize
+    def _count(self, noiseModels, pauli):
+        return super(InputDependentComponent, self)._count(noiseModels, pauli)
+    
+    def _convolve(self, results, noiseModels, pauli, inputResult):
+        inputResult.counts, inputResult.keyMeta = self._propagateInput(inputResult)
+        inputResult.blocks = results[0].blocks
+        super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
+
+    def _propagateInput(self, inputResult):
+        raise NotImplementedError
