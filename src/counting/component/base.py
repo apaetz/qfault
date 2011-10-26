@@ -74,6 +74,9 @@ class Component(object):
         '''
         return Locations()
     
+    def inBlocks(self):
+        return tuple()
+    
     def outBlocks(self):
         raise NotImplementedError
     
@@ -107,12 +110,12 @@ class Component(object):
         prSubs = [sub.prAccept(noiseModels, kMax) for sub in self.subcomponents().values()]
         return reduce(operator.mul, prSubs, 1)
     
-    def propagateCounts(self, counts, keyMeta, blockname):
-        propagator, keyMeta = self.keyPropagator(keyMeta, blockname)
+    def propagateCounts(self, counts, keyMeta):
+        propagator, keyMeta = self.keyPropagator(keyMeta)
         propagated = mapCounts(counts, propagator)        
         return propagated, keyMeta
     
-    def keyPropagator(self, keyMeta, blockname):
+    def keyPropagator(self, keyMeta):
         return (lambda key: key, keyMeta)
     
     def _count(self, noiseModels, pauli):
@@ -202,8 +205,11 @@ class CountableComponent(Component):
     def internalLocations(self, pauli=Pauli.Y):
         return countErrors.pauliFilter(copy(self._locations), pauli)
     
-    def outBlocks(self):
+    def inBlocks(self):
         return self.blocks
+    
+    def outBlocks(self):
+        return self.inBlocks()
         
     def _count(self, noiseModels, pauli):
         # First, count the sub-components.
@@ -220,9 +226,11 @@ class CountableComponent(Component):
     
 class Empty(CountableComponent):
     
-    def __init__(self, code, blockname=''):
-        locs = Locations([], blockname)
-        super(Empty, self).__init__(locs, [blockname], {blockname: code}, {})
+    def __init__(self, code, nblocks=1):
+        locs = Locations([])
+        blocknames = [str(i) for i in range(nblocks)]
+        codes = {name: code for name in blocknames}
+        super(Empty, self).__init__(locs, blocknames, codes, {})
 
 class Prep(CountableComponent):
     
@@ -248,8 +256,8 @@ class InputDependentComponent(Component):
     
     def _convolve(self, results, noiseModels, pauli, inputResult):
         inputResult.counts, inputResult.keyMeta = self._propagateInput(inputResult)
-        inputResult.blocks = results[0].blocks
-        super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
+        inputResult.blocks = results.values()[0].blocks
+        return super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
 
     def _propagateInput(self, inputResult):
         raise NotImplementedError

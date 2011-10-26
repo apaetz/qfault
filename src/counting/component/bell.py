@@ -39,15 +39,17 @@ class BellMeas(Component):
         super(BellMeas, self).__init__(kGood, subcomponents=subs)
         self.code = code
         
+    def inBlocks(self):
+        return self[self.cnotName].inBlocks()
+        
     def outBlocks(self):
         measX = Block(self.measXName, self.code)
         measZ = Block(self.measZName, self.code)
         return (measX, measZ)
 
-    def keyPropagator(self, keyMeta, blockname):
+    def keyPropagator(self, keyMeta):
         cnot = self.subcomponents()[self.cnotName]
-        namemap = {self.measXName: cnot.ctrlName, self.measZName: cnot.targName}
-        return cnot.keyPropagator(keyMeta, namemap[blockname])
+        return cnot.keyPropagator(keyMeta)
         
     def _convolve(self, results, noiseModels, pauli):
         

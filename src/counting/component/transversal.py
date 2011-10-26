@@ -10,6 +10,7 @@ from qec.error import zType, xType, Pauli
 from qec.qecc import StabilizerState, StabilizerCode
 from util import counterUtils, bits
 import logging
+from counting.countErrors import mapCounts
 
 logger = logging.getLogger('component')
 
@@ -50,29 +51,25 @@ class TransCnot(CountableComponent):
         
         return newOp
     
-    def keyPropagator(self, keyMeta, blockname):
+    def keyPropagator(self, keyMeta):
         parityChecks = keyMeta.parityChecks()
         
-        blocknum = self.blockorder.index(blockname)
+        # On the control input X errors propagate through to the target
+        # block.
+        fromCtrlMask = bits.listToBits((0 == check[xType]) for check in parityChecks)
         
-        # Extend the single input block to both blocks
-        before = 1 * (1 == blocknum)
-        after = 1 * (0 == blocknum)
-        extender, keyMeta = keyExtender(keyMeta, blocksBefore=before, blocksAfter=after)
+        # On the target input Z errors propagate through to the control
+        # block.
+        fromTargMask = bits.listToBits((0 == check[zType]) for check in parityChecks)
         
-        if self.ctrlName == blockname:
-            # We're on the control input.  X errors propagate through to the target
-            # block.
-            mask = bits.listToBits((0 == check[xType]) for check in parityChecks)
-        else:
-            # We're on the target input.  Z errors propagate through to the control
-            # block.
-            mask = bits.listToBits((0 == check[zType]) for check in parityChecks)
+        ctrlNum = self.blockorder.index(self.ctrlName)
+        targNum = not ctrlNum
         
-        copier = keyCopier(keyMeta, blocknum, not blocknum, mask=mask)
+        ctrlCopier = keyCopier(keyMeta, ctrlNum, targNum, mask=fromCtrlMask)
+        targCopier = keyCopier(keyMeta, targNum, ctrlNum, mask=fromTargMask)
     
         def propagator(key):
-            return copier(extender(key))
+            return targCopier(ctrlCopier(key))
         
         return propagator, keyMeta
         
@@ -171,7 +168,7 @@ class CnotConvolver(Component):
         self.targName = targName
         
     def outBlocks(self):
-        self.subcomponents()[self.cnotName].outBlocks()
+        return self.subcomponents()[self.cnotName].outBlocks()
     
     def _convolve(self, results, noiseModels, pauli):
         
@@ -180,13 +177,14 @@ class CnotConvolver(Component):
         targResult = results[self.targName]
         cnotResult = results[self.cnotName]
         
-        # First, propagate the input results through the CNOT    
-        ctrlResult.counts, ctrlResult.keyMeta = cnot.propagateCounts(ctrlResult.counts,
-                                                             ctrlResult.keyMeta,
-                                                             cnot.ctrlName)
-        targResult.counts, targResult.keyMeta = cnot.propagateCounts(targResult.counts,
-                                                             targResult.keyMeta,
-                                                             cnot.targName)
+        # First, propagate the input results through the CNOT
+        ctrlExtender, ctrlResult.keyMeta = keyExtender(ctrlResult.keyMeta, blocksAfter=1)
+        ctrlResult.counts = mapCounts(targResult.counts, ctrlExtender)
+        ctrlResult.counts, ctrlResult.keyMeta = cnot.propagateCounts(ctrlResult.counts, ctrlResult.keyMeta)
+        
+        targExtender, targResult.keyMeta = keyExtender(targResult.keyMeta, blocksBefore=1)
+        targResult.counts = mapCounts(targResult.counts, targExtender)
+        targResult.counts, targResult.keyMeta = cnot.propagateCounts(targResult.counts, targResult.keyMeta)
         
         ctrlResult.blocks = cnotResult.blocks
         targResult.blocks = cnotResult.blocks

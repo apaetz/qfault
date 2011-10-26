@@ -12,6 +12,7 @@ from qec.error import Pauli
 from util import bits
 from util.cache import fetchable
 import logging
+from counting.block import Block
 
 logger = logging.getLogger('component')
 
@@ -31,21 +32,25 @@ class UncorrectedTeleport(Component):
         super(UncorrectedTeleport, self).__init__(kGood, subcomponents=subs)
         #self._outblockOrder = outblockOrder
         
+    def inBlocks(self):
+        return (self[self.bmName].inBlocks()[0], )
+    
     def outBlocks(self):
         #TODO
         raise NotImplementedError
     
-    def keyPropagator(self, keyMeta, blockname):
+    def keyPropagator(self, keyMeta):
         # Propagate the input through the CNOT of the Bell measurement and
         # then extend to the output block.
+        bmExtender, keyMeta = keyExtender(keyMeta, blocksAfter=1)
         bellMeas = self[self.bmName]
-        bmPropagator = bellMeas.keyPropagator(bellMeas.measXName)
-        extender = keyExtender(keyMeta, blocksAfter=1)
+        bmPropagator, keyMeta = bellMeas.keyPropagator(keyMeta)
+        extender, keyMeta = keyExtender(keyMeta, blocksAfter=1)
         
         def propagate(key):
-            return extender(bmPropagator(key))
+            return extender(bmPropagator(bmExtender(key)))
         
-        return propagate
+        return propagate, keyMeta
         
 #    @staticmethod
 #    @fetchable
@@ -78,12 +83,13 @@ class UncorrectedTeleport(Component):
         # Propagate the first half of the bell pair through the bell measurement.
         bpMeta = bpRes.keyMeta
         splitter, meta0, meta1 = keySplitter(bpMeta, 1)
-        bmPropagator, bmMeta = bm.keyPropagator(meta0, bm.measZName)
+        extender, extMeta = keyExtender(meta0, blocksBefore=1)
+        bmPropagator, bmMeta = bm.keyPropagator(extMeta)
         concatenator, propMeta = keyConcatenator(bmMeta, meta1)
         
         def propagator(key):
             bpKey0, bpKey1 = splitter(key)
-            key = concatenator(bmPropagator(bpKey0), bpKey1)
+            key = concatenator(bmPropagator(extender(bpKey0)), bpKey1)
             return key
 
         bpRes.counts = mapCounts(bpRes.counts, propagator)
@@ -108,6 +114,7 @@ class TeleportED(InputDependentComponent):
     def __init__(self, kGood, bellPair, bellMeas):
         ucTeleport = UncorrectedTeleport(kGood, bellPair, bellMeas)
         super(TeleportED, self).__init__(kGood, subcomponents={self.ucTeleportName: ucTeleport})
+        self._outBlock = bellPair.outBlocks()[1]
     
     def prAccept(self, noiseModels, kMax=None):
         # TODO: Currently only using the full XZ counts.  This
@@ -122,9 +129,15 @@ class TeleportED(InputDependentComponent):
         
         return prSelf * super(TeleportED, self).prAccept(noiseModels, kMax)
     
+    def inBlocks(self):
+        return self[self.ucTeleportName].inBlocks()
+    
+    def outBlocks(self):
+        return (self._outBlock,)
+    
     def _propagateInput(self, inputResult):
         ucTeleport = self[self.ucTeleportName]
-        counts, keyMeta = ucTeleport.propagateCounts(inputResult.counts, inputResult.keyMeta, ucTeleport.inName)
+        counts, keyMeta = ucTeleport.propagateCounts(inputResult.counts, inputResult.keyMeta)
                 
         return counts, keyMeta
     

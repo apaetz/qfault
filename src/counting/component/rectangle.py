@@ -13,7 +13,7 @@ from util.cache import fetchable, memoizeFetchable
 from counting.countParallel import convolve
 from util import listutils
 
-class TeleportEDCnotRect(InputDependentComponent):
+class CnotRectangle(InputDependentComponent):
     '''
     classdocs
     '''
@@ -28,9 +28,9 @@ class TeleportEDCnotRect(InputDependentComponent):
 
         subcomponents = {
                          self.cnotName: cnot,
-                         self.ucTeleportName: tec
+                         self.tecName: tec
                         }
-        super(TeleportEDCnotRect, self).__init__(kGood, subcomponents=subcomponents)
+        super(CnotRectangle, self).__init__(kGood, subcomponents=subcomponents)
         
 #    def _propagateInput(self, inputResult):
 #        cnot = self[self.cnotName]
@@ -51,20 +51,28 @@ class TeleportEDCnotRect(InputDependentComponent):
 #        propagated = mapCounts(inputResult.counts, propagate)
 #        
 #        return propagated, outMeta
+
+    def _propagateInput(self, inputResult):
+        cnot = self[self.cnotName]
+        counts, keyMeta = cnot.propagateCounts(inputResult.counts, inputResult.keyMeta)
+        
+        return counts, keyMeta
+
+    def _count(self, noiseModels, pauli):
+        # TODO: also initialize TEC decoder here?
+        return {self.cnotName: self[self.cnotName].count(noiseModels, pauli)}
         
     def _convolve(self, results, noiseModels, pauli, inputResult):
               
         # Convolve the input with the transversal CNOT.
-        cnot = self[self.cnotName]
-        inputResult.counts, inputResult.keyMeta = cnot.propagateCounts(inputResult.counts, inputResult.keyMeta)
-        cnotResult = results[self.cnotName]
-        convolved = super(TeleportEDCnotRect, self)._convolve([inputResult, cnotResult], noiseModels, pauli)
+        convolved = super(CnotRectangle, self)._convolve(results, noiseModels, pauli, inputResult)
         
         # Split the keys into two parts; one for each TEC
+        cnotResult = results[self.cnotName]
         splitter, _, _ = keySplitter(cnotResult.keyMeta, 1)
         convolved.counts = mapCounts(convolved.counts, splitter)
         
-        decodeCounter = TECDecoder(self[self.ucTeleportname], noiseModels, pauli)
+        decodeCounter = TECDecoder(self[self.tecName], noiseModels, pauli)
         
         decodeCounts = []
         for k,countsK in enumerate(convolved.counts):
@@ -95,16 +103,17 @@ class TECDecoder(object):
         self._lookup = self.lookupTable(tec, noiseModels, pauli)
         
     @staticmethod
-    @memoizeFetchable
+    @fetchable
     def lookupTable(tec, noiseModels, pauli):
         code = tec.inBlocks()[0].getCode()
         keyMeta = SyndromeKeyGenerator(code, '').keyMeta()
         nchecks = len(keyMeta.parityChecks())
         decoder = SyndromeKeyDecoder(code)
         lookup = {}
-        for key in xrange(1 << len(nchecks)):
+        for key in xrange(1 << nchecks):
             inCount = [{(key,): 1}]
-            outResult = tec.count(noiseModels, pauli, inCount)
+            inResult = CountResult(inCount, keyMeta, None)
+            outResult = tec.count(noiseModels, pauli, inResult)
             dCounts = TECDecoder.decodeCounts(outResult.counts, decoder)
             lookup[key] = dCounts
             

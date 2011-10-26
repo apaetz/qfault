@@ -34,7 +34,7 @@ class memoize(object):
 		
 	def __call__(self, *args):
 		key = self.getKey(args)
-		return self._fetch(key)
+		return self._fetch(key, args)
 	
 	def _fetch(self, key, args):
 		try:
@@ -53,7 +53,14 @@ class memoize(object):
 		return self.memo[key]
 	
 	def getKey(self, args):
-		return args
+		key = [0] * len(args)
+		for i, arg in enumerate(args):
+			try:
+				key[i] = arg.__hash__()
+			except TypeError:
+				key[i] = str(arg)
+		
+		return tuple(key)
 	
 	def _methodCall(self, obj, *args, **kwargs):
 		funcName = ''.join([repr(obj), '.', self.func.func_name])

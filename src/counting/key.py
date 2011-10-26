@@ -69,7 +69,7 @@ class SyndromeKeyGenerator(object):
         return key
     
     def keyMeta(self):
-        return SyndromeKeyMeta(self.parityChecks(), [self.blockname])
+        return SyndromeKeyMeta(self.parityChecks(), 1)
     
 #    def getError(self, key):
 #        syndrome, logical = key
