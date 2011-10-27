@@ -74,7 +74,8 @@ class CnotRectangle(InputDependentComponent):
         
         decodeCounter = TECDecoder(self[self.tecName], noiseModels, pauli)
         
-        decodeCounts = []
+        decodeCounts = [{}] * (self.kGood[pauli] + 1)
+        
         for k,countsK in enumerate(convolved.counts):
             for splitKey, count in countsK.iteritems():
                 # Use the decodeCounter to determine the counts for 
@@ -90,8 +91,8 @@ class CnotRectangle(InputDependentComponent):
                 
                 # TODO multiply by count
             
-                for j in len(convolved):
-                    decodeCounts[j+k] = listutils.addDicts(decodeCounts[j+k], convolved)
+                for j in range(len(convolved)):
+                    decodeCounts[j+k] = listutils.addDicts(decodeCounts[j+k], convolved[j])
                
         return CountResult(decodeCounts, None, None)
         
@@ -115,7 +116,7 @@ class TECDecoder(object):
             inResult = CountResult(inCount, keyMeta, None)
             outResult = tec.count(noiseModels, pauli, inResult)
             dCounts = TECDecoder.decodeCounts(outResult.counts, decoder)
-            lookup[key] = dCounts
+            lookup[(key,)] = dCounts
             
         return lookup
             

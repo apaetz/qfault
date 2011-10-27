@@ -9,7 +9,10 @@ from qec.error import xType, zType, dualType, PauliError, Pauli
 from qec.qecc import StabilizerCode, Codeword
 from util import listutils, bits
 from util.cache import memoize
+import logging
 import operator
+
+logger = logging.getLogger('counting.key')
 
 class DefaultErrorKeyGenerator(object):
     
@@ -339,24 +342,28 @@ class SyndromeKeyDecoder(object):
     def __init__(self, code):
         self._code = code
         
-#    def decode(self, key):
-#        normalizers = self.code.normalizerGenerators()
-#        nNorms = len(normalizers)
-#        logicalChecks = key & ((1 << nNorms) - 1)
-#        syndrome = key >> nNorms
-#        
-#        e = self.code.syndromeCorrection(syndrome)
-#        
-#        decoded = (0,0)
-#        for i, check in self.code.normalizerGenerators():
-#            qubit = i/2
-#            decoded[i % 2] += ((logicalChecks & 1) ^ e.commutesWith(check)) << qubit
-#            logicalChecks >>= 1
-#    
-#        return PauliError(xbits=decoded[0], zbits=decoded[1])
-
-    def decode(self, key):
-        self._code.decodeSyndrome(key)
+    def decode(self, keys):
+        normalizers = self._code.normalizerGenerators()
+        nNorms = len(normalizers)
+        logicalError = Pauli.I
+        for key in keys:
+            logicalChecks = key & ((1 << nNorms) - 1)
+            syndrome = key >> nNorms
+            
+            e = self._code.syndromeCorrection(syndrome)
+            
+            # TODO: this algorithm is neither robust nor readable.
+            decoded = [0,0]
+            for i, check in enumerate(reversed(normalizers)):
+                qubit = i/2
+                decoded[i % 2] += ((logicalChecks & 1) ^ (not e.commutesWith(check))) << qubit
+                logicalChecks >>= 1
+                
+            logicalError += PauliError(xbits=decoded[0], zbits=decoded[1])
+        
+        logger.debug('correction=%s, normalizers=%s', e, normalizers)
+        logger.debug('key=%s, logicalError=%s', key, logicalError)
+        return logicalError
         
 
 if __name__ == '__main__':
