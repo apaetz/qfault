@@ -15,6 +15,7 @@ from util import counterUtils
 from util.cache import fetchable, memoize
 import logging
 import operator
+from counting.key import keyExtender
 
 logger = logging.getLogger('component')
 
@@ -257,7 +258,32 @@ class InputDependentComponent(Component):
     def _convolve(self, results, noiseModels, pauli, inputResult):
         inputResult.counts, inputResult.keyMeta = self._propagateInput(inputResult)
         inputResult.blocks = results.values()[0].blocks
+        results['input'] = inputResult
         return super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
 
     def _propagateInput(self, inputResult):
         raise NotImplementedError
+    
+class ConcatenatedComponent(Component):
+    
+    def __init__(self, kGood, *components):
+        subs = {i: comp for i,comp in components}
+        super(ConcatenatedComponent, self).__init__(kGood, subcomponents=subs)
+        
+    def _convolve(self, results, noiseModels, pauli):
+        
+        # Extend each of the component results so that they each contain the same
+        # number of output blocks.  Then they can be convolved with the default
+        # algorithm.
+        blocks = sum(results[i].blocks for i in range(len(results)), tuple())
+        n = len(blocks)
+        blocknum = 0
+        for i in range(len(results)):
+            result = results[i]
+            before = blocknum
+            after = n - len(result.blocks) - before
+            extender, result.keyMeta = keyExtender(result.keyMeta, blocksBefore=before, blocksAfter=after)
+            result.counts = mapCounts(result.counts, extender)
+            result.blocks = blocks
+            
+        return super(ConcatenatedComponent, self)._convolve(results, noiseModels, pauli)

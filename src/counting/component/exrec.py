@@ -5,6 +5,77 @@ Created on 2011-10-25
 '''
 from counting.component.base import Component
 from counting.component.transversal import TransCnot
+from counting.result import CountResult
+from util import listutils
+from counting.countParallel import convolve
+from counting.component.ec import TECDecodeAdapter
+
+class ExRec(Component):
+    
+    lecName = 'LEC'
+    gaName = 'Ga'
+    tecName = 'TEC'
+    
+    def __init__(self, kGood, lec, gadget, tec):
+        tec = TECDecodeAdapter(tec)
+        subs = {self.lecName: lec, self.gaName: gadget, self.tecName: tec}
+        super(ExRec, self).__init__(kGood, subcomponents=subs)
+        
+    def _convolve(self, results, noiseModels, pauli):
+        # The LEC should have already stripped all counts of the
+        # logical error information.  That is, all LEC error keys
+        # should now decode to the trivial error.  The LEC
+        # can do this, because, correctness of the rectangle depends
+        # only on the syndrome of its input, not on its logical state.
+        # Thus, we can simply convolve the LEC output through the gate
+        # gadget and then count up the decoded results of the TEC.
+        
+        # First, propagate the LEC through the Gadget.
+        lecResult = results[self.lecName]
+        gaResult = results[self.gaName]
+        cnot = self[self.gaName]
+        lecResult.counts, lecResult.keyMeta = cnot.propagateCounts(lecResult.counts, lecResult.keyMeta)
+        
+        # Now convolve the Gadget and the LEC.
+        convolved = super(ExRec, self)._convolve([lecResult, gaResult], noiseModels, pauli)
+        
+        # Now compute the result of propagating the LEC/CNOT input through the TEC
+        # and then decoding.
+        tecResult = results[self.tecName]
+        decodeCounts = convolve(convolved, tecResult, kMax=self.kGood[pauli], convolveFcn=self.convolveTEC)
+        #decodeCounts = self._convolveTEC(convolved, tecDecoder, self.kGood[pauli])
+        
+        return decodeCounts
+    
+    def _postCount(self, result, noiseModels, pauli):
+        pass
+        
+    
+#    def _convolveTEC(self, inputResult, tecDecoder, kMax):
+#        
+#        decodeCounts = [{}] * (kMax + 1)
+#        
+#        for k,countsK in enumerate(inputResult.counts):
+#            for key, count in countsK.iteritems():
+#                decoded = tecDecoder.getCounts(key)
+#                
+#                # TODO multiply by count
+#            
+#                for j in range(kMax - k + 1):
+#                    decodeCounts[k+j] = listutils.addDicts(decodeCounts[j+k], decoded[j])
+#               
+#        return CountResult(decodeCounts, None, None)
+    
+    @staticmethod
+    def convolveTEC(inputCounts, tecCounts):
+        
+        decodeCounts = {}
+        for key, count in inputCounts.iteritems():
+            decoded = tecCounts[key]
+            decoded = {key: val * count for key, val in decoded.iteritems()}
+            decodeCounts = listutils.addDicts(decodeCounts, decoded)
+           
+        return decodeCounts     
 
 class CnotExRec(Component):
     

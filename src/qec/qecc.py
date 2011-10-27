@@ -115,7 +115,7 @@ class TrivialStablizerCode(StabilizerCode):
         return (Pauli.X, Pauli.Z)
     
     def syndromeCorrection(self, s):
-        return 0
+        return Pauli.I
     
 class Codeword(Qecc):
     '''
