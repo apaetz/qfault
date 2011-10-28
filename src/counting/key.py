@@ -114,6 +114,12 @@ class SyndromeKeyMeta(object):
     def parityChecks(self):
         return self._parityChecks
     
+    def meta(self):
+        return self
+    
+    def __call__(self, key):
+        return key
+    
 #    def blocknames(self):
 #        return self._blocks.keys()
 #    
@@ -146,67 +152,160 @@ class SyndromeKeyMeta(object):
     
     def __repr__(self):
         return 'SyndromeKeyMeta(' + str(self.parityChecks()) + ',' + str(self.nblocks) + ')'
+    
+class KeyManipulator(object):
+    
+    def __init__(self, meta):
+        self._manipulator = meta
+                
+    def meta(self):
+        return self._manipulator.meta()
+                
+    def __call__(self, key):
+        return self._manipulate(self._manipulator(key))
+        
+    def _manipulate(self, key):
+        raise NotImplementedError
+    
+class KeyExtender(KeyManipulator):
+    
+    def __init__(self, meta, blocksBefore=0, blocksAfter=0):
+        super(KeyExtender, self).__init__(meta)
+        self._before = tuple([0] * blocksBefore)
+        self._after = tuple([0] * blocksAfter)
+        
+    def meta(self):
+        keyMeta = super(KeyExtender, self).meta()
+        return SyndromeKeyMeta(keyMeta.parityChecks(), 
+                               keyMeta.nblocks + len(self._before) + len(self._after))
+        
+    def _manipulate(self, key):
+        return self._before + key + self._after
+    
+class KeySplitter(KeyManipulator):
+    
+    def __init__(self, meta, splits, manipulator=None):
+        super(KeySplitter, self).__init__(meta)
+        self._splits = splits
+    
+    def meta(self):
+        keyMeta = super(KeySplitter, self).meta()
+        
+        self._metas = []
+        lastSplit = 0
+        for split in self._splits:
+            self._metas.append(SyndromeKeyMeta(keyMeta.parityChecks(), split - lastSplit))
+            lastSplit = split
+                               
+        self._metas.append(SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks - lastSplit))
+        return tuple(self._metas)
+    
+    def _manipulate(self, key):
+        keys = [0] * (len(self._splits) + 1)
+        lastSplit = 0
+        
+        for i,split in enumerate(self._splits):
+            keys[i] = tuple(key[lastSplit:split])
+            lastSplit = split
+        keys[-1] = tuple(key[lastSplit:])
+        
+        return keys
+    
+class KeyConcatenator(KeyManipulator):
+    
+    def __init__(self, meta):
+        super(KeyConcatenator, self).__init__(meta)
+#        if key1Meta.parityChecks() != key2Meta.parityChecks():
+#            raise Exception('Incompatible keys {0}, {1}'.format(key1Meta, key2Meta))
+#    
+        
+    def meta(self):
+        metas = super(KeyConcatenator, self).meta()
+        return SyndromeKeyMeta(metas[0].parityChecks(), sum(m.nblocks for m in metas))
+    
+    def _manipulate(self, keys):
+        return sum(keys, tuple())
 
-def extendKeys(keys, keyMeta, blocksBefore=0, blocksAfter=0):
-    before = tuple([0] * blocksBefore)
-    after = tuple([0] * blocksAfter)
-    keymap = {key: before + key + after for key in keys}
-    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
     
-    return keymap, keyMeta
 
-def keyExtender(keyMeta, blocksBefore=0, blocksAfter=0):
-    before = tuple([0] * blocksBefore)
-    after = tuple([0] * blocksAfter)
-    def extendKey(key):
-        return before + key + after
-    
-    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
-    
-    return extendKey, keyMeta
-
-def keySplitter(keyMeta, splitBlock):
-    
-    meta1 = SyndromeKeyMeta(keyMeta.parityChecks(), splitBlock)
-    meta2 = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks - splitBlock)
-    
-    def split(key):
-        return key[:splitBlock], key[splitBlock:]
-
-    return split, meta1, meta2
-
-def keyConcatenator(keyMeta1, keyMeta2):
-    
-    if keyMeta1.parityChecks() != keyMeta2.parityChecks():
-        raise Exception('Incompatible keys {0}, {1}'.format(keyMeta1, keyMeta2))
-    
-    meta = SyndromeKeyMeta(keyMeta1.parityChecks(), keyMeta1.nblocks + keyMeta2.nblocks)
-    
-    def cat(key1, key2):
-        return key1 + key2
-    
-    return cat, meta
+#def extendKeys(keys, keyMeta, blocksBefore=0, blocksAfter=0):
+#    before = tuple([0] * blocksBefore)
+#    after = tuple([0] * blocksAfter)
+#    keymap = {key: before + key + after for key in keys}
+#    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
+#    
+#    return keymap, keyMeta
+#
+#def keyExtender(keyMeta, blocksBefore=0, blocksAfter=0):
+#    before = tuple([0] * blocksBefore)
+#    after = tuple([0] * blocksAfter)
+#    def extendKey(key):
+#        return before + key + after
+#    
+#    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
+#    
+#    return extendKey, keyMeta
+#
+#def keySplitter(keyMeta, splitBlock):
+#    
+#    meta1 = SyndromeKeyMeta(keyMeta.parityChecks(), splitBlock)
+#    meta2 = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks - splitBlock)
+#    
+#    def split(key):
+#        return key[:splitBlock], key[splitBlock:]
+#
+#    return split, meta1, meta2
+#
+#def keyConcatenator(keyMeta1, keyMeta2):
+#    
+#    if keyMeta1.parityChecks() != keyMeta2.parityChecks():
+#        raise Exception('Incompatible keys {0}, {1}'.format(keyMeta1, keyMeta2))
+#    
+#    meta = SyndromeKeyMeta(keyMeta1.parityChecks(), keyMeta1.nblocks + keyMeta2.nblocks)
+#    
+#    def cat(key1, key2):
+#        return key1 + key2
+#    
+#    return cat, meta
 
 def keyForBlock(key, block, keyMeta):
     return (key[block],)
+
+class KeyCopier(KeyManipulator):
     
-def keyCopier(keyMeta, fromBlock, toBlock, mask=None):
-    '''
-    Copy keys (with the given key metatadata) from one block to another block.  The optional
-    mask specifies which bits of fromBlock are copied.  By default, all bits are copied.
-    '''
-            
-    if None == mask:
-        blocklen = len(keyMeta.parityChecks())
-        # Select all of the bits of fromBlock
-        mask = (1 << blocklen) - 1
+    def __init__(self, meta, fromBlock, toBlock, mask=None):
+        super(KeyCopier, self).__init__(meta)
+        if None == mask:
+            blocklen = len(meta.meta())
+            # Select all of the bits of fromBlock
+            mask = (1 << blocklen) - 1
+        
+        self._mask = mask
+        self._toBlock = toBlock
+        self._fromBlock = fromBlock
     
-    def newKey(key):
+    def _manipulate(self, key):
         newKey = list(key)
-        newKey[toBlock] ^= key[fromBlock] & mask
+        newKey[self._toBlock] ^= key[self._fromBlock] & self._mask
         return tuple(newKey)
     
-    return newKey
+#def keyCopier(keyMeta, fromBlock, toBlock, mask=None):
+#    '''
+#    Copy keys (with the given key metatadata) from one block to another block.  The optional
+#    mask specifies which bits of fromBlock are copied.  By default, all bits are copied.
+#    '''
+#            
+#    if None == mask:
+#        blocklen = len(keyMeta.parityChecks())
+#        # Select all of the bits of fromBlock
+#        mask = (1 << blocklen) - 1
+#    
+#    def newKey(key):
+#        newKey = list(key)
+#        newKey[toBlock] ^= key[fromBlock] & mask
+#        return tuple(newKey)
+#    
+#    return newKey
 
 def copyKeys(keys, keyMeta, fromBlock, toBlock, mask=None):
     '''

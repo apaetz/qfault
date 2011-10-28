@@ -5,8 +5,8 @@ Created on 2011-10-26
 '''
 from counting.component.base import InputDependentComponent
 from counting.component.transversal import TransCnot
-from counting.key import keySplitter, keyForBlock, keyConcatenator,\
-    SyndromeKeyMeta, SyndromeKeyGenerator, SyndromeKeyDecoder
+from counting.key import keyForBlock, \
+    SyndromeKeyMeta, SyndromeKeyGenerator, SyndromeKeyDecoder, KeySplitter
 from counting.countErrors import mapCounts
 from counting.result import CountResult
 from util.cache import fetchable, memoizeFetchable
@@ -69,7 +69,7 @@ class CnotRectangle(InputDependentComponent):
         
         # Split the keys into two parts; one for each TEC
         cnotResult = results[self.cnotName]
-        splitter, _, _ = keySplitter(cnotResult.keyMeta, 1)
+        splitter = KeySplitter(cnotResult.keyMeta, [1])
         convolved.counts = mapCounts(convolved.counts, splitter)
         
         decodeCounter = TECDecoder(self[self.tecName], noiseModels, pauli)

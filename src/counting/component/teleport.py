@@ -7,7 +7,8 @@ from copy import copy
 from counting import probability
 from counting.component.base import Component, InputDependentComponent
 from counting.countErrors import mapCounts, extendCounts
-from counting.key import keySplitter, keyConcatenator, keyForBlock, keyExtender
+from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator,\
+    KeyConcatenator
 from qec.error import Pauli
 from util import bits
 from util.cache import fetchable
@@ -42,15 +43,12 @@ class UncorrectedTeleport(Component):
     def keyPropagator(self, keyMeta):
         # Propagate the input through the CNOT of the Bell measurement and
         # then extend to the output block.
-        bmExtender, keyMeta = keyExtender(keyMeta, blocksAfter=1)
+        bmExtender = KeyExtender(keyMeta, blocksAfter=1)
         bellMeas = self[self.bmName]
-        bmPropagator, keyMeta = bellMeas.keyPropagator(keyMeta)
-        extender, keyMeta = keyExtender(keyMeta, blocksAfter=1)
+        bmPropagator = bellMeas.keyPropagator(bmExtender.meta())
+        outExtender = KeyExtender(keyMeta, blocksAfter=1, manipulator=bmPropagator)
         
-        def propagate(key):
-            return extender(bmPropagator(bmExtender(key)))
-        
-        return propagate, keyMeta
+        return outExtender
         
 #    @staticmethod
 #    @fetchable
@@ -82,18 +80,18 @@ class UncorrectedTeleport(Component):
         
         # Propagate the first half of the bell pair through the bell measurement.
         bpMeta = bpRes.keyMeta
-        splitter, meta0, meta1 = keySplitter(bpMeta, 1)
-        extender, extMeta = keyExtender(meta0, blocksBefore=1)
-        bmPropagator, bmMeta = bm.keyPropagator(extMeta)
-        concatenator, propMeta = keyConcatenator(bmMeta, meta1)
+        extender = KeyExtender(bpMeta, blocksBefore=1)
+        splitter = KeySplitter(extender, [2])
+        bmPropagator = self.BMPropagator(splitter, bm)
+        concatenator= KeyConcatenator(bmPropagator)
         
-        def propagator(key):
-            bpKey0, bpKey1 = splitter(key)
-            key = concatenator(bmPropagator(extender(bpKey0)), bpKey1)
-            return key
+#        def propagator(key):
+#            bpKey0, bpKey1 = splitter(key)
+#            key = concatenator(bmPropagator(extender(bpKey0)), bpKey1)
+#            return key
 
-        bpRes.counts = mapCounts(bpRes.counts, propagator)
-        bpRes.keyMeta = propMeta
+        bpRes.counts = mapCounts(bpRes.counts, concatenator)
+        bpRes.keyMeta = concatenator.meta()
         
         # Extend bell measurement results over all three blocks.
         bmRes.counts, bmRes.keyMeta = extendCounts(bmRes.counts, bmRes.keyMeta, blocksAfter=1)
@@ -105,6 +103,20 @@ class UncorrectedTeleport(Component):
 #    def _postCount(self, result):
 #        # TODO: permute the output blocks to match outblockOrder
 #        raise NotImplementedError
+
+    class BMPropagator(KeyManipulator):
+        
+        def __init__(self, splitter, bm):
+            super(UncorrectedTeleport.BMPropagator, self).__init__(splitter)
+            bmMeta, self._outMeta = splitter.meta()
+            self._bmPropagator = bm.keyPropagator(bmMeta)
+            
+        def meta(self):
+            return (self._bmPropagator.meta(), self._outMeta)
+        
+        def _manipulate(self, key):
+            keyBM, keyOut = key
+            return (self._bmPropagator(keyBM), keyOut)
     
 class TeleportED(InputDependentComponent):
     
@@ -146,6 +158,8 @@ class TeleportED(InputDependentComponent):
         Post-select for the trivial syndrome on the two measured blocks.
         '''
         result.counts, result.rejected = self._postselect(result)
+        result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()
+        result.blocks = (result.blocks[2],)
         return result
         
     def _postselect(self, result):

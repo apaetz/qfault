@@ -32,23 +32,27 @@ class ExRec(Component):
         
         # First, propagate the LEC through the Gadget.
         lecResult = results[self.lecName]
-        gaResult = results[self.gaName]
-        cnot = self[self.gaName]
-        lecResult.counts, lecResult.keyMeta = cnot.propagateCounts(lecResult.counts, lecResult.keyMeta)
+        ga = self[self.gaName]
+        lecResult.counts, lecResult.keyMeta = ga.propagateCounts(lecResult.counts, lecResult.keyMeta)
         
         # Now convolve the Gadget and the LEC.
-        convolved = super(ExRec, self)._convolve([lecResult, gaResult], noiseModels, pauli)
+        tecResult = results.pop(self.tecName)
+        convolved = super(ExRec, self)._convolve(results, noiseModels, pauli)
         
         # Now compute the result of propagating the LEC/CNOT input through the TEC
         # and then decoding.
-        tecResult = results[self.tecName]
-        decodeCounts = convolve(convolved, tecResult, kMax=self.kGood[pauli], convolveFcn=self.convolveTEC)
+        decodeCounts = convolve(convolved.counts, 
+                                tecResult.counts, 
+                                kMax=self.kGood[pauli], 
+                                convolveFcn=self.convolveTEC,
+                                splitListsInto=[2,1])
         #decodeCounts = self._convolveTEC(convolved, tecDecoder, self.kGood[pauli])
         
-        return decodeCounts
+        
+        return CountResult(decodeCounts, tecResult.keyMeta, tecResult.blocks)
     
     def _postCount(self, result, noiseModels, pauli):
-        pass
+        return result
         
     
 #    def _convolveTEC(self, inputResult, tecDecoder, kMax):
