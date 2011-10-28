@@ -53,7 +53,7 @@ class TransCnot(CountableComponent):
         return newOp
     
     def keyPropagator(self, keyMeta):
-        parityChecks = keyMeta.parityChecks()
+        parityChecks = keyMeta.meta().parityChecks()
         
         # On the control input X errors propagate through to the target
         # block.

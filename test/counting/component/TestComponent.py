@@ -5,9 +5,9 @@ Created on May 3, 2011
 '''
 
 import logging
-from counting.component.transversal import TransCnot
 logging.basicConfig(level=logging.DEBUG)
 
+from counting.component.transversal import TransCnot
 from counting.component.base import Prep, Empty, InputAdapter
 from counting.component.bell import BellPair, BellMeas
 from counting.component.exrec import ExRec
@@ -153,7 +153,6 @@ class TestTeleportED(unittest.TestCase):
 		
 class TestExRec(unittest.TestCase):
 
-	@unittest.skip('')
 	def testX(self):
 		kGood = {Pauli.X: 1, Pauli.Z: 1}
 		noise = {Pauli.X: CountingNoiseModelX()}
@@ -165,9 +164,8 @@ class TestExRec(unittest.TestCase):
 		
 		exRec = ExRec(kGood, lec, empty, ec)
 		result = exRec.count(noise, Pauli.X)
-		print result.counts
-		
-		#print result.counts
+		expected = [{Pauli.I: 1}, {Pauli.X: 2, Pauli.I: 4}]
+		assert result.counts == expected
 
 #class TestBellPair(unittest.TestCase):
 #

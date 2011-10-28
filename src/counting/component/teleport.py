@@ -45,8 +45,8 @@ class UncorrectedTeleport(Component):
         # then extend to the output block.
         bmExtender = KeyExtender(keyMeta, blocksAfter=1)
         bellMeas = self[self.bmName]
-        bmPropagator = bellMeas.keyPropagator(bmExtender.meta())
-        outExtender = KeyExtender(keyMeta, blocksAfter=1, manipulator=bmPropagator)
+        bmPropagator = bellMeas.keyPropagator(bmExtender)
+        outExtender = KeyExtender(bmPropagator, blocksAfter=1)
         
         return outExtender
         
@@ -83,7 +83,7 @@ class UncorrectedTeleport(Component):
         extender = KeyExtender(bpMeta, blocksBefore=1)
         splitter = KeySplitter(extender, [2])
         bmPropagator = self.BMPropagator(splitter, bm)
-        concatenator= KeyConcatenator(bmPropagator)
+        concatenator = KeyConcatenator(bmPropagator)
         
 #        def propagator(key):
 #            bpKey0, bpKey1 = splitter(key)
@@ -94,7 +94,9 @@ class UncorrectedTeleport(Component):
         bpRes.keyMeta = concatenator.meta()
         
         # Extend bell measurement results over all three blocks.
-        bmRes.counts, bmRes.keyMeta = extendCounts(bmRes.counts, bmRes.keyMeta, blocksAfter=1)
+        extender = KeyExtender(bmRes.keyMeta, blocksAfter=1)
+        bmRes.counts = mapCounts(bmRes.counts, extender)
+        bmRes.keyMeta = extender.meta()
                     
         bpRes.blocks = bmRes.blocks = bmRes.blocks + tuple([bpRes.blocks[1]])
 
@@ -158,7 +160,7 @@ class TeleportED(InputDependentComponent):
         Post-select for the trivial syndrome on the two measured blocks.
         '''
         result.counts, result.rejected = self._postselect(result)
-        result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()
+        result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()[1]
         result.blocks = (result.blocks[2],)
         return result
         
