@@ -4,7 +4,7 @@ Created on 2011-10-25
 @author: adam
 '''
 from counting.block import Block
-from counting.component.base import Component
+from counting.component.base import Component, ConcatenatedComponent
 from counting.component.transversal import CnotConvolver, TransCnot, TransMeas
 from counting.countErrors import extendCounts
 from qec.error import Pauli
@@ -24,17 +24,19 @@ class BellPair(CnotConvolver):
 class BellMeas(Component):
 
     cnotName = 'cnot'
-    measXName = 'measX'
-    measZName = 'measZ'
+    measName = 'measX,measZ'
     
     def __init__(self, kGood, code, kGoodMeasX=None, kGoodMeasZ=None, kGoodCnot=None):
         if None == kGoodMeasX: kGoodMeasX = kGood
         if None == kGoodMeasZ: kGoodMeasZ = kGood
         if None == kGoodCnot: kGoodCnot = kGood
         
+        measX = TransMeas(kGoodMeasX, code, Pauli.X)
+        measZ = TransMeas(kGoodMeasZ, code, Pauli.Z)
+        meas = ConcatenatedComponent(kGood, measX, measZ)
+        
         subs = {self.cnotName: TransCnot(kGoodCnot, code, code),
-                self.measXName: TransMeas(kGoodMeasX, code, Pauli.X, self.measXName),
-                self.measZName: TransMeas(kGoodMeasZ, code, Pauli.Z, self.measZName)}
+                self.measName: meas}
         
         super(BellMeas, self).__init__(kGood, subcomponents=subs)
         self.code = code
@@ -53,15 +55,20 @@ class BellMeas(Component):
         
     def _convolve(self, results, noiseModels, pauli):
         
-        cnot = results[self.cnotName]
-        measX = results[self.measXName]
-        measZ = results[self.measZName]
+        cnotResult = results[self.cnotName]
+        meas = self[self.measName]
         
-        measX.counts, measX.keyMeta = extendCounts(measX.counts, measX.keyMeta, blocksAfter=1)
-        measZ.counts, measZ.keyMeta = extendCounts(measZ.counts, measZ.keyMeta, blocksBefore=1)
-            
-        measX.blocks = cnot.blocks
-        measZ.blocks = cnot.blocks
+        # Propagate the CNOT counts through the measurements.
+        cnotResult.counts, cnotResult.keyMeta = meas.propagateCounts(cnotResult.counts, cnotResult.keyMeta)
+        
+#        measX = results[self.measXName]
+#        measZ = results[self.measZName]
+#        
+#        measX.counts, measX.keyMeta = extendCounts(measX.counts, measX.keyMeta, blocksAfter=1)
+#        measZ.counts, measZ.keyMeta = extendCounts(measZ.counts, measZ.keyMeta, blocksBefore=1)
+#            
+#        measX.blocks = cnot.blocks
+#        measZ.blocks = cnot.blocks
             
         # Now convolve.
         return super(BellMeas, self)._convolve(results, noiseModels, pauli)

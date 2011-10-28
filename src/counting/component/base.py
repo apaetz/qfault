@@ -8,6 +8,8 @@ from counting import probability, key, countErrors
 from counting.block import Block
 from counting.countErrors import mapCounts, countBlocksBySyndrome
 from counting.countParallel import convolve
+from counting.key import SyndromeKeyGenerator, SyndromeKeyMeta,\
+    KeySplitter, KeyManipulator, KeyConcatenator, KeyExtender
 from counting.location import Locations
 from counting.result import CountResult
 from qec.error import Pauli
@@ -15,7 +17,6 @@ from util import counterUtils
 from util.cache import fetchable, memoize
 import logging
 import operator
-from counting.key import keyExtender
 
 logger = logging.getLogger('component')
 
@@ -112,12 +113,12 @@ class Component(object):
         return reduce(operator.mul, prSubs, 1)
     
     def propagateCounts(self, counts, keyMeta):
-        propagator, keyMeta = self.keyPropagator(keyMeta)
+        propagator = self.keyPropagator(keyMeta)
         propagated = mapCounts(counts, propagator)        
-        return propagated, keyMeta
+        return propagated, propagator.meta()
     
     def keyPropagator(self, keyMeta):
-        return (lambda key: key, keyMeta)
+        return keyMeta
     
     def _count(self, noiseModels, pauli):
         '''
@@ -150,8 +151,8 @@ class Component(object):
             raise Exception('Key metadatas are not all identical. {0}'.format([r.keyMeta for r in results]))
         
         blocks = results[0].blocks
-        if not all(r.blocks == blocks for r in results):
-            raise Exception('Result blocks are not all identical. {0}'.format([r.blocks for r in results]))
+        if not all(len(r.blocks) == len(blocks) for r in results):
+            raise Exception('Block count mismatch. {0}'.format([len(r.blocks) for r in results]))
         
         counts = [result.counts for result in results]
         convolved = counts[0]
@@ -264,26 +265,82 @@ class InputDependentComponent(Component):
     def _propagateInput(self, inputResult):
         raise NotImplementedError
     
+class InputAdapter(Component):
+    
+    def __init__(self, component, inputKey):
+        blocks = component.inBlocks()
+        code = blocks[0].getCode()
+        parityChecks = SyndromeKeyGenerator.ParityChecks(code)
+        keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
+        inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
+        
+        super(InputAdapter, self).__init__({})
+        
+        self._component = component
+        self._inResult = inputResult
+        
+    def count(self, noiseModels, pauli):
+        return self._component.count(noiseModels, pauli, self._inResult)
+        
 class ConcatenatedComponent(Component):
     
     def __init__(self, kGood, *components):
-        subs = {i: comp for i,comp in components}
+        subs = {i: comp for i,comp in enumerate(components)}
         super(ConcatenatedComponent, self).__init__(kGood, subcomponents=subs)
+        
+    def propagateCounts(self, counts, keyMeta):
+        # Split the incoming keys according to each of the components
+        nsubs = len(self.subcomponents())
+        splits = [0] * (nsubs - 1)
+        for i in range(nsubs-1):
+            sub = self[i]
+            nblocks = len(sub.inBlocks())
+            splits[i] = splits[i-1] + nblocks
+        
+        splitter = KeySplitter(keyMeta, splits)
+        # Then propagate the keys through the components
+        propagator = self.Propagator(self.subcomponents(), splitter)
+        
+        # Then glue them back together.
+        mapper = KeyConcatenator(propagator)
+        
+        counts = mapCounts(counts, mapper)
+        return counts, mapper.meta()
         
     def _convolve(self, results, noiseModels, pauli):
         
         # Extend each of the component results so that they each contain the same
         # number of output blocks.  Then they can be convolved with the default
         # algorithm.
-        blocks = sum(results[i].blocks for i in range(len(results)), tuple())
+        blocks = sum([results[i].blocks for i in range(len(results))], tuple())
         n = len(blocks)
         blocknum = 0
         for i in range(len(results)):
             result = results[i]
             before = blocknum
             after = n - len(result.blocks) - before
-            extender, result.keyMeta = keyExtender(result.keyMeta, blocksBefore=before, blocksAfter=after)
+            blocknum += len(result.blocks)
+            
+            extender = KeyExtender(result.keyMeta, blocksBefore=before, blocksAfter=after)
             result.counts = mapCounts(result.counts, extender)
+            result.keyMeta = extender.meta()
             result.blocks = blocks
             
         return super(ConcatenatedComponent, self)._convolve(results, noiseModels, pauli)
+    
+    class Propagator(KeyManipulator):
+        
+        def __init__(self, subcomponents, splitter):
+            super(ConcatenatedComponent.Propagator, self).__init__(splitter)
+            
+            self._metas = splitter.meta()
+            self._propagators = [subcomponents[i].keyPropagator(self._metas[i]) 
+                                 for i in range(len(subcomponents))]
+            
+        def meta(self):
+            return self._metas
+        
+        def _manipulate(self, keys):
+            key = tuple(self._propagators[i](key) for i,key in enumerate(keys))
+            return key
+    

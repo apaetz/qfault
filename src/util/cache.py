@@ -13,11 +13,18 @@ import functools
 logger = logging.getLogger('util.cache')
 
 fetchEnabled = True
+memoEnabled = True
 
 def enableFetch(enable=True):
 	global fetchEnabled
 	fetchEnabled = enable
 	logger.info('Fetching enabled=' + str(fetchEnabled))
+	
+def enableMemo(enable=True):
+	global memoEnabled
+	memoEnabled = enable
+	logger.info('Memos enabled=' + str(memoEnabled))
+
 
 class memoize(object):
 	'''
@@ -37,6 +44,9 @@ class memoize(object):
 		return self._fetch(key, args)
 	
 	def _fetch(self, key, args):
+		if not memoEnabled:
+			return self.func(*args)	
+
 		try:
 			return self.getMemo(key)
 		except KeyError:

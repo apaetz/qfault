@@ -8,7 +8,7 @@ This file contains functions counting error propagation within a given set of lo
 
 from collections import namedtuple
 from counting.key import SyndromeKeyGenerator, DefaultErrorKeyGenerator, \
-	MultiBlockSyndromeKeyGenerator, extendKeys
+	MultiBlockSyndromeKeyGenerator
 from qec.error import Pauli, PauliError, xType, zType
 from qec.qecc import StabilizerCode
 from util import iteration, counterUtils
@@ -77,7 +77,12 @@ def mapCounts(counts, keymap):
 
 	newCounts = []
 	for countsK in counts:
-		newCounts.append({keymap(key): count for key,count in countsK.iteritems()})
+		newCountsK = {}
+		for key,count in countsK.iteritems():
+			mappedKey = keymap(key)
+			newCountsK[mappedKey] = newCountsK.get(mappedKey, 0) + count
+			
+		newCounts.append(newCountsK)
 		
 	return newCounts
 

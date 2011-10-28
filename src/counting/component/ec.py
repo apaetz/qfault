@@ -3,10 +3,13 @@ Created on 2011-10-27
 
 @author: adam
 '''
-from counting.key import SyndromeKeyGenerator, SyndromeKeyDecoder
+from counting.key import SyndromeKeyGenerator, SyndromeKeyDecoder,\
+    SyndromeKeyMeta
 from counting.result import CountResult
 from util.cache import fetchable
 from counting.component.base import Component
+
+
 
 class TECDecodeAdapter(Component):
     
@@ -23,7 +26,8 @@ class TECDecodeAdapter(Component):
         # k failures in the TEC when the input to the TEC
         # is 'key'.
         
-        return self.lookupTable(self._tec, noiseModels, pauli)
+        counts, meta, blocks = self.lookupTable(self._tec, noiseModels, pauli)
+        return CountResult(counts, meta, blocks)
         
     @staticmethod
     @fetchable
@@ -32,16 +36,19 @@ class TECDecodeAdapter(Component):
         keyMeta = SyndromeKeyGenerator(code, '').keyMeta()
         nchecks = len(keyMeta.parityChecks())
         decoder = SyndromeKeyDecoder(code)
-        lookup = [0] * (tec.kGood[pauli] + 1)
+        lookup = [{} for _ in range(tec.kGood[pauli] + 1)]
         for key in xrange(1 << nchecks):
             inCount = [{(key,): 1}]
             inResult = CountResult(inCount, keyMeta, None)
             outResult = tec.count(noiseModels, pauli, inResult)
+            outMeta = outResult.keyMeta
+            outBlocks = outResult.blocks
+            
             dCounts = TECDecodeAdapter.decodeCounts(outResult.counts, decoder)
             for k in range(len(lookup)):
                 lookup[k][(key,)] = dCounts[k]
             
-        return lookup
+        return lookup, outMeta, outBlocks
             
     @staticmethod
     def decodeCounts(counts, decoder):
