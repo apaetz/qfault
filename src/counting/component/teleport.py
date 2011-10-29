@@ -6,7 +6,7 @@ Created on 2011-10-25
 from copy import copy
 from counting import probability
 from counting.component.base import Component, InputDependentComponent
-from counting.countErrors import mapCounts, extendCounts
+from counting.countErrors import mapCounts
 from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator,\
     KeyConcatenator
 from qec.error import Pauli

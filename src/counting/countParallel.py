@@ -11,6 +11,8 @@ from util.listutils import addLists, addDicts
 import logging
 import math
 import time
+import operator
+from util import listutils
 
 
 logger = logging.getLogger('countParallel')
@@ -155,7 +157,13 @@ def asyncFuncWrapper(argList):
 	asyncFcn = argList[0]
 	return asyncFcn(*argList[1:])
 	
-def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=None, convolveFcn=convolveDict, extraArgs=[], splitListsInto=[2,2]):
+def convolveParallel(pool, 
+					counts0, counts1, 
+					partMax0=None, partMax1=None, 
+					kMax=None, 
+					convolveFcn=convolveDict, extraArgs=[], 
+					splitListsInto=[2,2],
+					listMergeOp=listutils.addDicts):
 	
 	if None == partMax0:
 		partMax0 = len(counts0)-1
@@ -196,16 +204,12 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 				continue
 			
 			ready = [r.get() for r in ready]
-			if type(ready[0]) is dict:
-				addFunc = addDicts
-			else:
-				addFunc = addLists
 			
 			logger.debug('Summing contents of {0} lists of size {1} for k={2}'.format(len(ready), len(ready[0]), k))
 			if 0 != convolved[k]:
 				ready += [convolved[k]]
 			
-			convolved[k] = addFunc(*ready)
+			convolved[k] = listMergeOp(*ready)
 				
 
 			

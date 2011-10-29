@@ -6,7 +6,6 @@ Created on 2011-10-25
 from counting.block import Block
 from counting.component.base import Component, ConcatenatedComponent
 from counting.component.transversal import CnotConvolver, TransCnot, TransMeas
-from counting.countErrors import extendCounts
 from qec.error import Pauli
 import logging
 
