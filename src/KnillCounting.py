@@ -7,39 +7,61 @@ Created on 2011-09-12
 from counting.component import base, bell, teleport
 from qec import ed422, qecc, error
 from qec.error import Pauli
-from settings.noise import NoiseModelXZSympy, NoiseModelXSympy, NoiseModelZSympy
+from settings.noise import NoiseModelXZSympy, NoiseModelXSympy, NoiseModelZSympy, \
+    CountingNoiseModelX, CountingNoiseModelZ
 import util.cache
+from counting.component.base import InputAdapter, ConcatenatedComponent
+from counting.component.transversal import TransCnot
+from counting.component.exrec import ExRec
+from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
+
+
+def makeED(kGood):
+    
+    prepZ = base.Prep(kGood, 
+                      ed422.prepare(Pauli.Z, Pauli.X), 
+                      qecc.StabilizerState(ed422.ED422Code(), [error.zType, error.xType]))
+    prepX = base.Prep(kGood, 
+                      ed422.prepare(Pauli.X, Pauli.Z), 
+                      qecc.StabilizerState(ed422.ED422Code(), [error.xType, error.zType]))
+    
+    bellPair = bell.BellPair(kGood, prepX, prepZ, kGood)
+    bellMeas = bell.BellMeas(kGood, ed422.ED422Code(), kGood, kGood, kGood)
+    
+    teleportED = teleport.TeleportED(kGood, bellPair, bellMeas)
+    
+    return teleportED
 
 
 def run():
-    kMax = {pauli: 2 for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}
+    kGood = {pauli: 1 for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}
     
-    prepZ = base.Prep(kMax, ed422.prepare(Pauli.Z, Pauli.X), 
-                           #ed422.ED422ZeroPlus())
-                           qecc.StabilizerState(ed422.ED422Code(), [error.zType, error.xType]))
-    prepX = base.Prep(kMax, ed422.prepare(Pauli.X, Pauli.Z), 
-                           qecc.StabilizerState(ed422.ED422Code(), [error.xType, error.zType]))
-    noises = { Pauli.X: NoiseModelXSympy(),
-              Pauli.Z: NoiseModelZSympy(),
-              Pauli.Y: NoiseModelXZSympy() 
-             }
+
+#    noises = { Pauli.X: NoiseModelXSympy(),
+#              Pauli.Z: NoiseModelZSympy(),
+#              Pauli.Y: NoiseModelXZSympy() 
+#             }
+    noises = {Pauli.X: CountingNoiseModelX(),
+              Pauli.Z: CountingNoiseModelZ(),
+              Pauli.Y: None,
+              }
     
     pauli = Pauli.X
-    noise = noises[pauli]
+    code = ed422.ED422Code()
+
+    data = base.Empty(ed422.ED422Code()).count(noises, pauli)
     
-    prepBlock = prepZ.count(noise, pauli)
-    print prepBlock.keyMeta
-    print prepBlock.counts
-    print prepZ.prBad(noise, pauli)
-    print prepZ.prBad(noise, pauli)(.001)
+    ed = makeED(kGood)
+    led = InputAdapter(ed, (0,))
+    led = ConcatenatedComponent(kGood, led, led)
+    cnot = TransCnot(kGood, code, code)
+    ted = TECDecodeAdapter(ed)
+    ted = ConcatenatedTEC(kGood, ted, ted)
     
-    bellPair = bell.BellPair(kMax, prepX, prepZ, kMax)
-    bellMeas = bell.BellMeas(kMax, ed422.ED422Code(), kMax, kMax, kMax)
-    data = base.Empty(ed422.ED422Code()).count(noise, pauli)
-    teleportED = teleport.TeleportED(kMax, data, bellPair, bellMeas)
-    tedblock = teleportED.count(noise, pauli)
-    print tedblock.counts
-    print teleportED.prAccept(noises)(.001)
+    exRec = ExRec(kGood, led, cnot, ted)
+    
+    result = exRec.count(noises, pauli)
+    print result.counts
 
 if __name__ == '__main__':
     from counting import countParallel

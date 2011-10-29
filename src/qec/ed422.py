@@ -63,6 +63,12 @@ class ED422Code(CssCode):
     def normalizerGenerators(self):
         return self._logicalOps
     
+    def syndromeCorrection(self, s):
+        # TODO: It's not clear what to do here, since this is
+        # and error detecting code.
+        raise NotImplementedError
+        #return Pauli.I ** 4
+    
 #    def reduceError(self, e):
 #        r = dict()
 #        for pauli in [Pauli.X, Pauli.Z]:

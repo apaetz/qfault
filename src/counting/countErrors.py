@@ -63,15 +63,15 @@ def countBlocksBySyndrome(locations, blocks, noise, kMax):
 	
 	return counts, keyGenerator.keyMeta()
 
-def extendCounts(counts, keyMeta, blocksAfter=0, blocksBefore=0):
-	extCounts = []
-	oldMeta = keyMeta
-	
-	for countsK in counts:
-		keymap, keyMeta = extendKeys(countsK.keys(), oldMeta, blocksAfter=blocksAfter, blocksBefore=blocksBefore)
-		extCounts.append({keymap[key]: count for key,count in countsK.iteritems()})
-		
-	return extCounts, keyMeta
+#def extendCounts(counts, keyMeta, blocksAfter=0, blocksBefore=0):
+#	extCounts = []
+#	oldMeta = keyMeta
+#	
+#	for countsK in counts:
+#		keymap, keyMeta = extendKeys(countsK.keys(), oldMeta, blocksAfter=blocksAfter, blocksBefore=blocksBefore)
+#		extCounts.append({keymap[key]: count for key,count in countsK.iteritems()})
+#		
+#	return extCounts, keyMeta
 
 def mapCounts(counts, keymap):
 

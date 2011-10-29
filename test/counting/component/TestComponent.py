@@ -5,10 +5,12 @@ Created on May 3, 2011
 '''
 
 import logging
+from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
 logging.basicConfig(level=logging.DEBUG)
 
 from counting.component.transversal import TransCnot
-from counting.component.base import Prep, Empty, InputAdapter
+from counting.component.base import Prep, Empty, InputAdapter,\
+	ConcatenatedComponent
 from counting.component.bell import BellPair, BellMeas
 from counting.component.exrec import ExRec
 from counting.component.rectangle import CnotRectangle
@@ -161,11 +163,30 @@ class TestExRec(unittest.TestCase):
 		
 		ec = TestTeleportED.TeleportED(kGood, code)
 		lec = InputAdapter(ec, (0,))
+		tec = TECDecodeAdapter(ec)
 		
-		exRec = ExRec(kGood, lec, empty, ec)
+		exRec = ExRec(kGood, lec, empty, tec)
 		result = exRec.count(noise, Pauli.X)
 		expected = [{Pauli.I: 1}, {Pauli.X: 2, Pauli.I: 4}]
 		assert result.counts == expected
+		
+	def testXCnot(self):
+		kGood = {Pauli.X: 1, Pauli.Z: 1}
+		noise = {Pauli.X: CountingNoiseModelX()}
+		code = TrivialStablizerCode()
+		cnot = TransCnot(kGood, code, code) 
+		
+		ec = TestTeleportED.TeleportED(kGood, code)
+		lec = InputAdapter(ec, (0,))
+		lec = ConcatenatedComponent(kGood, lec, lec)
+		tec = TECDecodeAdapter(ec)
+		tec = ConcatenatedTEC(kGood, tec, tec)
+			
+		exRec = ExRec(kGood, lec, cnot, tec)
+		result = exRec.count(noise, Pauli.X)
+		expected = [{Pauli.I: 1}, {Pauli.X: 2, Pauli.I: 4}]
+		print 'cnot exRec:' + str(result.counts)# == expected
+
 
 #class TestBellPair(unittest.TestCase):
 #

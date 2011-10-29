@@ -213,7 +213,13 @@ class KeySplitter(KeyManipulator):
     
 class KeyConcatenator(KeyManipulator):
     
-    def __init__(self, meta):
+    def __init__(self, *metas):
+        if 1 == len(metas):
+            meta = metas[0]
+        else:
+            meta = MultiManipulatorAdapter(metas)
+            
+            
         super(KeyConcatenator, self).__init__(meta)
 #        if key1Meta.parityChecks() != key2Meta.parityChecks():
 #            raise Exception('Incompatible keys {0}, {1}'.format(key1Meta, key2Meta))
@@ -222,12 +228,21 @@ class KeyConcatenator(KeyManipulator):
     def meta(self):
         metas = super(KeyConcatenator, self).meta()
         return SyndromeKeyMeta(metas[0].parityChecks(), sum(m.nblocks for m in metas))
-    
+
     def _manipulate(self, keys):
         return sum(keys, tuple())
 
+class MultiManipulatorAdapter(object):
     
+    def __init__(self, manipulators):
+        self._manipulators = manipulators
+        
+    def meta(self):
+        return tuple(m.meta() for m in self._manipulators)
 
+    def __call__(self, keys):
+        return tuple(self._manipulators[i](key) for i,key in enumerate(keys))
+        
 #def extendKeys(keys, keyMeta, blocksBefore=0, blocksAfter=0):
 #    before = tuple([0] * blocksBefore)
 #    after = tuple([0] * blocksAfter)

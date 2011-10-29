@@ -17,7 +17,6 @@ class ExRec(Component):
     tecName = 'TEC'
     
     def __init__(self, kGood, lec, gadget, tec):
-        tec = TECDecodeAdapter(tec)
         subs = {self.lecName: lec, self.gaName: gadget, self.tecName: tec}
         super(ExRec, self).__init__(kGood, subcomponents=subs)
         

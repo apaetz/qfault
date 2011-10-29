@@ -120,7 +120,7 @@ class Component(object):
     def keyPropagator(self, keyMeta):
         return keyMeta
     
-    def _count(self, noiseModels, pauli):
+    def _count(self, *args):
         '''
         Subclass hook.
         Counts the errors in each sub-component and returns the counts
@@ -128,7 +128,7 @@ class Component(object):
         It is expected that most concrete components will not need to 
         implement this method. 
         '''
-        return {name: sub.count(noiseModels, pauli) for name, sub in self._subs.iteritems()} 
+        return {name: sub.count(*args) for name, sub in self._subs.iteritems()} 
     
     def _convolve(self, results, noiseModels, pauli):
         '''
@@ -243,6 +243,10 @@ class Prep(CountableComponent):
 class InputDependentComponent(Component):
 
     def count(self, noiseModels, pauli, inputResult):
+        # Counting and convolving may manipulate the input directly.
+        # Copy to avoid changing the user's input.
+        inputResult = copy(inputResult)
+        
         logger.info('Counting ' + str(self) + ': ' + str(pauli))
         results = self._count(noiseModels, pauli)
         
@@ -287,6 +291,13 @@ class ConcatenatedComponent(Component):
     def __init__(self, kGood, *components):
         subs = {i: comp for i,comp in enumerate(components)}
         super(ConcatenatedComponent, self).__init__(kGood, subcomponents=subs)
+        
+    def inBlocks(self):
+        return sum((self[i].inBlocks() for i in range(len(self.subcomponents()))), tuple())
+    
+    def outBlocks(self):
+        return sum((self[i].outBlocks() for i in range(len(self.subcomponents()))), tuple())
+    
         
     def propagateCounts(self, counts, keyMeta):
         # Split the incoming keys according to each of the components
