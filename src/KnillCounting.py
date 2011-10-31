@@ -20,13 +20,13 @@ def makeED(kGood):
     
     prepZ = base.Prep(kGood, 
                       ed422.prepare(Pauli.Z, Pauli.X), 
-                      qecc.StabilizerState(ed422.ED422Code(), [error.zType, error.xType]))
+                      qecc.StabilizerState(ed422.ED412Code(gaugeType=error.xType), [error.zType]))
     prepX = base.Prep(kGood, 
                       ed422.prepare(Pauli.X, Pauli.Z), 
-                      qecc.StabilizerState(ed422.ED422Code(), [error.xType, error.zType]))
+                      qecc.StabilizerState(ed422.ED412Code(gaugeType=error.xType), [error.xType]))
     
     bellPair = bell.BellPair(kGood, prepX, prepZ, kGood)
-    bellMeas = bell.BellMeas(kGood, ed422.ED422Code(), kGood, kGood, kGood)
+    bellMeas = bell.BellMeas(kGood, ed422.ED412Code(), kGood, kGood, kGood)
     
     teleportED = teleport.TeleportED(kGood, bellPair, bellMeas)
     
@@ -47,18 +47,18 @@ def run():
               }
     
     pauli = Pauli.X
-    code = ed422.ED422Code()
+    code = ed422.ED412Code()
 
-    data = base.Empty(ed422.ED422Code()).count(noises, pauli)
+    id = base.Empty(ed422.ED412Code())
     
     ed = makeED(kGood)
     led = InputAdapter(ed, (0,))
-    led = ConcatenatedComponent(kGood, led, led)
+    led2 = ConcatenatedComponent(kGood, led, led)
     cnot = TransCnot(kGood, code, code)
     ted = TECDecodeAdapter(ed)
-    ted = ConcatenatedTEC(kGood, ted, ted)
+    ted2 = ConcatenatedTEC(kGood, ted, ted)
     
-    exRec = ExRec(kGood, led, cnot, ted)
+    exRec = ExRec(kGood, led, id, ted)
     
     result = exRec.count(noises, pauli)
     print result.counts
