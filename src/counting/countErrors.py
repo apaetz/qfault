@@ -137,9 +137,18 @@ def countLocationSets(lSets, keyGenerator, blocknames, noise):
 				e = errorLookup[j][eIndexes[j]]
 				
 				totalWeight *= noise.getWeight(l,e)
-				#print 'l=', l
+				print 'l=', l
 				#print 'k=', k, 'j=', j, 'eIndex=', eIndexes[j]
-				#print 'e=', e, 'weight=', totalWeight
+				print 'e=', e, 'weight=', totalWeight
+				
+				
+				#
+				# TODO: The location errors are given in little endian, but
+				# this may not match up with code bit ordering.  At a minimum
+				# this needs to be documented.  Ideally, there would be a
+				# mechanism to check for consistency.
+				#
+				
 				
 				# X-error at location l on qubit 1 (i.e., IX, or IY, or XX, etc.)
 				if e[xType] & 1:
@@ -159,7 +168,7 @@ def countLocationSets(lSets, keyGenerator, blocknames, noise):
 
 			blockErrors = {name: PauliError(X[i], Z[i]) for i,name in enumerate(blocknames)}
 			errorKey = keyGenerator.getKey(blockErrors)
-			#print 'blockErrors=', blockErrors, 'key=', errorKey
+			print 'blockErrors=', blockErrors, 'key=', errorKey
 			counts[errorKey] = counts.get(errorKey, 0) + totalWeight
 
 	return counts

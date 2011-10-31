@@ -10,6 +10,7 @@ from qec.qecc import CssCode
 import qec.error as error
 from util import bits
 from util.bits import weight
+from util.cache import memoize
 
 # Cnots for stabilizer state preparation circuits.
 # Cnots are given as a list of rounds.
@@ -29,7 +30,7 @@ def prepare(eigen1, eigen2):
     '''
     return Locations(ancillaZPrep(cnotPreps[(eigen1, eigen2)]), '[[4,2,2]].'+str(eigen1+eigen2))
 
-class ED422Code(CssCode):
+class ED412Code(CssCode):
     '''
     The [[4,2,2]] code is the smallest quantum error *detecting* code.
     It encodes two qubits, though one of the two is often defined as a "gauge"
@@ -42,32 +43,60 @@ class ED422Code(CssCode):
     _generators = {error.xType: Pauli.X+Pauli.X+Pauli.X+Pauli.X,
                    error.zType: Pauli.Z+Pauli.Z+Pauli.Z+Pauli.Z}
     
-    _logicalOps = (
-                   # Qubit 1
-                   Pauli.I+Pauli.I+Pauli.X+Pauli.X,
-                   Pauli.I+Pauli.Z+Pauli.I+Pauli.Z,
-                   # Qubit 2
-                   Pauli.I+Pauli.X+Pauli.I+Pauli.X,
-                   Pauli.I+Pauli.I+Pauli.Z+Pauli.Z,
-                   )
+    _normalizers = {error.xType: Pauli.I+Pauli.I+Pauli.X+Pauli.X, 
+                    error.zType: Pauli.I+Pauli.Z+Pauli.I+Pauli.Z}
+    
+    _gaugeOperators = {error.xType: Pauli.I+Pauli.X+Pauli.I+Pauli.X, 
+                       error.zType: Pauli.I+Pauli.I+Pauli.Z+Pauli.Z}
 
-    def __init__(self):
+
+    
+    def __init__(self, gaugeType=error.xType):
         '''
         Constructor
         '''
-        super(ED422Code, self).__init__('[[4,2,2]]', 4, 2, 2)
+        super(ED412Code, self).__init__('[[4,2,2]]' + str(gaugeType), 4, 1, 2)
+        self._gaugeType = gaugeType
      
     def stabilizerGenerators(self, types=(error.xType, error.zType)):
-        return tuple(self._generators[t] for t in types)
+        return tuple(self._generators[t] for t in types) + (self._gaugeOperators[self._gaugeType],)
     
     def normalizerGenerators(self):
-        return self._logicalOps
+        return tuple(self._normalizers[t] for t in (error.xType, error.zType))
     
     def syndromeCorrection(self, s):
-        # TODO: It's not clear what to do here, since this is
-        # and error detecting code.
-        raise NotImplementedError
-        #return Pauli.I ** 4
+        corr = self._syndromeCorrectionTable(self._gaugeType)[s]
+        #print 's=', s, 'corr=', corr
+        return corr
+    
+    @staticmethod
+    @memoize
+    def _syndromeCorrectionTable(gaugeType):
+        # The correction for the non-trivial syndrome is ambiguous, since
+        # it can result from any single-qubit error.  Choice of a correction
+        # is mostly arbitrary, though some choices are better than others
+        # depending on the encoding circuit.  Here we apply a single Pauli
+        # to the first qubit.
+        # TODO: determine which corrections are optimal.
+        zCorr = Pauli.X + (Pauli.I ** 3)
+        xCorr = Pauli.Z + (Pauli.I ** 3)
+        
+        # A non-zero gauge syndrome is corrected by applying the dual
+        # gauge operator.
+        gaugeCorr = ED412Code._gaugeOperators[error.dualType(gaugeType)]
+        
+        # Syndrome bits are ordered from MSB to LSB as:
+        # XXXX, ZZZZ, gauge
+        return [Pauli.I ** 4,      # Commutes with all three stabilizers 
+                gaugeCorr,         # anti-commutes with gauge stabilizer
+                zCorr,             # anti-commutes with ZZZZ
+                gaugeCorr * zCorr, # anti-commutes with {ZZZZ, gaugeStabilizer}
+                xCorr,             # anti-commutes with XXXX
+                xCorr * gaugeCorr,
+                xCorr * zCorr,
+                xCorr * zCorr * gaugeCorr
+                ]
+        
     
 #    def reduceError(self, e):
 #        r = dict()
@@ -79,19 +108,19 @@ class ED422Code(CssCode):
     
 #    def getSyndrome(self, e, types=(error.xType, error.zType)):
 #        '''
-#        >>> ED422Code().getSyndrome(Pauli.X)
+#        >>> ED412Code().getSyndrome(Pauli.X)
 #        2
-#        >>> ED422Code().getSyndrome(Pauli.Z)
+#        >>> ED412Code().getSyndrome(Pauli.Z)
 #        1
-#        >>> ED422Code().getSyndrome(Pauli.Y)
+#        >>> ED412Code().getSyndrome(Pauli.Y)
 #        3
-#        >>> ED422Code().getSyndrome(Pauli.Y, error.xType)
+#        >>> ED412Code().getSyndrome(Pauli.Y, error.xType)
 #        1
-#        >>> ED422Code().getSyndrome(Pauli.Y, error.zType)
+#        >>> ED412Code().getSyndrome(Pauli.Y, error.zType)
 #        1
-#        >>> ED422Code().getSyndrome(Pauli.X, error.zType)
+#        >>> ED412Code().getSyndrome(Pauli.X, error.zType)
 #        0
-#        >>> ED422Code().getSyndrome(Pauli.Z, error.xType)
+#        >>> ED412Code().getSyndrome(Pauli.Z, error.xType)
 #        0
 #        '''
 #        s = 0

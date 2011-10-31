@@ -14,6 +14,7 @@ from util import bits
 from util.cache import fetchable
 import logging
 from counting.block import Block
+import warnings
 
 logger = logging.getLogger('component')
 
@@ -177,6 +178,7 @@ class TeleportED(InputDependentComponent):
         syndromeBits = [i for i,check in enumerate(parityChecks) if check in stabilizers]
         rejectMask = bits.listToBits(syndromeBits)
         
+        warnings.warn('Detection of normalizer generators is not yet implemented')
         # The UncorrectedTeleport component blocks are setup as follows:
         # block 0 - Transversal X-basis measurement
         # block 1 - Transversal Z-basis measurement
