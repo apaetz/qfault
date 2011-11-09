@@ -149,6 +149,7 @@ def concatenate(seq, lengths):
     >>> '{0:b}'.format(cat)
     '101011'
     '''
+    
     bits = 0
     for i,b in enumerate(seq):
         bits = (bits << lengths[i]) + b

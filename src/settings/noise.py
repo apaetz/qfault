@@ -141,6 +141,10 @@ class CountingNoiseModel(DepolarizingNoiseModelSympy):
 	def getWeight(self, loc, error):
 		return 1
 	
+	def likelyhood(self):
+		# 1 / (1-g)
+		return SymPolyWrapper(1 / sympoly1d([-1, 1]))
+	
 class CountingNoiseModelX(CountingNoiseModel):
 	
 	def errorList(self, loc):

@@ -64,5 +64,5 @@ def ancillaZPrep(schedule, roundPermutation=None, name='0', reverseQubitOrder=Tr
 		for r in resting:
 			addLoc(locrest(name, bitLookup[r]))
 			
-	propagateAllErrors(locations)
+	#propagateAllErrors(locations)
 	return locations

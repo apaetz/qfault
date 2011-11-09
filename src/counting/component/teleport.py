@@ -4,16 +4,18 @@ Created on 2011-10-25
 @author: adam
 '''
 from copy import copy
-from counting import probability
+from counting import probability, key
+from counting.block import Block
 from counting.component.base import Component, InputDependentComponent
 from counting.countErrors import mapCounts
-from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator,\
-    KeyConcatenator
+from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator, \
+    KeyConcatenator, IntegerKey
+from counting.result import CountResult
 from qec.error import Pauli
 from util import bits
 from util.cache import fetchable
+import counting.key
 import logging
-from counting.block import Block
 import warnings
 
 logger = logging.getLogger('component')
@@ -79,29 +81,31 @@ class UncorrectedTeleport(Component):
         bpRes = results[self.bpName]
         bmRes = results[self.bmName]
         
-        # Propagate the first half of the bell pair through the bell measurement.
-        bpMeta = bpRes.keyMeta
-        extender = KeyExtender(bpMeta, blocksBefore=1)
-        splitter = KeySplitter(extender, [2])
-        bmPropagator = self.BMPropagator(splitter, bm)
-        concatenator = KeyConcatenator(bmPropagator)
-        
-#        def propagator(key):
-#            bpKey0, bpKey1 = splitter(key)
-#            key = concatenator(bmPropagator(extender(bpKey0)), bpKey1)
-#            return key
+        bpRes.counts, bpRes.keyMeta = self._propagateBP(bpRes.counts, bpRes.keyMeta)
+        bmRes.counts, bmRes.keyMeta = self._propagateBM(bmRes.counts, bmRes.keyMeta)
 
-        bpRes.counts = mapCounts(bpRes.counts, concatenator)
-        bpRes.keyMeta = concatenator.meta()
-        
-        # Extend bell measurement results over all three blocks.
-        extender = KeyExtender(bmRes.keyMeta, blocksAfter=1)
-        bmRes.counts = mapCounts(bmRes.counts, extender)
-        bmRes.keyMeta = extender.meta()
-                    
         bpRes.blocks = bmRes.blocks = bmRes.blocks + tuple([bpRes.blocks[1]])
 
         return super(UncorrectedTeleport, self)._convolve(results, noiseModels, pauli)
+    
+    def _propagateBP(self, bpCounts, bpMeta):
+        # Propagate the first half of the bell pair through the bell measurement.
+        extender = KeyExtender(bpMeta, blocksBefore=1)
+        splitter = KeySplitter(extender, [2])
+        bmPropagator = self.BMPropagator(splitter, self[self.bmName])
+        concatenator = KeyConcatenator(bmPropagator)
+
+        bpCounts = mapCounts(bpCounts, concatenator)
+        bpMeta = concatenator.meta()
+        
+        return bpCounts, bpMeta
+    
+    def _propagateBM(self, bmCounts, bmMeta):
+        # Extend bell measurement results over all three blocks.
+        extender = KeyExtender(bmMeta, blocksAfter=1)
+        bmCounts = mapCounts(bmCounts, extender)
+        bmMeta = extender.meta()
+        return bmCounts, bmMeta
 
 #    def _postCount(self, result):
 #        # TODO: permute the output blocks to match outblockOrder
@@ -137,7 +141,12 @@ class TeleportED(InputDependentComponent):
         # However, we'll want to use the X-only and Z-only counts,
         # as well.
         rejected = self.count(noiseModels[Pauli.Y], Pauli.Y).rejected
-        prBad = self.prBad(noiseModels[Pauli.Y], Pauli.Y, kMax)
+        if None != kMax:
+            kMaxY = kMax[Pauli.Y]
+        else:
+            kMaxY = None
+            
+        prBad = self.prBad(noiseModels[Pauli.Y], Pauli.Y, kMaxY)
         locTotals = self.locations(Pauli.Y).getTotals()
         
         prSelf = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[Pauli.Y])
@@ -154,18 +163,18 @@ class TeleportED(InputDependentComponent):
         ucTeleport = self[self.ucTeleportName]
         counts, keyMeta = ucTeleport.propagateCounts(inputResult.counts, inputResult.keyMeta)
                 
-        return counts, keyMeta
+        return CountResult(counts, keyMeta, self.outBlocks(), inputResult.rejected)
     
     def _postCount(self, result, noiseModels, pauli):
         '''
         Post-select for the trivial syndrome on the two measured blocks.
         '''
-        result.counts, result.rejected = self._postselect(result)
+        result.counts, result.rejected = self._postselect(result, pauli)
         result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()[1]
         result.blocks = (result.blocks[2],)
         return result
         
-    def _postselect(self, result):
+    def _postselect(self, result, pauli):
         '''
         Post-select for the trivial syndrome on the two measured blocks.
         '''
@@ -189,17 +198,27 @@ class TeleportED(InputDependentComponent):
         
         accepted = []
         rejected = []
+        
+        # Error detection involves looking at both the X and Z
+        # syndromes.  We can upper bound the rejection probability
+        # only when counting both types of errors.  When counting
+        # only X, or only Z, we must assume (for the purpose of the
+        # rejected counts) that all errors are rejected.
+        rejectAll = (Pauli.Y != pauli)
+        
         for count in counts:
             acceptedK = {}
-            rejectedK = {}
+            rejectedK = 0
             for key, c in count.iteritems():
                 reducedKey = keyForBlock(key, 2, keyMeta)
                 if accept(key):
                     acceptedK[reducedKey] = c
+                    if rejectAll:
+                        rejectedK += c
                 else:
-                    rejectedK[reducedKey] = c
+                    rejectedK += c
                     
             accepted.append(acceptedK)
-            rejected.append(rejectedK)
+            rejected.append({counting.key.rejectKey: rejectedK})
             
         return accepted, rejected

@@ -3,12 +3,13 @@ Created on 2011-10-25
 
 @author: adam
 '''
+from counting import key
 from counting.component.base import Component
+from counting.component.ec import TECDecodeAdapter
 from counting.component.transversal import TransCnot
+from counting.countParallel import convolve
 from counting.result import CountResult
 from util import listutils
-from counting.countParallel import convolve
-from counting.component.ec import TECDecodeAdapter
 
 class ExRec(Component):
     
@@ -19,6 +20,17 @@ class ExRec(Component):
     def __init__(self, kGood, lec, gadget, tec):
         subs = {self.lecName: lec, self.gaName: gadget, self.tecName: tec}
         super(ExRec, self).__init__(kGood, subcomponents=subs)
+        
+    def prAccept(self, noiseModels, kMax=None):
+        prLEC = self[self.lecName].prAccept(noiseModels, self.kGood)
+        prGa = self[self.gaName].prAccept(noiseModels, self.kGood)
+        
+        try:
+            prTEC = self[self.tecName].prAccept(noiseModels, self.kGood)
+        except TypeError:
+            pass
+        
+        return prLEC * prGa * prTEC
         
     def _convolve(self, results, noiseModels, pauli):
         # The LEC should have already stripped all counts of the
@@ -47,8 +59,14 @@ class ExRec(Component):
                                 splitListsInto=[2,1])
         #decodeCounts = self._convolveTEC(convolved, tecDecoder, self.kGood[pauli])
         
+        rejectedCounts = convolve(convolved.counts,
+                                  tecResult.rejected,
+                                  kMax=self.kGood[pauli],
+                                  convolveFcn=self.convolveTECRejected,
+                                  splitListsInto=[2,1])
         
-        return CountResult(decodeCounts, tecResult.keyMeta, tecResult.blocks)
+        
+        return CountResult(decodeCounts, tecResult.keyMeta, tecResult.blocks, rejectedCounts=rejectedCounts)
     
     def _postCount(self, result, noiseModels, pauli):
         return result
@@ -79,6 +97,15 @@ class ExRec(Component):
             decodeCounts = listutils.addDicts(decodeCounts, decoded)
            
         return decodeCounts     
+    
+    @staticmethod
+    def convolveTECRejected(inputCounts, tecRejected):
+        # tecRejected is just a single count indexed by [input key][0]
+        rejectKey = key.rejectKey
+        rejectCounts = sum(tecRejected[key][rejectKey] * count for key, count in inputCounts.iteritems())
+        
+        return {rejectKey: rejectCounts}
+        
 
 class CnotExRec(Component):
     

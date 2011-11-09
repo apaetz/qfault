@@ -154,7 +154,7 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 		
 	kMax = min(kMax, nTotal) + 1
 	
-	logger.debug('Computing Pr[{0} <= k <= {1}] for {2}, {3}'.format(kMin, kMax, locTotals, noiseModel))
+	logger.debug('Computing Pr[{0} <= k < {1}] for {2}, {3}'.format(kMin, kMax, locTotals, noiseModel))
 	
 	
 	nCnot = locTotals.cnot
@@ -206,6 +206,8 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	weights = boundedFailureWeights(kMin, locTotals, noiseModel, kMax)
 	for k in range(kMin, kMax):
 		pr += weights[k-kMin] * (likelyhood ** k)
+		
+	logger.debug('A=%s, pr=%s', prefactor, pr)
 	
 	pr *= prefactor
 		
@@ -213,10 +215,13 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 		# Not all possible failure configurations were computed.  Bound
 		# the probabiliity by ignoring the prefactor and using probabilities (instead of
 		# likelyhoods)
+		
 		iterator = PartitionIterator(kMax, len(nList), nList) 
 		prFailList = [noiseModel.prFail(l) for l in locsList]
 		results = countParallel.iterParallel(iterator, constructLocLikely, [nList, prFailList])
-		pr += sum(r.get() for r in results)
+		cap = sum(r.get() for r in results)
+		logger.debug('adding bounding cap: %s', cap)
+		pr += cap
 	
 #	# Simplify, if possible.
 #	try:
