@@ -18,7 +18,7 @@ from util.cache import fetchable, memoize
 import logging
 import operator
 
-logger = logging.getLogger('component')
+logger = logging.getLogger('counting.component')
 
 
 class Component(object):
@@ -105,12 +105,18 @@ class Component(object):
     
     def prBad(self, noise, pauli, kMax=None):
         prSelf = probability.prBadPoly(self.kGood[pauli], self.internalLocations(pauli), noise, kMax)
-        prSubs = [sub.prBad(noise, pauli, kMax=self.kGood[pauli]) for sub in self.subcomponents().values()] + [prSelf]
+        prSubs = [sub.prBad(noise, pauli, kMax=self.kGood[pauli]) for sub in self.subcomponents().values()]
         return sum(prSubs) + prSelf
     
-    def prAccept(self, noiseModels, kMax=None):
-        prSubs = [sub.prAccept(noiseModels, kMax) for sub in self.subcomponents().values()]
-        return reduce(operator.mul, prSubs, 1)
+    def prAccept(self, noiseModels, pauli, kMax=None):
+#        prSubs = [sub.prAccept(noiseModels, kMax=self.kGood) for sub in self.subcomponents().values()]
+#        return reduce(operator.mul, prSubs, 1)
+        rejected = self.count(noiseModels, pauli).rejected
+        prBad = self.prBad(noiseModels[pauli], pauli, kMax)
+        locTotals = self.locations(pauli).getTotals()
+        
+        prAccept = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[pauli])
+        return prAccept
     
     def propagateCounts(self, counts, keyMeta):
         propagator = self.keyPropagator(keyMeta)
@@ -128,7 +134,7 @@ class Component(object):
         It is expected that most concrete components will not need to 
         implement this method. 
         '''
-        return {name: sub.count(*args) for name, sub in self._subs.iteritems()} 
+        return {name: sub.count(*args) for name, sub in self._subs.iteritems()}
     
     def _convolve(self, results, noiseModels, pauli):
         '''
@@ -147,8 +153,8 @@ class Component(object):
             return results[0]
         
         keyMeta = results[0].keyMeta
-        if not all(r.keyMeta == keyMeta for r in results):
-            raise Exception('Key metadatas are not all identical. {0}'.format([r.keyMeta for r in results]))
+        if not all((r.keyMeta == keyMeta) for r in results):
+            raise Exception('Key metadatas are not all identical. {0}, {1}'.format([r.keyMeta for r in results]))
         
         blocks = results[0].blocks
         if not all(len(r.blocks) == len(blocks) for r in results):
@@ -160,7 +166,12 @@ class Component(object):
         for count in counts[1:]:
             convolved = convolve(convolved, count, kMax=k, convolveFcn=key.convolveKeyCounts, extraArgs=[keyMeta])
             
-        return CountResult(convolved, keyMeta, blocks)
+        rejected = [result.rejected for result in results]
+        rejectConvolved = rejected[0]
+        for reject in rejected:
+            rejectConvolved = convolve(rejectConvolved, reject, kMax=k)
+            
+        return CountResult(convolved, keyMeta, blocks, rejectedCounts=rejectConvolved)
     
     def _postCount(self, result, noiseModels, pauli):
         '''
@@ -255,13 +266,16 @@ class InputDependentComponent(Component):
         
         logger.debug('Post processing ' + str(self))
         return self._postCount(result, noiseModels, pauli)
+    
+    def prAccept(self, noiseModels, inputResult, kMax=None):
+        return super(InputDependentComponent, self).prAccept(noiseModels, kMax=kMax)
         
     @memoize
     def _count(self, noiseModels, pauli):
         return super(InputDependentComponent, self)._count(noiseModels, pauli)
     
     def _convolve(self, results, noiseModels, pauli, inputResult):
-        inputResult.counts, inputResult.keyMeta = self._propagateInput(inputResult)
+        inputResult = self._propagateInput(inputResult)
         inputResult.blocks = results.values()[0].blocks
         results['input'] = inputResult
         return super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
@@ -335,6 +349,7 @@ class ConcatenatedComponent(Component):
             extender = KeyExtender(result.keyMeta, blocksBefore=before, blocksAfter=after)
             result.counts = mapCounts(result.counts, extender)
             result.keyMeta = extender.meta()
+            
             result.blocks = blocks
             
         return super(ConcatenatedComponent, self)._convolve(results, noiseModels, pauli)

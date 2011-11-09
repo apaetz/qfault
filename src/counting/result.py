@@ -4,6 +4,8 @@ Created on 2011-10-22
 @author: adam
 '''    
 
+from counting import key
+
 class CountResult(object):
     ''' 
     '''
@@ -12,6 +14,10 @@ class CountResult(object):
                     
         self.blocks = blocks
         self.counts = counts
+        if None == rejectedCounts:
+            # hack
+            rejectedCounts = [{key.rejectKey:0}]
+            
         self.rejected = rejectedCounts
         #self.prAccept = prAccept
         self.keyMeta = keyMeta

@@ -142,8 +142,10 @@ def numSlots():
 	return nSlots
 
 def getPool():
+	global defaultPool
+	
 	if None == defaultPool:
-		return DummyPool()
+		defaultPool = DummyPool()
 	return defaultPool
 
 def setPool(pool):
@@ -361,8 +363,7 @@ def packTasks(nSlots, tasks, costs):
 
 
 def iterParallel(iterator, iterFunc, extraArgs=[], callback=None, pool=None):	
-	if None == pool:
-		pool = defaultPool
+	pool = getPool()
 				
 	results = [pool.apply_async(iterFunc, [i] + extraArgs, callback=callback) for i in iterator]
 	return results

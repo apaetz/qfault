@@ -15,6 +15,7 @@ from qec.qecc import QeccNone
 from counting.block import Block
 import operator
 from qec.error import Pauli, xType, zType
+from counting import key
 
 class ConcatenatedTEC(ConcatenatedComponent):
     # TODO: Using ConcatenatedComponent directly doesn't work because the counts
@@ -48,7 +49,15 @@ class ConcatenatedTEC(ConcatenatedComponent):
                              splitListsInto=[1,1],
                              listMergeOp=mergeOp)
         
-        return CountResult(convolved, concatenator.meta(), self.outBlocks())
+        convRejected = convolve(results[0].rejected, 
+                             results[1].rejected, 
+                             kMax=self.kGood[pauli],
+                             extraArgs=[keyOp, countMul, listutils.addDicts, {}],
+                             splitListsInto=[1,1],
+                             listMergeOp=mergeOp)
+        
+        
+        return CountResult(convolved, concatenator.meta(), self.outBlocks(), rejectedCounts=convRejected)
         
 #    def _convolveTEC(self, tecCounts1, tecCounts2, meta):
 #        # TEC counts are indexed by [key][pauli]
@@ -82,9 +91,9 @@ class TECDecodeAdapter(Component):
         # k failures in the TEC when the input to the TEC
         # is 'key'.
         
-        counts, meta, blocks = self.lookupTable(self._tec, noiseModels, pauli)
-        return CountResult(counts, meta, blocks)
-    
+        counts, rejected, meta, blocks = self.lookupTable(self._tec, noiseModels, pauli)
+        return CountResult(counts, meta, blocks, rejectedCounts=rejected)
+        
     def outBlocks(self):
         code = QeccNone(1)
         return tuple(Block(block.name, code) for block in self._tec.outBlocks())
@@ -107,19 +116,21 @@ class TECDecodeAdapter(Component):
         keys = set(key & keyMask for key in xrange(1 << nchecks))
         
         decoder = SyndromeKeyDecoder(code)
-        lookup = [{} for _ in range(tec.kGood[pauli] + 1)]
+        countLookup = [{} for _ in range(tec.kGood[pauli] + 1)]
+        rejectLookup = [{} for _ in range(tec.kGood[pauli] + 1)]
         for key in keys:
             inCount = [{(key,): 1}]
-            inResult = CountResult(inCount, keyMeta, None)
+            inResult = CountResult(inCount, keyMeta, [None])
             outResult = tec.count(noiseModels, pauli, inResult)
             outMeta = outResult.keyMeta
             outBlocks = outResult.blocks
             
             dCounts = TECDecodeAdapter.decodeCounts(outResult.counts, decoder)
-            for k in range(len(lookup)):
-                lookup[k][(key,)] = dCounts[k]
+            for k in range(len(countLookup)):
+                countLookup[k][(key,)] = dCounts[k]
+                rejectLookup[k][(key,)] = outResult.rejected[k]
             
-        return lookup, outMeta, outBlocks
+        return countLookup, rejectLookup, outMeta, outBlocks
             
     @staticmethod
     def decodeCounts(counts, decoder):

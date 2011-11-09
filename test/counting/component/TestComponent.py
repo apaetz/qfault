@@ -6,6 +6,7 @@ Created on May 3, 2011
 
 import logging
 from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
+from unittest.case import SkipTest
 logging.basicConfig(level=logging.DEBUG)
 
 from counting.component.transversal import TransCnot
@@ -74,6 +75,10 @@ import unittest
 		
 class TestPrep(unittest.TestCase):
 	
+	noise = {Pauli.X: CountingNoiseModelX(),
+			 Pauli.Z: CountingNoiseModelZ()}
+	code = TrivialStablizerCode()
+	
 	@staticmethod
 	def Zero(kGood, code):
 		return Prep(kGood, Locations([counterUtils.locZprep('|0>', 0)], '|0>'), StabilizerState(code, [zType]))
@@ -82,20 +87,62 @@ class TestPrep(unittest.TestCase):
 	def Plus(kGood, code):
 		return Prep(kGood, Locations([counterUtils.locXprep('|+>', 0)], '|+>'), StabilizerState(code, [xType]))
 	
-	def testX(self):
+	def testCount(self):
+		expectedZero = [{(0,): 1}, {(1,): 1}]
+		expectedPlus = [{(0,): 1}, {}]
+		
+		self.doCountTest(Pauli.X, expectedPlus, expectedZero)
+		
+		expectedPlus = [{(0,): 1}, {(2,): 1}]
+		expectedZero = [{(0,): 1}, {}]
+		self.doCountTest(Pauli.Z, expectedPlus, expectedZero)
+		
+	def doCountTest(self, pauli, expectedPlus, expectedZero):
 		kGood = {Pauli.X: 1, Pauli.Z: 1}
-		noise = {Pauli.X: CountingNoiseModelX()}
-		code = TrivialStablizerCode()
 		
-		plus = self.Plus(kGood, code)
-		result = plus.count(noise, Pauli.X)
-		expected = [{(0,): 1}, {}]
-		assert result.counts == expected
+		plus = self.Plus(kGood, self.code)
+		result = plus.count(self.noise, pauli)
+		assert result.counts == expectedPlus
 		
-		zero = self.Zero(kGood, code)
-		result = zero.count(noise, Pauli.X)
-		expected = [{(0,): 1}, {(1,): 1}]
-		assert result.counts == expected
+		zero = self.Zero(kGood, self.code)
+		result = zero.count(self.noise, pauli)
+		assert result.counts == expectedZero
+		
+	def testPrBad(self):
+		logger = logging.getLogger('counting.probability')
+		logger.setLevel(logging.DEBUG)
+		
+		kGood = {Pauli.X: 0, Pauli.Z: 1}
+		pauli = Pauli.Z
+		
+		plus = self.Plus(kGood, self.code)
+		
+		# In the Z-error case we are counting all (1) locations
+		# so there are no bad cases.
+		prBad = plus.prBad(self.noise[Pauli.Z], pauli, 1)
+		assert 0 == prBad
+		
+		# In the X-error case, |+> does not cause any
+		# generate X-errors, so there are again no bad cases.
+		prBad = plus.prBad(self.noise[Pauli.X], pauli, 1)
+		assert 0 == prBad
+		
+		# Now we count zero of the (1) locations.  So
+		# everything is bad.
+		kGood[Pauli.Z] = 0
+		plus = self.Plus(kGood, self.code)
+		prBad = plus.prBad(self.noise[Pauli.Z], pauli, 1)
+		assert 1 == prBad
+		
+	def testPrAccept(self):
+		kGood = {Pauli.X: 1, Pauli.Z: 1}
+		plus = self.Plus(kGood, self.code)
+		zero = self.Zero(kGood, self.code)
+		
+		paulis = (Pauli.X, Pauli.Z)
+		assert all((1 == plus.prAccept(self.noise, pauli, 1) for pauli in paulis))
+		assert all((1 == zero.prAccept(self.noise, pauli, 1) for pauli in paulis))
+		
 	
 class TestCnot(unittest.TestCase):
 	
@@ -181,11 +228,12 @@ class TestExRec(unittest.TestCase):
 		lec = ConcatenatedComponent(kGood, lec, lec)
 		tec = TECDecodeAdapter(ec)
 		tec = ConcatenatedTEC(kGood, tec, tec)
+		tec.count(noise, Pauli.X)
 			
 		exRec = ExRec(kGood, lec, cnot, tec)
 		result = exRec.count(noise, Pauli.X)
 		expected = [{Pauli.I: 1}, {Pauli.X: 2, Pauli.I: 4}]
-		print 'cnot exRec:' + str(result.counts)# == expected
+		#print 'cnot exRec:' + str(result.counts)# == expected
 
 
 #class TestBellPair(unittest.TestCase):
@@ -224,12 +272,15 @@ class TestExRec(unittest.TestCase):
 		
 
 if __name__ == "__main__":
-	
 
-	
 	import util.cache
 	util.cache.enableFetch(False)
 	util.cache.enableMemo(False)
+
+	complog = logging.getLogger('counting.component')
+	complog.setLevel(logging.DEBUG)
+	
+	
 	
 	#import sys;sys.argv = ['', 'Test.testName']
 	unittest.main()

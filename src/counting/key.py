@@ -14,6 +14,8 @@ import operator
 
 logger = logging.getLogger('counting.key')
 
+rejectKey = 0
+
 class DefaultErrorKeyGenerator(object):
     
     def getKey(self,e):
@@ -107,6 +109,13 @@ class SyndromeKeyGenerator(object):
     
     def __repr__(self):
         return 'SyndromeKeyGenerator(' + str(self.code) + ')'
+    
+    
+def IntegerKey(value, nblocks=1):
+    return tuple([value]*nblocks)
+    
+def IntegerKeyMeta(nblocks=1):
+    return SyndromeKeyMeta([Pauli.I], nblocks=nblocks)
     
 class SyndromeKeyMeta(object):
     
