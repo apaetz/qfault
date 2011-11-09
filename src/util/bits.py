@@ -95,6 +95,34 @@ def listToBits(values):
 #    return s
     #return cbits.cython_listToBits(values)
     
+def bitsToList(bits, n, bigEndian=True):
+    '''
+    >>> bitsToList(0b01101, 5)
+    [0, 1, 1, 0, 1]
+    >>> bitsToList(0b01101, 5, bigEndian=False)
+    [1, 0, 1, 1, 0]
+    '''
+    blist = [0]*n
+    indices = range(n)
+    if bigEndian:
+        indices = reversed(indices)
+        
+    for i in indices:
+        blist[i] = bits & 1
+        bits >>= 1
+        
+    return blist
+
+def endianSwap(bits, n):
+    '''
+    >>> endianSwap(0b1101, 4) # 1101 -> 1011
+    11
+    >>> endianSwap(0b1011, 4) # 1011 -> 1101
+    13
+    '''
+        
+    return listToBits(bitsToList(bits, n, bigEndian=False))
+    
 def split(bits, lengths):
     '''
     Split the given value into a tuple according to the given bit lengths.

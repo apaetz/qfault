@@ -36,18 +36,19 @@ class ED412Code(CssCode):
     It encodes two qubits, though one of the two is often defined as a "gauge"
     qubit and is ignored.
     There are two stabilizer generators: XXXX, and ZZZZ.
-    One set of logical operators is: IIXX, IZIZ (given in descending qubit order).
-    The other set of logical operators is: IXIX, IIZZ.
+    One set of logical operators is: XXII, ZIZI (given in ascending qubit order).
+    The other set of logical operators is: XIXI, ZZII.
     '''
 
+    # Operators are given in decending qubit order (little endian)
     _generators = {error.xType: Pauli.X+Pauli.X+Pauli.X+Pauli.X,
                    error.zType: Pauli.Z+Pauli.Z+Pauli.Z+Pauli.Z}
     
-    _normalizers = {error.xType: Pauli.I+Pauli.I+Pauli.X+Pauli.X, 
-                    error.zType: Pauli.I+Pauli.Z+Pauli.I+Pauli.Z}
+    _normalizers = {error.xType: Pauli.X+Pauli.X+Pauli.I+Pauli.I, 
+                    error.zType: Pauli.Z+Pauli.I+Pauli.Z+Pauli.I}
     
-    _gaugeOperators = {error.xType: Pauli.I+Pauli.X+Pauli.I+Pauli.X, 
-                       error.zType: Pauli.I+Pauli.I+Pauli.Z+Pauli.Z}
+    _gaugeOperators = {error.xType: Pauli.X+Pauli.I+Pauli.X+Pauli.I, 
+                       error.zType: Pauli.Z+Pauli.Z+Pauli.I+Pauli.I}
 
 
     
@@ -76,10 +77,12 @@ class ED412Code(CssCode):
         # it can result from any single-qubit error.  Choice of a correction
         # is mostly arbitrary, though some choices are better than others
         # depending on the encoding circuit.  Here we apply a single Pauli
-        # to the first qubit.
+        # to the last qubit.
         # TODO: determine which corrections are optimal.
-        zCorr = Pauli.X + (Pauli.I ** 3)
-        xCorr = Pauli.Z + (Pauli.I ** 3)
+        
+        # Operators given in descending qubit order.
+        zCorr = (Pauli.I ** 3) + Pauli.X
+        xCorr = (Pauli.I ** 3) + Pauli.Z
         
         # A non-zero gauge syndrome is corrected by applying the dual
         # gauge operator.

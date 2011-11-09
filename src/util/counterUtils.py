@@ -308,6 +308,10 @@ def propagateErrors(errors, locations):
 
 def propagateAllErrors(locations):
 	"""Propagates all bit errors.
+	Errors are constructed using a descending (little endian) bit ordering.
+	A fault that propagates to a single X error on qubit k will results in a bit string
+	in which all bits are zero except bit k.  For example, a single X error on qubit
+	2 is represented by 0b100 (=4). 
 	"""
 	# First extract a list of all the block IDs used in the computation
 	blocks = allBlocks(locations)

@@ -67,6 +67,12 @@ class SyndromeKeyGenerator(object):
     
     @memoize
     def getKey(self, e):
+#        # e is given in little endian bit order (bit 0 = qubit 0), but
+#        # Qecc objects require big endian.
+#        X = bits.endianSwap(e[xType], self.code.n)
+#        Z = bits.endianSwap(e[zType], self.code.n)
+#        e = PauliError(xbits=X, zbits=Z)
+        
         key = StabilizerCode.Syndrome(e, self.parityChecks())
         #print 'e=', e, 'parityChecks=', self.parityChecks(), 'key={0:b}'.format(key)
         return key
