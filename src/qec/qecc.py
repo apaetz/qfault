@@ -22,10 +22,21 @@ class Qecc(object):
         self.d = d
     
     def getCorrection(self, e):
+        '''
+        :param e: The error, given in descending qubit order. 
+        :type e: :class:`qec.error.PauliError`
+        '''
         return 0
     
     def decodeError(self, e):
-        return bool(e)
+        '''
+        Returns the Pauli error resulting from perfectly decoding a block
+        with error e.  That is, returns the logical error corresponding
+        to the physical error e.
+        :param e: The error, given in descending qubit order. 
+        :type e: :class:`qec.error.PauliError`
+        '''
+        return e
            
     def blockLength(self):
         return self.n
@@ -42,6 +53,19 @@ class StabilizerCode(Qecc):
     
     @staticmethod
     def Syndrome(e, generators):
+        '''
+        Returns the syndrome, in descending generator order, corresponding to error e.
+        :param e: The error, given in descending qubit order. 
+        :type e: :class:`qec.error.PauliError`
+        :param sequence generators: The list of stabilizer generators.
+        :rtype: int
+        
+        >>> from qec.error import Pauli
+        >>> e = Pauli.Y + Pauli.X
+        >>> generators = [Pauli.X+Pauli.X, Pauli.Z+Pauli.Z, Pauli.Y+Pauli.Z]
+        >>> str('{0:b}'.format(StabilizerCode.Syndrome(e, generators)))
+        '101'
+        '''
         return bits.listToBits((not e.commutesWith(s)) for s in generators)
 
     def __init__(self, name, n, k, d):
@@ -83,6 +107,7 @@ class StabilizerCode(Qecc):
     def stabilizerGenerators(self):
         '''
         Returns an iterable containing the stabilizer generators.
+        Each generator operator is given in descending qubit order.
         '''
         raise NotImplementedError
     
@@ -90,10 +115,16 @@ class StabilizerCode(Qecc):
         '''
         A sequence of normalizer generators ordered by [X1,Z1,X2,Z2,...,Xk,Zk],
         where Xi (Zi) is the logical X (Z) operator on logical qubit i.
+        Each normalizer operator is given in descending qubit order.
         '''
         raise NotImplementedError
     
     def syndromeCorrection(self, s):
+        '''
+        Returns the Pauli recovery operation corresponding to syndrome s.
+        :param int s: The syndrome. Syndrome bits must be given in descending generator order. 
+                      Bit i of s corresponds to self.stabilizerGenerators[self.n - i].
+        '''
         raise NotImplementedError
     
 #    def logicalOperator(self, qubit, eType):
@@ -262,3 +293,7 @@ class BellState(CssCode):
     
     def syndromeLength(self, types=(error.xType, error.zType)):
         return len(self.stabilizerGenerators(types))
+    
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()

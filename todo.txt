@@ -1,4 +1,1 @@
- - Bit ordering seems to be consistent between the physical location counting code, and the qecc code definitions.
- At a minimum, this bit ordering needs to be documented clearly.  A better solution would be a mechanism to check for consistency.
- 
  - Basic component counting seems to work well.  Now need to integrate with Pr[bad], Pr[accept] calculations.
