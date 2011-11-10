@@ -3,19 +3,20 @@ Created on 2011-10-27
 
 @author: adam
 '''
+from copy import copy
+from counting import key
+from counting.block import Block
 from counting.component.base import Component, ConcatenatedComponent
 from counting.convolve import convolveDict
 from counting.countParallel import convolve
 from counting.key import SyndromeKeyGenerator, SyndromeKeyDecoder, \
     SyndromeKeyMeta, KeyConcatenator
 from counting.result import CountResult
+from qec.error import Pauli, xType, zType
+from qec.qecc import QeccNone
 from util import listutils, bits
 from util.cache import fetchable
-from qec.qecc import QeccNone
-from counting.block import Block
 import operator
-from qec.error import Pauli, xType, zType
-from counting import key
 
 class ConcatenatedTEC(ConcatenatedComponent):
     # TODO: Using ConcatenatedComponent directly doesn't work because the counts
@@ -76,29 +77,20 @@ class ConcatenatedTEC(ConcatenatedComponent):
 #                
 #        return convolved
 
-class TECDecodeAdapter(Component):
-    
-    def __init__(self, tec):
-        self._tec = tec
-        
-    def count(self, noiseModels, pauli):
-        # This must return a count result for which the counts
-        # are indexable by k (the number of faults) and then
-        # an input key.  The value of [k][key] is a dictionary
-        # indexed by (logical) Pauli error.  Finally, the
-        # value [k][key][pauli] is a weighted count of the
-        # ways to produce the logical error 'pauli' given
-        # k failures in the TEC when the input to the TEC
-        # is 'key'.
-        
-        counts, rejected, meta, blocks = self.lookupTable(self._tec, noiseModels, pauli)
-        return CountResult(counts, meta, blocks, rejectedCounts=rejected)
-        
-    def outBlocks(self):
-        code = QeccNone(1)
-        return tuple(Block(block.name, code) for block in self._tec.outBlocks())
-        
-    @staticmethod
+def TECDecodeAdapter(tec):
+
+    def decodeCounts(counts, decoder):
+        decodeCounts = []
+        for countK in counts:
+            decodeCountK = {}
+            for key, val in countK.iteritems():
+                decoded = decoder.decode(key)
+                decodeCountK[decoded] = decodeCountK.get(decoded, 0) + val
+                    
+            decodeCounts.append(decodeCountK)
+            
+        return decodeCounts
+
     @fetchable
     def lookupTable(tec, noiseModels, pauli):
         code = tec.inBlocks()[0].getCode()
@@ -121,26 +113,40 @@ class TECDecodeAdapter(Component):
         for key in keys:
             inCount = [{(key,): 1}]
             inResult = CountResult(inCount, keyMeta, [None])
-            outResult = tec.count(noiseModels, pauli, inResult)
+            outResult = tec.countNonDecoded(noiseModels, pauli, inResult)
             outMeta = outResult.keyMeta
             outBlocks = outResult.blocks
             
-            dCounts = TECDecodeAdapter.decodeCounts(outResult.counts, decoder)
+            dCounts = decodeCounts(outResult.counts, decoder)
             for k in range(len(countLookup)):
                 countLookup[k][(key,)] = dCounts[k]
                 rejectLookup[k][(key,)] = outResult.rejected[k]
             
         return countLookup, rejectLookup, outMeta, outBlocks
+        
+    def tecAdapter_count(noiseModels, pauli):
+        # This must return a count result for which the counts
+        # are indexable by k (the number of faults) and then
+        # an input key.  The value of [k][key] is a dictionary
+        # indexed by (logical) Pauli error.  Finally, the
+        # value [k][key][pauli] is a weighted count of the
+        # ways to produce the logical error 'pauli' given
+        # k failures in the TEC when the input to the TEC
+        # is 'key'.
+        
+        counts, rejected, meta, blocks = lookupTable(tec, noiseModels, pauli)
+        return CountResult(counts, meta, blocks, rejectedCounts=rejected)
+        
+    def tecAdapter_outBlocks():
+        code = QeccNone(1)
+        return tuple(Block(block.name, code) for block in tec.outBlocksNonDecoded())
+    
+    # Replace the tec methods with the decoded adapted ones.
+    tec = copy(tec)
+    tec.countNonDecoded = tec.count
+    tec.outBlocksNonDecoded = tec.outBlocks
+    tec.count = tecAdapter_count
+    tec.outBlocks = tecAdapter_outBlocks
+    
+    return tec
             
-    @staticmethod
-    def decodeCounts(counts, decoder):
-        decodeCounts = []
-        for countK in counts:
-            decodeCountK = {}
-            for key, val in countK.iteritems():
-                decoded = decoder.decode(key)
-                decodeCountK[decoded] = decodeCountK.get(decoded, 0) + val
-                    
-            decodeCounts.append(decodeCountK)
-            
-        return decodeCounts

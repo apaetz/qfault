@@ -6,7 +6,8 @@ Created on 2011-10-25
 from copy import copy
 from counting import probability, key
 from counting.block import Block
-from counting.component.base import Component, InputDependentComponent
+from counting.component.base import Component, InputDependentComponent,\
+    PostselectingComponent, Empty, ConcatenatedComponent
 from counting.countErrors import mapCounts
 from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator, \
     KeyConcatenator, IntegerKey
@@ -17,6 +18,8 @@ from util.cache import fetchable
 import counting.key
 import logging
 import warnings
+from counting.component import transversal
+from counting.component.transversal import TransRest
 
 logger = logging.getLogger('component')
 
@@ -25,13 +28,35 @@ class UncorrectedTeleport(Component):
     inName = 'input'
     bpName = 'BP'
     bmName = 'BM'
-    measXName = 'measX'
-    measZName = 'measZ'
-    outName = 'output'
+    measOutName = 'measOut'
     
-    def __init__(self, kGood, bellPair, bellMeas):
+    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
+
+        # Order of the Bell pair and Bell measurement output blocks
+        # is hardcoded.
+        measXBlock, measZBlock = bellMeas.outBlocks()
+        outBlock = bellPair.outBlocks()[1]
+        
+        emptyMeasX = Empty(measXBlock.getCode(), measXBlock.name)
+        emptyMeasZ = Empty(measZBlock.getCode(), measZBlock.name)
+        emptyOut = Empty(outBlock.getCode(), outBlock.name)
+        
+        # Extend the Bell measurement and the Bell pair so that they
+        # contain the same number of blocks, some of which are empty.
+        bellPair = ConcatenatedComponent(kGood, emptyMeasX, bellPair)
+        bellMeas = ConcatenatedComponent(kGood, bellMeas, emptyOut)
+        
         subs = {self.bpName: bellPair,
                 self.bmName: bellMeas}
+        
+        if enableRest:
+            outBlock = bellPair.outBlocks()[1]
+            measOut = TransRest(kGood, outBlock.getCode())
+            
+            # Extend the measurement to include the other two blocks, as well.
+            measOut = ConcatenatedComponent(kGood, emptyMeasX, emptyMeasZ, measOut)
+            
+            subs[self.measOutName] = measOut
         
         super(UncorrectedTeleport, self).__init__(kGood, subcomponents=subs)
         #self._outblockOrder = outblockOrder
@@ -40,76 +65,16 @@ class UncorrectedTeleport(Component):
         return (self[self.bmName].inBlocks()[0], )
     
     def outBlocks(self):
-        #TODO
+        # It is expected that UncorrectedTeleport will be wrapped by another
+        # component which will be able to define the output blocks.
         raise NotImplementedError
     
     def keyPropagator(self, keyMeta):
-        # Propagate the input through the CNOT of the Bell measurement and
-        # then extend to the output block.
-        bmExtender = KeyExtender(keyMeta, blocksAfter=1)
-        bellMeas = self[self.bmName]
-        bmPropagator = bellMeas.keyPropagator(bmExtender)
-        outExtender = KeyExtender(bmPropagator, blocksAfter=1)
-        
-        return outExtender
-        
-#    @staticmethod
-#    @fetchable
-#    def _convolveBP(bellMeas, bellPairResult, bpMeasBlock):
-#        bpMeta = bellPairResult.keyMeta
-#        splitter, meta0, meta1 = keySplitter(bpMeta, 1)
-#        bpSplitMeta = (meta0, meta1)
-#        bmPropagator, bmMeta = bellMeas.keyPropagator(bpSplitMeta[bpMeasBlock], bellMeas.measZName)
-#        concatenator, propMeta = keyConcatenator(bmMeta, bpSplitMeta[not bpMeasBlock])
-#        
-#        def propagator(key):
-#            bpKeys = splitter(key)
-#            key = concatenator(bmPropagator(bpKeys[bpMeasBlock]), bpKeys[not bpMeasBlock])
-#            return key
-#
-#        bellPairResult.counts = mapCounts(bellPairResult.counts, propagator)
-#        bellPairResult.keyMeta = propMeta
-#        
-#        return bellPairResult
-        
-    def _convolve(self, results, noiseModels, pauli):
-#        results[self.bpName] = self._convolveBP(self.subcomponents()[self.bmName],
-#                                                results[self.bpName], 
-#                                                self._bpMeasBlock)
+        # Extend the input to all three blocks, then propagate
+        # through the Bell measurement.
+        extender = KeyExtender(keyMeta, blocksAfter=2)
+        return self[self.bmName].keyPropagator(extender)
 
-        bm = self[self.bmName]
-        bpRes = results[self.bpName]
-        bmRes = results[self.bmName]
-        
-        bpRes.counts, bpRes.keyMeta = self._propagateBP(bpRes.counts, bpRes.keyMeta)
-        bmRes.counts, bmRes.keyMeta = self._propagateBM(bmRes.counts, bmRes.keyMeta)
-
-        bpRes.blocks = bmRes.blocks = bmRes.blocks + tuple([bpRes.blocks[1]])
-
-        return super(UncorrectedTeleport, self)._convolve(results, noiseModels, pauli)
-    
-    def _propagateBP(self, bpCounts, bpMeta):
-        # Propagate the first half of the bell pair through the bell measurement.
-        extender = KeyExtender(bpMeta, blocksBefore=1)
-        splitter = KeySplitter(extender, [2])
-        bmPropagator = self.BMPropagator(splitter, self[self.bmName])
-        concatenator = KeyConcatenator(bmPropagator)
-
-        bpCounts = mapCounts(bpCounts, concatenator)
-        bpMeta = concatenator.meta()
-        
-        return bpCounts, bpMeta
-    
-    def _propagateBM(self, bmCounts, bmMeta):
-        # Extend bell measurement results over all three blocks.
-        extender = KeyExtender(bmMeta, blocksAfter=1)
-        bmCounts = mapCounts(bmCounts, extender)
-        bmMeta = extender.meta()
-        return bmCounts, bmMeta
-
-#    def _postCount(self, result):
-#        # TODO: permute the output blocks to match outblockOrder
-#        raise NotImplementedError
 
     class BMPropagator(KeyManipulator):
         
@@ -125,7 +90,7 @@ class UncorrectedTeleport(Component):
             keyBM, keyOut = key
             return (self._bmPropagator(keyBM), keyOut)
     
-class TeleportED(InputDependentComponent):
+class TeleportED(PostselectingComponent):
     
     ucTeleportName = 'uct'
     inName = 'input'
@@ -134,28 +99,10 @@ class TeleportED(InputDependentComponent):
         ucTeleport = UncorrectedTeleport(kGood, bellPair, bellMeas)
         super(TeleportED, self).__init__(kGood, subcomponents={self.ucTeleportName: ucTeleport})
         self._outBlock = bellPair.outBlocks()[1]
-    
-    def prAccept(self, noiseModels, kMax=None):
-        # TODO: Currently only using the full XZ counts.  This
-        # is still valid since Pr[bad] is also calculated with XZ here.
-        # However, we'll want to use the X-only and Z-only counts,
-        # as well.
-        rejected = self.count(noiseModels[Pauli.Y], Pauli.Y).rejected
-        if None != kMax:
-            kMaxY = kMax[Pauli.Y]
-        else:
-            kMaxY = None
+        
+        # Delegate to ucTeleport
+        self.inBlocks = ucTeleport.inBlocks
             
-        prBad = self.prBad(noiseModels[Pauli.Y], Pauli.Y, kMaxY)
-        locTotals = self.locations(Pauli.Y).getTotals()
-        
-        prSelf = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[Pauli.Y])
-        
-        return prSelf * super(TeleportED, self).prAccept(noiseModels, kMax)
-    
-    def inBlocks(self):
-        return self[self.ucTeleportName].inBlocks()
-    
     def outBlocks(self):
         return (self._outBlock,)
     
@@ -203,17 +150,18 @@ class TeleportED(InputDependentComponent):
         # syndromes.  We can upper bound the rejection probability
         # only when counting both types of errors.  When counting
         # only X, or only Z, we must assume (for the purpose of the
-        # rejected counts) that all errors are rejected.
+        # rejected counts) that all errors are rejected, unless
+        # k = 0.
         rejectAll = (Pauli.Y != pauli)
         
-        for count in counts:
+        for k, count in enumerate(counts):
             acceptedK = {}
             rejectedK = 0
             for key, c in count.iteritems():
                 reducedKey = keyForBlock(key, 2, keyMeta)
                 if accept(key):
                     acceptedK[reducedKey] = c
-                    if rejectAll:
+                    if rejectAll and (0 != k):
                         rejectedK += c
                 else:
                     rejectedK += c

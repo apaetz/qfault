@@ -17,6 +17,7 @@ from util import counterUtils
 from util.cache import fetchable, memoize
 import logging
 import operator
+from util.polynomial import sympoly1d, SymPolyWrapper
 
 logger = logging.getLogger('counting.component')
 
@@ -104,19 +105,18 @@ class Component(object):
         return self._postCount(result, noiseModels, pauli)
     
     def prBad(self, noise, pauli, kMax=None):
-        prSelf = probability.prBadPoly(self.kGood[pauli], self.internalLocations(pauli), noise, kMax)
+        prSelf = probability.prBadPoly(self.kGood[pauli], self.locations(pauli), noise, kMax)
+        self._log(logging.DEBUG, 'Pr[bad] (self)=%s', prSelf)
         prSubs = [sub.prBad(noise, pauli, kMax=self.kGood[pauli]) for sub in self.subcomponents().values()]
         return sum(prSubs) + prSelf
     
-    def prAccept(self, noiseModels, pauli, kMax=None):
-#        prSubs = [sub.prAccept(noiseModels, kMax=self.kGood) for sub in self.subcomponents().values()]
-#        return reduce(operator.mul, prSubs, 1)
-        rejected = self.count(noiseModels, pauli).rejected
-        prBad = self.prBad(noiseModels[pauli], pauli, kMax)
-        locTotals = self.locations(pauli).getTotals()
-        
-        prAccept = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[pauli])
-        return prAccept
+    def prAccept(self, noiseModels, kMax=None):
+        prSubs = [sub.prAccept(noiseModels, kMax=self.kGood) for sub in self.subcomponents().values()]
+        prAccept = self._prAccept(noiseModels, kMax)
+        return reduce(operator.mul, prSubs, prAccept)
+    
+    def _prAccept(self, noiseModels, kMax):
+        return SymPolyWrapper(sympoly1d([1]))
     
     def propagateCounts(self, counts, keyMeta):
         propagator = self.keyPropagator(keyMeta)
@@ -154,7 +154,7 @@ class Component(object):
         
         keyMeta = results[0].keyMeta
         if not all((r.keyMeta == keyMeta) for r in results):
-            raise Exception('Key metadatas are not all identical. {0}, {1}'.format([r.keyMeta for r in results]))
+            raise Exception('Key metadatas are not all identical. {0}'.format([r.keyMeta for r in results]))
         
         blocks = results[0].blocks
         if not all(len(r.blocks) == len(blocks) for r in results):
@@ -166,12 +166,12 @@ class Component(object):
         for count in counts[1:]:
             convolved = convolve(convolved, count, kMax=k, convolveFcn=key.convolveKeyCounts, extraArgs=[keyMeta])
             
-        rejected = [result.rejected for result in results]
-        rejectConvolved = rejected[0]
-        for reject in rejected:
-            rejectConvolved = convolve(rejectConvolved, reject, kMax=k)
+#        rejected = [result.rejected for result in results]
+#        rejectConvolved = rejected[0]
+#        for reject in rejected:
+#            rejectConvolved = convolve(rejectConvolved, reject, kMax=k)
             
-        return CountResult(convolved, keyMeta, blocks, rejectedCounts=rejectConvolved)
+        return CountResult(convolved, keyMeta, blocks)#, rejectedCounts=rejectConvolved)
     
     def _postCount(self, result, noiseModels, pauli):
         '''
@@ -181,7 +181,11 @@ class Component(object):
         Returns a CountResult object.
         '''
         return result
-
+    
+    def _log(self, level, msg, *args, **kwargs):
+        classname = self.__class__.__name__
+        logger.log(level, ''.join([classname, ': ', msg]), *args, **kwargs)
+    
     def nickname(self):
         return self._nickname
     
@@ -239,11 +243,10 @@ class CountableComponent(Component):
     
 class Empty(CountableComponent):
     
-    def __init__(self, code, nblocks=1):
+    def __init__(self, code, blockname='0'):
         locs = Locations([])
-        blocknames = [str(i) for i in range(nblocks)]
-        codes = {name: code for name in blocknames}
-        super(Empty, self).__init__(locs, blocknames, codes, {})
+        kGood = {}
+        super(Empty, self).__init__(locs, [blockname], {blockname: code}, kGood)
 
 class Prep(CountableComponent):
     
@@ -283,22 +286,73 @@ class InputDependentComponent(Component):
     def _propagateInput(self, inputResult):
         raise NotImplementedError
     
-class InputAdapter(Component):
+class PostselectingComponent(InputDependentComponent):
     
-    def __init__(self, component, inputKey):
+    def __init__(self, kGood, pauliDependency=Pauli.Y, **kwargs):
+        super(PostselectingComponent, self).__init__(kGood, **kwargs)
+        self._pauliDependency = pauliDependency
+    
+    def _prAccept(self, noiseModels, kMax):
+        pauli = self._pauliDependency
+        rejected = self.count(noiseModels, pauli).rejected
+        prBad = self.prBad(noiseModels[pauli], pauli, kMax)
+        locTotals = self.locations(pauli).getTotals()
+        
+        prAccept = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[pauli])
+        self._log(logging.DEBUG, 'Pr[accept](self) = %s', prAccept)
+        
+        return prAccept
+
+    def _postCount(self, result, noiseModels, pauli):
+        '''
+        Subclasses must implement a post count method.
+        '''
+        raise NotImplementedError
+    
+    
+#class InputAdapter(ComponentAdapter):
+#    
+#    def __init__(self, component, inputKey):
+#        blocks = component.inBlocks()
+#        code = blocks[0].getCode()
+#        parityChecks = SyndromeKeyGenerator.ParityChecks(code)
+#        keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
+#        inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
+#        
+#        super(InputAdapter, self).__init__(component)
+#        
+#        self._component = component
+#        self._inResult = inputResult
+#        
+#    def count(self, noiseModels, pauli):
+#        return self._component.count(noiseModels, pauli, self._inResult)
+
+def InputAdapter(component, inputKey):
+        component = copy(component)
         blocks = component.inBlocks()
         code = blocks[0].getCode()
         parityChecks = SyndromeKeyGenerator.ParityChecks(code)
         keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
         inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
+              
+        # Now for the tricky stuff.  We replace the component's
+        # count method by one which doesn't require an input result.
+        component.countWithInput = component.count
+        def inputAdapter_count(noiseModels, pauli):
+            return component.countWithInput(noiseModels, pauli, inputResult)
+        component.count = inputAdapter_count
         
-        super(InputAdapter, self).__init__({})
+        component.prAcceptWithInput = component.prAccept
+        def inputAdapter_prAccept(noiseModels, kMax=None):
+            return component.prAcceptWithInput(noiseModels, inputResult, kMax)
+        component.prAccept = inputAdapter_prAccept
         
-        self._component = component
-        self._inResult = inputResult
+        # TODO doesn't work.
+#        # Also replace the __repr__ method to avoid confusion
+#        component.__repr_old__ = component.__repr__
+#        component.__repr__ = lambda: 'InputAdapter(' + component.__repr_old__() + ')'
         
-    def count(self, noiseModels, pauli):
-        return self._component.count(noiseModels, pauli, self._inResult)
+        return component
         
 class ConcatenatedComponent(Component):
     
@@ -311,7 +365,6 @@ class ConcatenatedComponent(Component):
     
     def outBlocks(self):
         return sum((self[i].outBlocks() for i in range(len(self.subcomponents()))), tuple())
-    
         
     def propagateCounts(self, counts, keyMeta):
         # Split the incoming keys according to each of the components
@@ -353,6 +406,10 @@ class ConcatenatedComponent(Component):
             result.blocks = blocks
             
         return super(ConcatenatedComponent, self)._convolve(results, noiseModels, pauli)
+    
+    def __repr__(self):
+        subStr = ''.join(sub.__class__.__name__ for sub in self.subcomponents().values())
+        return super(ConcatenatedComponent, self).__repr__() + '-' + subStr
     
     class Propagator(KeyManipulator):
         

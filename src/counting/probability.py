@@ -628,7 +628,8 @@ def toPoly(counts, locTotals, noise):
 	'''
 	
 	prefactor = likelyhoodPrefactorPoly(locTotals, noise)
-	return prefactor * countsAsProbability(counts, noise.likelyhood())
+	countPr =  countsAsProbability(counts, noise.likelyhood())
+	return prefactor * countPr
 
 	
 

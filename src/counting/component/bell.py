@@ -44,9 +44,7 @@ class BellMeas(Component):
         return self[self.cnotName].inBlocks()
         
     def outBlocks(self):
-        measX = Block(self.measXName, self.code)
-        measZ = Block(self.measZName, self.code)
-        return (measX, measZ)
+        return self[self.measName].outBlocks()
 
     def keyPropagator(self, keyMeta):
         cnot = self.subcomponents()[self.cnotName]

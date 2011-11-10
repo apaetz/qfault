@@ -12,6 +12,7 @@ from qec.qecc import StabilizerState, StabilizerCode
 from util import counterUtils, bits
 import logging
 from counting.countErrors import mapCounts
+from util.counterUtils import locrest
 
 logger = logging.getLogger('component')
 
@@ -228,3 +229,13 @@ class TransMeas(CountableComponent):
             return (key[0] & mask,)
         
         return propagate
+    
+class TransRest(CountableComponent):
+    
+    def __init__(self, kGood, code, blockname='0'):
+        nickname = 'transRest' + str(code.n)
+        locs = Locations([locrest(blockname, i) for i in range(code.n)], nickname)
+        
+        super(TransRest, self).__init__(locs, [blockname], {blockname: code}, kGood, nickname)
+        
+  
