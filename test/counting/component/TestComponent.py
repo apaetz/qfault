@@ -21,7 +21,7 @@ from counting.location import Locations
 from qec.error import Pauli, xType, zType
 from qec.qecc import TrivialStablizerCode, StabilizerState
 from settings.noise import NoiseModelXSympy, CountingNoiseModel, \
-	CountingNoiseModelX, CountingNoiseModelZ
+	CountingNoiseModelX, CountingNoiseModelZ, NoiseModelZSympy, NoiseModelXZSympy
 from util import counterUtils
 import golay
 import unittest
@@ -72,7 +72,7 @@ import unittest
 #		
 #		#print result.counts
 		
-		
+
 class TestPrep(unittest.TestCase):
 	
 	noise = {Pauli.X: CountingNoiseModelX(),
@@ -140,10 +140,10 @@ class TestPrep(unittest.TestCase):
 		zero = self.Zero(kGood, self.code)
 		
 		paulis = (Pauli.X, Pauli.Z)
-		assert all((1 == plus.prAccept(self.noise, pauli, 1) for pauli in paulis))
-		assert all((1 == zero.prAccept(self.noise, pauli, 1) for pauli in paulis))
+		assert all((1 == plus.prAccept(self.noise, 1) for pauli in paulis))
+		assert all((1 == zero.prAccept(self.noise, 1) for pauli in paulis))
 		
-	
+
 class TestCnot(unittest.TestCase):
 	
 	def testX(self):
@@ -157,7 +157,6 @@ class TestCnot(unittest.TestCase):
 		expected = [{(0, 0): 1}, {(0, 1): 1, (1, 0): 1, (1, 1): 1}]
 		assert result.counts == expected
 		
-
 class TestBellPair(unittest.TestCase):
 	
 	@staticmethod
@@ -194,12 +193,36 @@ class TestBellMeas(unittest.TestCase):
 	
 class TestTeleportED(unittest.TestCase):
 	
+	noise = {Pauli.X: NoiseModelXSympy(),
+			 Pauli.Z: NoiseModelZSympy(),
+			 Pauli.Y: NoiseModelXZSympy()}
+	code = TrivialStablizerCode()
+	
 	@staticmethod
 	def TeleportED(kGood, code):
 		bellPair = TestBellPair.BellPair(kGood, code)
 		bellMeas = TestBellMeas.BellMeas(kGood, code)
 		return TeleportED(kGood, bellPair, bellMeas)
+	
+	def testPrAccept(self):
+		kGood = {Pauli.Y: 6}
+		teleportED = self.TeleportED(kGood, self.code)
+		teleportED = InputAdapter(teleportED, (0,))
+		prAccept = teleportED.prAccept(self.noise)
 		
+		# With a trivial code, i.e., no code, the acceptance
+		# probability should approach 1 as k increases.
+		print prAccept
+		print prAccept(0), prAccept(0.001)
+		
+	def testPrBad(self):
+		kGood = {Pauli.X: 0}
+		teleportED = self.TeleportED(kGood, self.code)
+		prBad = teleportED.prBad(self.noise[Pauli.X], Pauli.X, kMax=1)
+		print prBad
+		print prBad(0), prBad(0.001)
+				
+
 class TestExRec(unittest.TestCase):
 
 	def testX(self):
@@ -214,9 +237,11 @@ class TestExRec(unittest.TestCase):
 		
 		exRec = ExRec(kGood, lec, empty, tec)
 		result = exRec.count(noise, Pauli.X)
-		expected = [{Pauli.I: 1}, {Pauli.X: 2, Pauli.I: 4}]
+		expected = [{Pauli.I: 1}, {Pauli.X: 3, Pauli.I: 5}]
+		print result.counts
 		assert result.counts == expected
 		
+
 	def testXCnot(self):
 		kGood = {Pauli.X: 1, Pauli.Z: 1}
 		noise = {Pauli.X: CountingNoiseModelX()}
@@ -228,13 +253,30 @@ class TestExRec(unittest.TestCase):
 		lec = ConcatenatedComponent(kGood, lec, lec)
 		tec = TECDecodeAdapter(ec)
 		tec = ConcatenatedTEC(kGood, tec, tec)
-		tec.count(noise, Pauli.X)
-			
+					
 		exRec = ExRec(kGood, lec, cnot, tec)
 		result = exRec.count(noise, Pauli.X)
 		expected = [{Pauli.I: 1}, {Pauli.X: 2, Pauli.I: 4}]
 		#print 'cnot exRec:' + str(result.counts)# == expected
+		
+	@SkipTest
+	def testPrAccept(self):
+		kGood = {Pauli.X: 1, Pauli.Z: 1}
+		noise = {Pauli.X: CountingNoiseModelX()}
+		code = TrivialStablizerCode()
+		cnot = TransCnot(kGood, code, code) 
+		
+		ec = TestTeleportED.TeleportED(kGood, code)
+		lec = InputAdapter(ec, (0,))
+		lec = ConcatenatedComponent(kGood, lec, lec)
+		tec = TECDecodeAdapter(ec)
+		tec = ConcatenatedTEC(kGood, tec, tec)
 
+		exRec = ExRec(kGood, lec, cnot, tec)
+		pr = exRec.prAccept(noise)
+		print pr
+		print pr(0.000)
+		print 'pr(0.001)', pr(0.001)
 
 #class TestBellPair(unittest.TestCase):
 #
@@ -283,4 +325,8 @@ if __name__ == "__main__":
 	
 	
 	#import sys;sys.argv = ['', 'Test.testName']
+	suite = unittest.TestSuite()
+	suite.addTest(TestTeleportED('testPrAccept'))
+	suite.addTest(TestTeleportED('testPrBad'))
+	unittest.TextTestRunner().run(suite)
 	unittest.main()

@@ -25,10 +25,19 @@ class ExRec(Component):
         prLEC = self[self.lecName].prAccept(noiseModels, self.kGood)
         prGa = self[self.gaName].prAccept(noiseModels, self.kGood)
         
+        # There are two cases. Either the TEC depends on the input,
+        # or it does not.  Assume first that it does not depend on
+        # the input and ask for its acceptance probability directly.
         try:
             prTEC = self[self.tecName].prAccept(noiseModels, self.kGood)
         except TypeError:
-            pass
+            # The TEC depends on the input.  We may calculate the 
+            # acceptance probability from the convolution of the
+            # TEC rejected counts and the LEC-Ga (accepted) counts which
+            # is calculated by the count() method.  Effectively we
+            # have pushed acceptance from the TEC up to the entire
+            # exRec.
+            prTEC = self._prAccept(noiseModels, kMax)
         
         return prLEC * prGa * prTEC
         
