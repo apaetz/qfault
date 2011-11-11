@@ -160,7 +160,7 @@ class TeleportED(PostselectingComponent):
             for key, c in count.iteritems():
                 reducedKey = keyForBlock(key, 2, keyMeta)
                 if accept(key):
-                    acceptedK[reducedKey] = c
+                    acceptedK[reducedKey] = acceptedK.get(reducedKey, 0) + c
                     if rejectAll and (0 != k):
                         rejectedK += c
                 else:

@@ -13,6 +13,7 @@ from util.counterUtils import PartitionIterator, loccnot, locrest, locXprep, \
 import gmpy
 import logging
 import operator
+from util.polynomial import SymPolyWrapper, sympoly1d
 
 logger = logging.getLogger('counting.probability')
 
@@ -308,7 +309,12 @@ def countsAsProbability(counts, likelyhood):
 
 def prBadPoly(kGood, locations, noiseModel, kMax=None):
 	# Count up all of the locations
-	return prMinFailures(kGood+1, locations, noiseModel, kMax)
+	
+	prBad = prMinFailures(kGood+1, locations, noiseModel, kMax)
+	if int == type(prBad):
+		prBad = SymPolyWrapper(sympoly1d([prBad]))
+	
+	return prBad
 	
 
 
@@ -622,7 +628,7 @@ def likelyhoodPrefactorPoly(locTotals, noise):
 	return prefactor
 	
 
-def toPoly(counts, locTotals, noise):
+def countsToPoly(counts, locTotals, noise):
 	'''
 	Convert weighed error likelyhood counts into a polynomial in gamma (= p/15).
 	'''
@@ -699,7 +705,7 @@ def upperBoundPoly(counts, pBad, locTotals, noise, normFactor=1):
 	This probability is computed by Pr[!accept] <= Pr[!accept, good] + Pr[bad]
 	'''
 
-	pr = toPoly(counts, locTotals, noise)
+	pr = countsToPoly(counts, locTotals, noise)
 	pr = pr * normFactor + pBad
 	return pr
 

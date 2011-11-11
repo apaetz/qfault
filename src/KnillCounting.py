@@ -7,13 +7,14 @@ Created on 2011-09-12
 from counting.component import base, bell, teleport
 from qec import ed422, qecc, error
 from qec.error import Pauli
-from settings.noise import NoiseModelXZSympy, NoiseModelXSympy, NoiseModelZSympy, \
+from settings.noise import NoiseModelXZLowerSympy, NoiseModelXSympy, NoiseModelZSympy, \
     CountingNoiseModelX, CountingNoiseModelZ
 import util.cache
 from counting.component.base import InputAdapter, ConcatenatedComponent
 from counting.component.transversal import TransCnot
 from counting.component.exrec import ExRec
 from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
+from counting import probability
 
 
 def makeED(kGood):
@@ -39,14 +40,14 @@ def run():
 
 #    noises = { Pauli.X: NoiseModelXSympy(),
 #              Pauli.Z: NoiseModelZSympy(),
-#              Pauli.Y: NoiseModelXZSympy() 
+#              Pauli.Y: NoiseModelXZLowerSympy() 
 #             }
-    noises = {Pauli.X: CountingNoiseModelX(),
-              Pauli.Z: CountingNoiseModelZ(),
-              Pauli.Y: None,
+    noises = {Pauli.X: NoiseModelXSympy(),
+              Pauli.Z: NoiseModelZSympy(),
+              Pauli.Y: NoiseModelXZLowerSympy(),
               }
     
-    pauli = Pauli.X
+    pauli = Pauli.Y
     code = ed422.ED412Code()
 
     id = base.Empty(ed422.ED412Code())
@@ -61,7 +62,11 @@ def run():
     exRec = ExRec(kGood, led, id, ted)
     
     result = exRec.count(noises, pauli)
-    print result.counts
+    countPoly = probability.countsToPoly(result.counts, exRec.locations(pauli).getTotals(), noises[pauli])
+    prBad = exRec.prBad(noises[pauli], pauli)
+    prAccept = exRec.prAccept(noises)
+    pr = countPoly / prAccept + prBad
+    print pr(0.001)
 
 if __name__ == '__main__':
     from counting import countParallel

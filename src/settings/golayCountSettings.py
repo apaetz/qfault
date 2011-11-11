@@ -3,7 +3,7 @@ Created on 2010-08-20
 
 @author' :  adam
 '''
-from noise import NoiseModelXSympy, NoiseModelXZSympy
+from noise import NoiseModelXSympy, NoiseModelXZLowerSympy
 from settings.countSettings import PrettyFloat, buildSettingsTree
 import gmpy
 import logging
@@ -22,7 +22,7 @@ pMax = PrettyFloat(0.0023)
 gMin = gmpy.mpf(pMin/15)
 gMax = gmpy.mpf(pMax/15)
 
-noiseDict = {'XZ': NoiseModelXZSympy(gMin, gMax),
+noiseDict = {'XZ': NoiseModelXZLowerSympy(gMin, gMax),
 			 'X':  NoiseModelXSympy(gMin, gMax),
 			 'Z':  NoiseModelXSympy(gMin, gMax)
 			}
