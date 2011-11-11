@@ -211,7 +211,7 @@ class NoiseModelZSympy(NoiseModelMarginalSympy):
 		super(NoiseModelZSympy, self).__init__(errorListZ, gMin, gMax)
 	
 	
-class NoiseModelXZSympy(DepolarizingNoiseModelSympy):
+class NoiseModelXZLowerSympy(DepolarizingNoiseModelSympy):
 	'''
 	Concrete realization of the depolarizing noise model in which
 	noise weights, likelyhoods, etc. are given in terms of *lower* bounds.
@@ -220,7 +220,7 @@ class NoiseModelXZSympy(DepolarizingNoiseModelSympy):
 	def getWeight(self, loc, error):
 		'''
 		For XZ counts we want lower bounds and so the likelyhoods are calculated as g/(1-4g) instead
-		of g/(1-12g).  As a result, the weights are a bit different.
+		of g/(1-15g).  As a result, the weights are a bit different.
 		'''
 		if loc['type'] == 'cnot':
 			return 1
@@ -237,7 +237,31 @@ class NoiseModelXZSympy(DepolarizingNoiseModelSympy):
 			return []
 	
 	def __str__(self):
-		return 'w=4.c=1'
+		return 'lower-w=4.c=1'
+	
+class NoiseModelXZUpperSympy(DepolarizingNoiseModelSympy):
+	'''
+	Concrete realization of the depolarizing noise model in which
+	noise weights, likelyhoods, etc. are given in terms of *lower* bounds.
+	'''
+	
+	def getWeight(self, loc, error):
+		if loc['type'] == 'cnot':
+			return 1
+		return 4
+	
+	def likelyhood(self):
+		# g/(1-15g): Upper bound by dividing by 1-15g in all cases.
+		return SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-15, 1]))
+	
+	def errorList(self, loc):
+		try:
+			return errorListXZ[loc['type']]
+		except KeyError:
+			return []
+	
+	def __str__(self):
+		return 'upper-w=4.c=1'
 
 class TransformedNoiseModelSympy(UpperBoundNoiseModelSympy):
 	'''

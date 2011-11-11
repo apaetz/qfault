@@ -2,7 +2,7 @@ from counting.countErrors import reduceAllErrorSyndromesZero, countErrors1Block
 from counting.location import Locations
 from golay.overlap import prep
 from golayCode import permuteList, permuteListByInverse
-from settings.noise import NoiseModelXZSympy
+from settings.noise import NoiseModelXZLowerSympy
 from util.counterUtils import SubsetIterator
 #from GolayOverlapSuperXpairs import superXpairs
 
@@ -264,7 +264,7 @@ if __name__ == '__main__':
 #	print orderWeightCounts
 
 #	
-	noise = NoiseModelXZSympy()
+	noise = NoiseModelXZLowerSympy()
 	for k in range(4):
 		countsX = countErrors1Block(k, cnots, '0', 12, 'X', noise)
 		for s in nonZeroIndices(countsX):

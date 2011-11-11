@@ -1,1 +1,6 @@
  - Basic component counting seems to work well.  Now need to integrate with Pr[bad], Pr[accept] calculations.
+ - Improve unit test structure and quality.
+   - Break into separate files
+   - Build up generic TestComponent to test general features.
+   
+- pylint (or other static analysis)
