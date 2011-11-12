@@ -113,9 +113,28 @@ class StabilizerCode(Qecc):
     
     def normalizerGenerators(self):
         '''
-        A sequence of normalizer generators ordered by [X1,Z1,X2,Z2,...,Xk,Zk],
-        where Xi (Zi) is the logical X (Z) operator on logical qubit i.
+        A sequence of normalizer generators.
+        Default ordering is [X1,Z1,X2,Z2,...,Xk,Zk], where Xi (Zi) is the logical X (Z) 
+        operator on logical qubit i.  This ordering, however, is not required or enforced.
+        Any ordering is permitted as long as it is consistent for each call to this method.
         Each normalizer operator is given in descending qubit order.
+        '''
+        
+        # Assume that all of the logical operators are also in the normalizer.
+        # (This is not true for stabilizer states, and so this method must be overridden
+        # in that case.)
+        logicals = self.logicalOperators()
+        normalizers = []
+        for k in range(len(logicals)):
+            normalizers += tuple(logicals[k][eType] for eType in sorted(logicals[k].keys()))
+            
+        return tuple(normalizers)
+    
+    def logicalOperators(self):
+        '''
+        A sequence of dictionaries of logical operators indexed by [logical qubit][type],
+        where the logical qubit can range from 0-k, and type is error.xType or error.zType.
+        Each operator is given in descending (physical) qubit order.
         '''
         raise NotImplementedError
     
@@ -142,8 +161,8 @@ class TrivialStablizerCode(StabilizerCode):
     def stabilizerGenerators(self):
         return tuple([])
     
-    def normalizerGenerators(self):
-        return (Pauli.X, Pauli.Z)
+    def logicalOperators(self):
+        return ({error.xType: Pauli.X, error.zType: Pauli.Z},)
     
     def syndromeCorrection(self, s):
         return Pauli.I
@@ -173,18 +192,17 @@ class StabilizerState(StabilizerCode, Codeword):
         
         self.code = code
         
-        logicalChecks = code.normalizerGenerators()
-        typeOffset = {error.xType: 0, error.zType: 1}
-        self.lStabs = tuple(logicalChecks[2*i + typeOffset[etype]] for i,etype in enumerate(logicalOpTypes))
+        logicals = code.logicalOperators()
+        self.lStabs = tuple(logicals[k][etype] for k,etype in enumerate(logicalOpTypes))
 
     def stabilizerGenerators(self):
         return self.code.stabilizerGenerators() + self.lStabs
     
     def normalizerGenerators(self):
-        return []
+        return tuple([])
     
-    def logicalStabilizers(self):
-        return self.lStabs
+#    def logicalStabilizers(self):
+#        return self.lStabs
         
     def getCode(self):
         return self.code

@@ -60,15 +60,18 @@ class TestBellMeas(testComponent.ComponentTestCase):
 	def BellMeas(kGood, code):
 		return BellMeas(kGood, code)
 	
-	def testX(self):
+	def testCount(self):
 		kGood = {Pauli.X: 1, Pauli.Z: 1}
-		noise = {Pauli.X: CountingNoiseModelX()}
+		noise = self.countingNoiseModels
 		code = self.trivialCode
 		
 		bm = self.BellMeas(kGood, code)
-		result = bm.count(noise, Pauli.X)
-		expected = [{(0, 0): 1}, {(0, 0): 1, (0, 1): 3}]
-		assert result.counts == expected
+		
+		eKey = {Pauli.X: (0,1), Pauli.Z: (2,0)}
+		for pauli in (Pauli.X, Pauli.Z):
+			result = bm.count(noise, pauli)
+			expected = [{(0, 0): 1}, {(0, 0): 1, eKey[pauli]: 3}]
+			assert result.counts == expected
 		
 	def _getComponent(self, kGood, code):
 		return self.BellMeas(kGood, code)

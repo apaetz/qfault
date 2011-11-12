@@ -47,8 +47,10 @@ class BellMeas(Component):
         return self[self.measName].outBlocks()
 
     def keyPropagator(self, keyMeta):
-        cnot = self.subcomponents()[self.cnotName]
-        return cnot.keyPropagator(keyMeta)
+        # First propagate through the CNOT, then propagate through the measurements.
+        cnot = self[self.cnotName]
+        meas = self[self.measName]
+        return meas.keyPropagator(cnot.keyPropagator(keyMeta))
         
     def _convolve(self, results, noiseModels, pauli):
         

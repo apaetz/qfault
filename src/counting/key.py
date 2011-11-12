@@ -199,7 +199,7 @@ class KeyExtender(KeyManipulator):
     
 class KeySplitter(KeyManipulator):
     
-    def __init__(self, meta, splits, manipulator=None):
+    def __init__(self, meta, splits):
         super(KeySplitter, self).__init__(meta)
         self._splits = splits
     
@@ -319,6 +319,16 @@ class KeyCopier(KeyManipulator):
         newKey[self._toBlock] ^= key[self._fromBlock] & self._mask
         return tuple(newKey)
     
+class KeyMasker(KeyManipulator):
+    
+    def __init__(self, meta, mask):
+        super(KeyMasker, self).__init__(meta)
+        self._mask = mask
+    
+    def _manipulate(self, key):
+        newKey = tuple(k & self._mask for k in key)
+        return newKey
+    
 #def keyCopier(keyMeta, fromBlock, toBlock, mask=None):
 #    '''
 #    Copy keys (with the given key metatadata) from one block to another block.  The optional
@@ -394,15 +404,15 @@ class StabilizerStateKeyGenerator(MaskedKeyGenerator):
     
     def __init__(self, state, blockname):
         self._state = state
-        self.lStabs = set(state.logicalStabilizers())
-        code = state.getCode()
+        #self.lStabs = set(state.logicalStabilizers())
+        #code = state.getCode()
         
-        skg = SyndromeKeyGenerator(code, blockname)
+        skg = SyndromeKeyGenerator(state.getCode(), blockname)
 
         # The check mask eliminates parity checks of logical operators that are in the normalizer
         # of the code, but are not in the normalizer of the state because the corresponding dual
         # operator is now in the stabilizer.
-        maskedChecks = code.stabilizerGenerators() + state.logicalStabilizers()
+        maskedChecks = set(state.stabilizerGenerators() + state.normalizerGenerators())
         masks = [check in maskedChecks for check in skg.parityChecks()]
         self._mask = bits.listToBits(masks)
         

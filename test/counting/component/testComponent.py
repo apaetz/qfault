@@ -8,7 +8,9 @@ from counting import probability
 from qec.error import Pauli
 from qec.qecc import TrivialStablizerCode
 from settings.noise import NoiseModelXSympy, NoiseModelZSympy, \
-	NoiseModelXZLowerSympy, NoiseModelXZUpperSympy
+	NoiseModelXZLowerSympy, NoiseModelXZUpperSympy, CountingNoiseModelX, \
+	CountingNoiseModelZ
+import logging
 import unittest
 
 
@@ -18,8 +20,20 @@ class ComponentTestCase(unittest.TestCase):
 	depolarizingNoiseModels = {Pauli.X: NoiseModelXSympy(),
 			 			  Pauli.Z: NoiseModelZSympy(),
 			 			  Pauli.Y: NoiseModelXZUpperSympy()}
+	
+	countingNoiseModels = {Pauli.X: CountingNoiseModelX(),
+						   Pauli.Z: CountingNoiseModelZ()}
 
 	trivialCode = TrivialStablizerCode()
+	
+	def setUp(self):
+		import util.cache
+		util.cache.enableFetch(False)
+		#util.cache.enableMemo(False)
+	
+		complog = logging.getLogger('counting.component')
+		#complog.setLevel(logging.DEBUG)
+		complog.setLevel(logging.INFO)
 	
 	def testProbabilities(self):
 		for k in range(3):
