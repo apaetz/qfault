@@ -62,8 +62,8 @@ class ED412Code(CssCode):
     def stabilizerGenerators(self, types=(error.xType, error.zType)):
         return tuple(self._generators[t] for t in types) + (self._gaugeOperators[self._gaugeType],)
     
-    def normalizerGenerators(self):
-        return tuple(self._normalizers[t] for t in (error.xType, error.zType))
+    def logicalOperators(self):
+        return (self._normalizers,)
     
     def syndromeCorrection(self, s):
         corr = self._syndromeCorrectionTable(self._gaugeType)[s]

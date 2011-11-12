@@ -5,7 +5,7 @@ Created on 2011-10-25
 '''
 from counting import key
 from counting.component.base import Component
-from counting.component.ec import TECDecodeAdapter
+from counting.component.ec import TECDecodeAdapter, LECSyndromeAdapter
 from counting.component.transversal import TransCnot
 from counting.countParallel import convolve
 from counting.result import CountResult
@@ -29,7 +29,7 @@ class ExRec(Component):
         # or it does not.  Assume first that it does not depend on
         # the input and ask for its acceptance probability directly.
         try:
-            prTEC = self[self.tecName].prAccept(noiseModels, self.kGood)
+            prTEC = self[self.tecName].prAccept(noiseModels, kMax=self.kGood)
         except TypeError:
             # The TEC depends on the input.  We may calculate the 
             # acceptance probability from the convolution of the
@@ -37,7 +37,7 @@ class ExRec(Component):
             # is calculated by the count() method.  Effectively we
             # have pushed acceptance from the TEC up to the entire
             # exRec.
-            prTEC = self._prAccept(noiseModels, kMax)
+            prTEC = self._prAccept(noiseModels, kMax=self.kGood)
         
         return prLEC * prGa * prTEC
         
@@ -78,6 +78,8 @@ class ExRec(Component):
         return CountResult(decodeCounts, tecResult.keyMeta, tecResult.blocks, rejectedCounts=rejectedCounts)
     
     def _postCount(self, result, noiseModels, pauli):
+        result = super(ExRec, self)._postCount(result, noiseModels, pauli)
+        # TODO remove counts for rectangle correctness??
         return result
         
     

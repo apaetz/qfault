@@ -10,9 +10,9 @@ from counting.component.base import Component, InputDependentComponent,\
     PostselectingComponent, Empty, ConcatenatedComponent
 from counting.countErrors import mapCounts
 from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator, \
-    KeyConcatenator, IntegerKey
+    KeyConcatenator, IntegerKey, KeyCopier
 from counting.result import CountResult
-from qec.error import Pauli
+from qec.error import Pauli, xType, zType
 from util import bits
 from util.cache import fetchable
 import counting.key
@@ -76,19 +76,42 @@ class UncorrectedTeleport(Component):
         return self[self.bmName].keyPropagator(extender)
 
 
-    class BMPropagator(KeyManipulator):
+    def _convolve(self, results, noiseModels, pauli):
         
-        def __init__(self, splitter, bm):
-            super(UncorrectedTeleport.BMPropagator, self).__init__(splitter)
-            bmMeta, self._outMeta = splitter.meta()
-            self._bmPropagator = bm.keyPropagator(bmMeta)
-            
-        def meta(self):
-            return (self._bmPropagator.meta(), self._outMeta)
-        
-        def _manipulate(self, key):
-            keyBM, keyOut = key
-            return (self._bmPropagator(keyBM), keyOut)
+        # Propagate the Bell pair through the Bell measurement.
+        bm = self[self.bmName]
+        bpResult = results[self.bpName]
+        bpResult.counts, bpResult.keyMeta = bm.propagateCounts(bpResult.counts, bpResult.keyMeta)
+
+        # Now convolve normally.
+        return super(UncorrectedTeleport, self)._convolve(results, noiseModels, pauli)
+    
+#    def _propagateBP(self, bpCounts, bpMeta):
+#        # Propagate the first half of the bell pair through the bell measurement.
+#        extender = KeyExtender(bpMeta, blocksBefore=1)
+#        splitter = KeySplitter(extender, [2])
+#        bmPropagator = self.BMPropagator(splitter, self[self.bmName])
+#        concatenator = KeyConcatenator(bmPropagator)
+#
+#        bpCounts = mapCounts(bpCounts, concatenator)
+#        bpMeta = concatenator.meta()
+#        
+#        return bpCounts, bpMeta
+#
+#    class BMPropagator(KeyManipulator):
+#        
+#        def __init__(self, bm, bpMeta):
+#            splitter = KeySplitter(bpMeta, [3])
+#            super(UncorrectedTeleport.BMPropagator, self).__init__(splitter)
+#            bmMeta, self._outMeta = splitter.meta()
+#            self._bmPropagator = bm.keyPropagator(bmMeta)
+#            
+#        def meta(self):
+#            return (self._bmPropagator.meta(), self._outMeta)
+#        
+#        def _manipulate(self, key):
+#            keyBM, keyOut = key
+#            return (self._bmPropagator(keyBM), keyOut)
     
 class TeleportED(PostselectingComponent):
     
@@ -123,16 +146,28 @@ class TeleportED(PostselectingComponent):
         
     def _postselect(self, result, pauli):
         '''
-        Post-select for the trivial syndrome on the two measured blocks.
+        Post-select for the trivial syndrome on the two measured blocks, and make
+        logical corrections if necessary.
         '''
         counts = result.counts
         keyMeta = result.keyMeta
-        stabilizers = set(result.blocks[0].getCode().stabilizerGenerators())
-        blockChecks = keyMeta.parityChecks()
-        parityChecks = blockChecks
+        outBlock = result.blocks[2]
+        stabilizers = set(outBlock.getCode().stabilizerGenerators())
+        logicals = outBlock.getCode().logicalOperators()
+        if 1 != len(logicals):
+            raise Exception('Incorrect number of logical qubits ({0})'.format(len(logicals)))
         
-        syndromeBits = [i for i,check in enumerate(parityChecks) if check in stabilizers]
+        logicals = logicals[0]
+        
+        parityChecks = keyMeta.parityChecks()
+        
+        syndromeBits = [(check in stabilizers) for check in parityChecks]
+        logicalBitsX =  [check == logicals[xType] for check in parityChecks]
+        logicalBitsZ =  [check == logicals[zType] for check in parityChecks]
+        
         rejectMask = bits.listToBits(syndromeBits)
+        logicalMaskX = bits.listToBits(logicalBitsX)
+        logicalMaskZ = bits.listToBits(logicalBitsZ)
         
         warnings.warn('Detection of normalizer generators is not yet implemented')
         # The UncorrectedTeleport component blocks are setup as follows:
@@ -142,6 +177,14 @@ class TeleportED(PostselectingComponent):
         def accept(key):
             # TODO also check additional normalizers.
             return not(key[0] & rejectMask) and not(key[1] & rejectMask)
+        
+        # Apply the logical operator parity checks (i.e. the logical corrections)
+        # to the output key
+        copier = KeyCopier(keyMeta, 0, 2, logicalMaskX)
+        copier = KeyCopier(copier, 1, 2, logicalMaskZ)
+        def outputKey(key):
+            key = copier(key)
+            return keyForBlock(key, 2, keyMeta)
         
         accepted = []
         rejected = []
@@ -158,9 +201,10 @@ class TeleportED(PostselectingComponent):
             acceptedK = {}
             rejectedK = 0
             for key, c in count.iteritems():
-                reducedKey = keyForBlock(key, 2, keyMeta)
                 if accept(key):
-                    acceptedK[reducedKey] = acceptedK.get(reducedKey, 0) + c
+                    outKey = outputKey(key)
+                    acceptedK[outKey] = acceptedK.get(outKey, 0) + c
+                    
                     if rejectAll and (0 != k):
                         rejectedK += c
                 else:

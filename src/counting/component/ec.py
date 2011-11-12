@@ -6,17 +6,21 @@ Created on 2011-10-27
 from copy import copy
 from counting import key
 from counting.block import Block
-from counting.component.base import Component, ConcatenatedComponent
+from counting.component.base import Component, ConcatenatedComponent,\
+    ComponentAdapter
 from counting.convolve import convolveDict
 from counting.countParallel import convolve
 from counting.key import SyndromeKeyGenerator, SyndromeKeyDecoder, \
-    SyndromeKeyMeta, KeyConcatenator
+    SyndromeKeyMeta, KeyConcatenator, KeyMasker
 from counting.result import CountResult
 from qec.error import Pauli, xType, zType
 from qec.qecc import QeccNone
 from util import listutils, bits
 from util.cache import fetchable
 import operator
+from counting.countErrors import mapCounts
+import logging
+from util.patterns import DelegatingAdapter
 
 class ConcatenatedTEC(ConcatenatedComponent):
     # TODO: Using ConcatenatedComponent directly doesn't work because the counts
@@ -77,8 +81,13 @@ class ConcatenatedTEC(ConcatenatedComponent):
 #                
 #        return convolved
 
-def TECDecodeAdapter(tec):
-
+class TECDecodeAdapter(ComponentAdapter):
+    
+    def __init__(self, tec):
+        super(TECDecodeAdapter, self).__init__(tec)
+        self.tec = tec
+    
+    @staticmethod
     def decodeCounts(counts, decoder):
         decodeCounts = []
         for countK in counts:
@@ -91,6 +100,7 @@ def TECDecodeAdapter(tec):
             
         return decodeCounts
 
+    @staticmethod
     @fetchable
     def lookupTable(tec, noiseModels, pauli):
         code = tec.inBlocks()[0].getCode()
@@ -113,18 +123,18 @@ def TECDecodeAdapter(tec):
         for key in keys:
             inCount = [{(key,): 1}]
             inResult = CountResult(inCount, keyMeta, [None])
-            outResult = tec.countNonDecoded(noiseModels, pauli, inResult)
+            outResult = tec.count(noiseModels, pauli, inResult)
             outMeta = outResult.keyMeta
             outBlocks = outResult.blocks
             
-            dCounts = decodeCounts(outResult.counts, decoder)
+            dCounts = TECDecodeAdapter.decodeCounts(outResult.counts, decoder)
             for k in range(len(countLookup)):
                 countLookup[k][(key,)] = dCounts[k]
                 rejectLookup[k][(key,)] = outResult.rejected[k]
             
         return countLookup, rejectLookup, outMeta, outBlocks
         
-    def tecAdapter_count(noiseModels, pauli):
+    def count(self, noiseModels, pauli):
         # This must return a count result for which the counts
         # are indexable by k (the number of faults) and then
         # an input key.  The value of [k][key] is a dictionary
@@ -134,19 +144,39 @@ def TECDecodeAdapter(tec):
         # k failures in the TEC when the input to the TEC
         # is 'key'.
         
-        counts, rejected, meta, blocks = lookupTable(tec, noiseModels, pauli)
+        counts, rejected, meta, blocks = self.lookupTable(self.tec, noiseModels, pauli)
         return CountResult(counts, meta, blocks, rejectedCounts=rejected)
         
-    def tecAdapter_outBlocks():
+    def outBlocks(self):
         code = QeccNone(1)
-        return tuple(Block(block.name, code) for block in tec.outBlocksNonDecoded())
-    
-    # Replace the tec methods with the decoded adapted ones.
-    tec = copy(tec)
-    tec.countNonDecoded = tec.count
-    tec.outBlocksNonDecoded = tec.outBlocks
-    tec.count = tecAdapter_count
-    tec.outBlocks = tecAdapter_outBlocks
-    
-    return tec
+        return tuple(Block(block.name, code) for block in self.tec.outBlocks())
             
+            
+class LECSyndromeAdapter(ComponentAdapter):
+    
+    def __init__(self, lec):
+        super(LECSyndromeAdapter, self).__init__(lec)
+        self.lec = lec
+    
+    def logicalMasker(self, keyMeta):        
+        # Strip off the logical syndrome information.
+        block = self.lec.outBlocks()[0]
+        stabilizers = set(block.getCode().stabilizerGenerators())   
+        parityChecks = keyMeta.parityChecks() 
+        syndromeBits = [(check in stabilizers) for check in parityChecks]
+        syndromeMask = bits.listToBits(syndromeBits)
+        
+        masker = KeyMasker(keyMeta, syndromeMask)
+        
+        return masker
+    
+    def keyPropagator(self, keyMeta):
+        return self.logicalMasker(self.lec.keyPropagator(keyMeta))
+    
+    def _postCount(self, result, noiseModels, pauli):
+        result = self.lec._postCount(result, noiseModels, pauli)
+        self._log(logging.DEBUG, 'Stripping logical syndrome information.')
+        masker = self.logicalMasker(result.keyMeta)
+        result.counts = mapCounts(result.counts, masker)
+        result.keyMeta = masker.meta()
+        return result

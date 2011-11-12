@@ -5,7 +5,7 @@ Created on 2011-10-25
 '''
 from counting.component.base import CountableComponent, Component,\
     ConcatenatedComponent
-from counting.key import KeyCopier
+from counting.key import KeyCopier, KeyMasker
 from counting.location import Locations
 from qec.error import zType, xType, Pauli
 from qec.qecc import StabilizerState, StabilizerCode
@@ -225,11 +225,8 @@ class TransMeas(CountableComponent):
         # measurement.  These errors/syndromes cannot be detected.
         mask = bits.listToBits((0 != check[self._basisType]) for check in parityChecks)
         
-        def propagate(key):
-            return (key[0] & mask,)
+        return KeyMasker(keyMeta, mask)
         
-        return propagate
-    
 class TransRest(CountableComponent):
     
     def __init__(self, kGood, code, blockname='0'):
