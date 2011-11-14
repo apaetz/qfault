@@ -6,8 +6,8 @@ Created on 2011-10-27
 from copy import copy
 from counting import key
 from counting.block import Block
-from counting.component.base import Component, ConcatenatedComponent,\
-    ComponentAdapter
+from counting.component.base import Component, ConcatenatedComponent
+from counting.component.adapter import ComponentAdapter
 from counting.convolve import convolveDict
 from counting.countParallel import convolve
 from counting.key import SyndromeKeyGenerator, SyndromeKeyDecoder, \

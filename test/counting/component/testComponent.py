@@ -32,8 +32,8 @@ class ComponentTestCase(unittest.TestCase):
 		#util.cache.enableMemo(False)
 	
 		complog = logging.getLogger('counting.component')
-		#complog.setLevel(logging.DEBUG)
-		complog.setLevel(logging.INFO)
+		complog.setLevel(logging.DEBUG)
+		#complog.setLevel(logging.INFO)
 	
 	def testProbabilities(self):
 		for k in range(3):

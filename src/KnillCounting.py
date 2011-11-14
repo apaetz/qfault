@@ -8,13 +8,16 @@ from counting.component import base, bell, teleport
 from qec import ed422, qecc, error
 from qec.error import Pauli
 from settings.noise import NoiseModelXZLowerSympy, NoiseModelXSympy, NoiseModelZSympy, \
-    CountingNoiseModelX, CountingNoiseModelZ
+    CountingNoiseModelX, CountingNoiseModelZ, NoiseModelXZUpperSympy
 import util.cache
-from counting.component.base import InputAdapter, ConcatenatedComponent
+from counting.component.adapter import InputAdapter
+from counting.component.base import ConcatenatedComponent
 from counting.component.transversal import TransCnot
-from counting.component.exrec import ExRec
-from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
+from counting.component.exrec import ExRec, ExRecForward
+from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC,\
+    LECSyndromeAdapter
 from counting import probability
+import logging
 
 
 def makeED(kGood):
@@ -35,7 +38,7 @@ def makeED(kGood):
 
 
 def run():
-    kGood = {pauli: 1 for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}
+    kGood = {pauli: 3 for pauli in [Pauli.X, Pauli.Z, Pauli.Y]}
     
 
 #    noises = { Pauli.X: NoiseModelXSympy(),
@@ -44,7 +47,7 @@ def run():
 #             }
     noises = {Pauli.X: NoiseModelXSympy(),
               Pauli.Z: NoiseModelZSympy(),
-              Pauli.Y: NoiseModelXZLowerSympy(),
+              Pauli.Y: NoiseModelXZUpperSympy(),
               }
     
     pauli = Pauli.Y
@@ -54,27 +57,51 @@ def run():
     
     ed = makeED(kGood)
     led = InputAdapter(ed, (0,))
-    led2 = ConcatenatedComponent(kGood, led, led)
+    #led = LECSyndromeAdapter(led)
+    led = ConcatenatedComponent(kGood, led, led)
     cnot = TransCnot(kGood, code, code)
     ted = TECDecodeAdapter(ed)
-    ted2 = ConcatenatedTEC(kGood, ted, ted)
+    ted = ConcatenatedTEC(kGood, ted, ted)
     
-    exRec = ExRec(kGood, led, id, ted)
+    exRec = ExRecForward(kGood, led, cnot, ted)
+    
+    p = .005
+    gamma = p/15
+
+    prBad = exRec.prBad(noises[pauli], pauli)
+    print 'Pr[bad]({0})'.format(p), prBad(gamma)
+    
+    raise Exception
     
     result = exRec.count(noises, pauli)
-    countPoly = probability.countsToPoly(result.counts, exRec.locations(pauli).getTotals(), noises[pauli])
-    prBad = exRec.prBad(noises[pauli], pauli)
     prAccept = exRec.prAccept(noises)
-    pr = countPoly / prAccept + prBad
-    print pr(0.001)
+    print 'Pr[accept]({0})'.format(p), prAccept(gamma)
+    locTotals = exRec.locations(pauli).getTotals()
+    noise = noises[pauli]
+    
+    print 'result.counts=', result.counts
+    for pauli in (Pauli.X, Pauli.Z, Pauli.Y, Pauli.I):
+        counts = [{pauli:c.get(pauli, 0)} for c in result.counts]
+        countPoly = probability.countsToPoly(counts, locTotals, noise)
+        pr = countPoly / prAccept + prBad
+        print 'Pr[', pauli, ']({0})='.format(p), pr(gamma)
+        print counts
 
 if __name__ == '__main__':
     from counting import countParallel
     countParallel.setPool(countParallel.DummyPool())
     
+    
+    logger = logging.getLogger('counting.component')
+    #logger.setLevel(logging.DEBUG)
+    
+    logger = logging.getLogger('counting.probability')
+    #logger.setLevel(logging.DEBUG)
+    
     profile = False
-    fetch = False
+    fetch = True
     util.cache.enableFetch(fetch)
+    util.cache.enableMemo(fetch)
         
     if profile:
         import cProfile

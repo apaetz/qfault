@@ -133,7 +133,7 @@ class TeleportED(PostselectingComponent):
         ucTeleport = self[self.ucTeleportName]
         counts, keyMeta = ucTeleport.propagateCounts(inputResult.counts, inputResult.keyMeta)
                 
-        return CountResult(counts, keyMeta, self.outBlocks(), inputResult.rejected)
+        return CountResult(counts, keyMeta, None, inputResult.rejected)
     
     def _postCount(self, result, noiseModels, pauli):
         '''
@@ -203,11 +203,13 @@ class TeleportED(PostselectingComponent):
             for key, c in count.iteritems():
                 if accept(key):
                     outKey = outputKey(key)
+                    self._log(logging.DEBUG, 'accepted %s, output=%s, count=%d', key, outKey, c)
                     acceptedK[outKey] = acceptedK.get(outKey, 0) + c
                     
                     if rejectAll and (0 != k):
                         rejectedK += c
                 else:
+                    self._log(logging.DEBUG, 'rejected %s', key)
                     rejectedK += c
                     
             accepted.append(acceptedK)
