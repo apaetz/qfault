@@ -1,6 +1,5 @@
- - Basic component counting seems to work well.  Now need to integrate with Pr[bad], Pr[accept] calculations.
- - Improve unit test structure and quality.
-   - Break into separate files
-   - Build up generic TestComponent to test general features.
+- Noise: upper vs. lower bounds.
    
+- Modify TECDecodeAdapter to also calculate 1-block syndrome counts (upper bounds) for each type of logical error.
+
 - pylint (or other static analysis)

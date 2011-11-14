@@ -96,14 +96,17 @@ class Component(object):
 		Counts errors in the component.
 		Returns a CountResult. 
 		'''
-		logger.info('Counting ' + str(self) + ': ' + str(pauli))
+		self._log(logging.INFO, 'Counting: ' + str(pauli))
 		results = self._count(noiseModels, pauli)
 		
-		logger.debug('Convolving ' + str(self))
+		self._log(logging.DEBUG, 'Convolving')
 		result = self._convolve(results, noiseModels, pauli)
 		
-		logger.debug('Post processing ' + str(self))
-		return self._postCount(result, noiseModels, pauli)
+		self._log(logging.DEBUG, 'Post processing')
+		result = self._postCount(result, noiseModels, pauli)
+		
+		self._log(logging.DEBUG, 'counts=%s', result.counts)		
+		return result
 	
 	def prBad(self, noise, pauli, kMax=None):
 		prSelf = probability.prBadPoly(self.kGood[pauli], self.locations(pauli), noise, kMax)
@@ -167,12 +170,7 @@ class Component(object):
 		for count in counts[1:]:
 			convolved = convolve(convolved, count, kMax=k, convolveFcn=key.convolveKeyCounts, extraArgs=[keyMeta])
 			
-#		rejected = [result.rejected for result in results]
-#		rejectConvolved = rejected[0]
-#		for reject in rejected:
-#			rejectConvolved = convolve(rejectConvolved, reject, kMax=k)
-			
-		return CountResult(convolved, keyMeta, blocks)#, rejectedCounts=rejectConvolved)
+		return CountResult(convolved, keyMeta, blocks)
 	
 	def _postCount(self, result, noiseModels, pauli):
 		'''
@@ -316,39 +314,7 @@ class PostselectingComponent(InputDependentComponent):
 		raise NotImplementedError
 	
 	
-class ComponentAdapter(Component):
-	
-	def __init__(self, adaptee):
-		kGood = {}
-		super(ComponentAdapter, self).__init__(kGood, subcomponents={'adaptee': adaptee})
-		
-		self.locations = adaptee.locations
-		self.inBlocks = adaptee.inBlocks
-		self.outBlocks = adaptee.outBlocks
-		self.logicalStabilizers = adaptee.logicalStabilizers
-		self.propagateCounts = adaptee.propagateCounts
-		self.keyPropagator = adaptee.keyPropagator
-		
-	
-class InputAdapter(ComponentAdapter):
-	
-	def __init__(self, component, inputKey):
-		blocks = component.inBlocks()
-		code = blocks[0].getCode()
-		parityChecks = SyndromeKeyGenerator.ParityChecks(code)
-		keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
-		inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
-		
-		super(InputAdapter, self).__init__(component)
-		
-		self._component = component
-		self._inResult = inputResult
-		
-	def count(self, noiseModels, pauli):
-		return self._component.count(noiseModels, pauli, self._inResult)
-	
-	def prAccept(self, noiseModels, kMax=None):
-		return self._component.prAccept(noiseModels, self._inResult, kMax=kMax)
+
 
 #def InputAdapter(component, inputKey):
 #	
