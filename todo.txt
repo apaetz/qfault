@@ -1,5 +1,6 @@
-- Noise: upper vs. lower bounds.
-   
-- Modify TECDecodeAdapter to also calculate 1-block syndrome counts (upper bounds) for each type of logical error.
+ - Modify TECDecodeAdapter to also calculate 1-block syndrome counts (upper bounds) for each type of logical error.
 
+
+- Eliminate dead code.
+- Documentation
 - pylint (or other static analysis)

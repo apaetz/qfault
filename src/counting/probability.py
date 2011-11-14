@@ -7,7 +7,7 @@ Created on 2010-06-17
 from counting import countParallel
 from counting.location import LocationCount
 from fractions import Fraction
-from settings.noise import NoiseModelXSympy
+from settings.noise import NoiseModelXSympy, Bound
 from util.counterUtils import PartitionIterator, loccnot, locrest, locXprep, \
 	locXmeas, locZprep, locZmeas, SliceIterator
 import gmpy
@@ -143,7 +143,7 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	# types. Each product term is computed in parallel.
 	#===============================================================================
 
-	
+	bound = Bound.UpperBound
 	locTotals = locations.getTotals()
 	nTotal = reduce(operator.add, locTotals)
 	if None == kMax:
@@ -178,12 +178,12 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	locsList = [locsList[i] for i in range(len(locsList)) if nList[i]]
 	nList = [n for n in nList if n]
 	
-	prIdealList = [noiseModel.prIdeal(l) for l in locsList]
+	prIdealList = [noiseModel.prIdeal(l, bound=bound) for l in locsList]
 	
 	weightList = []
 	for l in locsList:
 		nErrors = len(noiseModel.errorList(l))
-		w = sum(noiseModel.getWeight(l,e) for e in range(nErrors))
+		w = sum(noiseModel.getWeight(l,e, bound=bound) for e in range(nErrors))
 		weightList.append(w)
 
 	# This should look something like (1-12g)^nCnot * (1-8g)^nRest * ...
@@ -203,8 +203,8 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	nList = newNList
 					
 	pr = 0
-	likelyhood = noiseModel.likelyhood()
-	weights = boundedFailureWeights(kMin, locTotals, noiseModel, kMax)
+	likelyhood = noiseModel.likelyhood(bound=bound)
+	weights = boundedFailureWeights(kMin, locTotals, noiseModel, kMax, bound)
 	for k in range(kMin, kMax):
 		pr += weights[k-kMin] * (likelyhood ** k)
 		
@@ -234,9 +234,9 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 
 
 
-def boundedFailureWeights(kMin, locTotals, noiseModel, kMax):
+def boundedFailureWeights(kMin, locTotals, noiseModel, kMax, bound=Bound.UpperBound):
 	'''
-	Calculates a vector of likelyhood weights that can be used to upper bound Pr[kMin <= k <= kMax].	
+	Calculates a vector of likelyhood weights that can be used to bound Pr[kMin <= k <= kMax].	
 	Arguments
 	---------
 	kMin		-- The minimum number of failures.
@@ -268,7 +268,7 @@ def boundedFailureWeights(kMin, locTotals, noiseModel, kMax):
 		
 	weightList = []
 	for l in locsList:
-		w = sum(noiseModel.getWeight(l,e) for e in range(noiseModel.numErrors(l)))
+		w = sum(noiseModel.getWeight(l,e, bound) for e in range(noiseModel.numErrors(l)))
 		weightList.append(w)
 		
 	# Check for identical weights.  These can be grouped together which

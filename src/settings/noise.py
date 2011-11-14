@@ -11,6 +11,9 @@ from util.polynomial import sympoly1d, SymPolyWrapper
 from util.iteration import SubsetIterator
 import warnings
 
+class Bound(object):
+	UpperBound = 0
+	LowerBound = 1
 
 
 errorListX = {
@@ -102,7 +105,7 @@ class DepolarizingNoiseModel(NoiseModel):
 		super(DepolarizingNoiseModel,self).__init__(gMin,gMax)
 	
 	@abstractmethod
-	def getWeight(self, loc, error):
+	def getWeight(self, loc, error, bound):
 		'''
 		Returns the "weight" associated with the given error for
 		location loc.  The probability of the error is calculated
@@ -111,18 +114,23 @@ class DepolarizingNoiseModel(NoiseModel):
 		'''
 			
 	@abstractmethod
-	def prFail(self, loc):
+	def prFail(self, loc, bound):
 		'''
 		Returns the probability that location loc will fail, expressed
 		in terms of the noise strength.
 		'''
 	
-	def prIdeal(self, loc):
+	def prIdeal(self, loc, bound):
 		'''
 		Returns the probability that location loc acts ideally,
 		i.e, that it does not fail.
 		'''
-		return 1 - self.prFail(loc)
+		if Bound.UpperBound == bound:
+			bound = Bound.LowerBound
+		else:
+			bound = Bound.UpperBound
+			
+		return 1 - self.prFail(loc, bound)
 		
 class DepolarizingNoiseModelSympy(DepolarizingNoiseModel):
 	'''
@@ -130,18 +138,18 @@ class DepolarizingNoiseModelSympy(DepolarizingNoiseModel):
 	represented by Sympy symbolic expressions.
 	'''
 							
-	def prFail(self, loc):
-		weights = [self.getWeight(loc, error) for error in self.errorList(loc)]
+	def prFail(self, loc, bound):
+		weights = [self.getWeight(loc, error, bound) for error in self.errorList(loc)]
 		coeffs = [sum(weights), 0]
 		sympoly = sympoly1d(coeffs)		
 		return SymPolyWrapper(sympoly)
 	
 class CountingNoiseModel(DepolarizingNoiseModelSympy):
 	
-	def getWeight(self, loc, error):
+	def getWeight(self, loc, error, bound=Bound.UpperBound):
 		return 1
 	
-	def likelyhood(self):
+	def likelyhood(self, bound=Bound.UpperBound):
 		# 1 / (1-g)
 		return SymPolyWrapper(1 / sympoly1d([-1, 1]))
 	
@@ -162,15 +170,15 @@ class CountingNoiseModelZ(CountingNoiseModel):
 			return []
 
 		
-class UpperBoundNoiseModelSympy(DepolarizingNoiseModelSympy):
-	'''
-	Special case of depolarizing noise in which upper bounds on the
-	error probabilities are known, but an upper bound on the
-	probability that a location does *not* fail is unknown.
-	'''
-	
-	def prIdeal(self, loc):
-		return SymPolyWrapper(sympoly1d([1]))
+#class UpperBoundNoiseModelSympy(DepolarizingNoiseModelSympy):
+#	'''
+#	Special case of depolarizing noise in which upper bounds on the
+#	error probabilities are known, but an upper bound on the
+#	probability that a location does *not* fail is unknown.
+#	'''
+#	
+#	def prIdeal(self, loc):
+#		return SymPolyWrapper(sympoly1d([1]))
 	
 class NoiseModelMarginalSympy(DepolarizingNoiseModelSympy):
 	'''
@@ -182,14 +190,19 @@ class NoiseModelMarginalSympy(DepolarizingNoiseModelSympy):
 		super(NoiseModelMarginalSympy, self).__init__(gMin, gMax)
 		self._errorList = errorList
 	
-	def getWeight(self, loc, error):
+	def getWeight(self, loc, error, bound=Bound.UpperBound):
+		# Weights are the same regardless of the bound type.
 		if loc['type'] == 'rest':
 			return 8
 		return 4
 	
-	def likelyhood(self):
+	def likelyhood(self, bound):
 		# g/(1-12g): Upper bound by dividing by 1-12g in all cases.
-		return  SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-12, 1]))
+		if Bound.UpperBound == bound:
+			return  SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-12, 1]))
+		
+		# g/(1-4g): Upper bound by dividing by 1-4g in all cases.
+		return  SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-4, 1]))
 	
 	def errorList(self, loc):
 		try:
@@ -211,46 +224,28 @@ class NoiseModelZSympy(NoiseModelMarginalSympy):
 		super(NoiseModelZSympy, self).__init__(errorListZ, gMin, gMax)
 	
 	
-class NoiseModelXZLowerSympy(DepolarizingNoiseModelSympy):
+class NoiseModelXZSympy(DepolarizingNoiseModelSympy):
 	'''
 	Concrete realization of the depolarizing noise model in which
 	noise weights, likelyhoods, etc. are given in terms of *lower* bounds.
 	'''
 	
-	def getWeight(self, loc, error):
+	def getWeight(self, loc, error, bound=Bound.UpperBound):
 		'''
 		For XZ counts we want lower bounds and so the likelyhoods are calculated as g/(1-4g) instead
 		of g/(1-15g).  As a result, the weights are a bit different.
 		'''
+		
+		# Weights are the same regardless of bound type
 		if loc['type'] == 'cnot':
 			return 1
 		return 4
 	
-	def likelyhood(self):
-		# g/(1-4g): Lower bound by dividing by 1-4g in all cases.
-		return SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-4, 1]))
-	
-	def errorList(self, loc):
-		try:
-			return errorListXZ[loc['type']]
-		except KeyError:
-			return []
-	
-	def __str__(self):
-		return 'lower-w=4.c=1'
-	
-class NoiseModelXZUpperSympy(DepolarizingNoiseModelSympy):
-	'''
-	Concrete realization of the depolarizing noise model in which
-	noise weights, likelyhoods, etc. are given in terms of *lower* bounds.
-	'''
-	
-	def getWeight(self, loc, error):
-		if loc['type'] == 'cnot':
-			return 1
-		return 4
-	
-	def likelyhood(self):
+	def likelyhood(self, bound):
+		if Bound.LowerBound == bound:
+			# g/(1-4g): Lower bound by dividing by 1-4g in all cases.
+			return SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-4, 1]))
+		
 		# g/(1-15g): Upper bound by dividing by 1-15g in all cases.
 		return SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-15, 1]))
 	
@@ -261,9 +256,9 @@ class NoiseModelXZUpperSympy(DepolarizingNoiseModelSympy):
 			return []
 	
 	def __str__(self):
-		return 'upper-w=4.c=1'
+		return 'lower-w=4.c=1'
 
-class TransformedNoiseModelSympy(UpperBoundNoiseModelSympy):
+class TransformedNoiseModelSympy(DepolarizingNoiseModelSympy):
 	'''
 	Abstract class for a transformed noise model, i.e., one
 	in which error weights of similar errors may be drastically
