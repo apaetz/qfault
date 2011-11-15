@@ -7,8 +7,7 @@ Created on May 3, 2011
 from counting import probability
 from qec.error import Pauli
 from qec.qecc import TrivialStablizerCode
-from settings.noise import NoiseModelXSympy, NoiseModelZSympy, \
-	NoiseModelXZLowerSympy, NoiseModelXZUpperSympy, CountingNoiseModelX, \
+from settings.noise import NoiseModelXSympy, NoiseModelZSympy, NoiseModelXZSympy, CountingNoiseModelX, \
 	CountingNoiseModelZ
 import logging
 import unittest
@@ -19,7 +18,7 @@ class ComponentTestCase(unittest.TestCase):
 	
 	depolarizingNoiseModels = {Pauli.X: NoiseModelXSympy(),
 			 			  Pauli.Z: NoiseModelZSympy(),
-			 			  Pauli.Y: NoiseModelXZUpperSympy()}
+			 			  Pauli.Y: NoiseModelXZSympy()}
 	
 	countingNoiseModels = {Pauli.X: CountingNoiseModelX(),
 						   Pauli.Z: CountingNoiseModelZ()}
@@ -32,7 +31,7 @@ class ComponentTestCase(unittest.TestCase):
 		#util.cache.enableMemo(False)
 	
 		complog = logging.getLogger('counting.component')
-		complog.setLevel(logging.DEBUG)
+		#complog.setLevel(logging.DEBUG)
 		#complog.setLevel(logging.INFO)
 	
 	def testProbabilities(self):
@@ -62,6 +61,7 @@ class ComponentTestCase(unittest.TestCase):
 						print 'pr({0})={1}'.format(gamma, pr(gamma))
 						print 'prAccept({0})={1}'.format(gamma, prAccept(gamma))
 						print 'prBad({0})={1}'.format(gamma, prBad(gamma))
+						print 'prTot({0})={1}'.format(gamma, prTot(gamma))
 						raise e
 						
 				

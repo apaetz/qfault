@@ -201,7 +201,7 @@ class NoiseModelMarginalSympy(DepolarizingNoiseModelSympy):
 		if Bound.UpperBound == bound:
 			return  SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-12, 1]))
 		
-		# g/(1-4g): Upper bound by dividing by 1-4g in all cases.
+		# g/(1-4g): Lower bound by dividing by 1-4g in all cases.
 		return  SymPolyWrapper(sympoly1d([1,0]) / sympoly1d([-4, 1]))
 	
 	def errorList(self, loc):

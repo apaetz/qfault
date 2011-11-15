@@ -5,9 +5,10 @@ Created on May 3, 2011
 '''
 
 from copy import copy
-from counting.component.base import Empty, InputAdapter
+from counting.component.adapter import InputAdapter
+from counting.component.base import Empty
 from counting.component.ec import TECDecodeAdapter, LECSyndromeAdapter
-from counting.component.exrec import ExRec
+from counting.component.exrec import ExRec, ExRecForward
 from qec.error import Pauli
 import logging
 import testComponent
@@ -18,16 +19,24 @@ import unittest
 class TestExRecTeleportED(testComponent.ComponentTestCase):
 
 	def testCount(self):
-		kGood = {Pauli.X: 1, Pauli.Z: 1}
+		kGood = {Pauli.X: 2, Pauli.Z: 2}
 		noise = self.countingNoiseModels
-		code = self.trivialCode
 		
-		exRec = self._getComponent(kGood, code)
-		for pauli in (Pauli.X, Pauli.Z):
-			result = exRec.count(noise, pauli)
-			expected = [{Pauli.I: 1}, {pauli: 7, Pauli.I: 11}]
-			print result.counts
-			assert result.counts == expected
+		def checkCount(code, expected):
+			exRec = self._getComponent(kGood, code)
+			for pauli in (Pauli.X, Pauli.Z):
+				result = exRec.count(noise, pauli)
+				print result.counts
+				assert result.counts == expected[pauli]
+				
+		# There are 7 ways to produce an X/Z-error from the output of the
+		# first ED with one fault.  There are also many ways to produce
+		# the trivial error, but these get filtered out by the Forward
+		# exRec.  There are 7*2 ways to get an X with one fault in each ED, and
+		# 10 ways to get an X with two faults in the first ED.  There are 7*7
+		# ways to get an X in both ED's, resulting in an overall I error.
+		expected = {pauli: [{}, {pauli: 7}, {Pauli.I: 7*7, pauli: 7*2 + 10}] for pauli in (Pauli.X, Pauli.Z)}
+		checkCount(self.trivialCode, expected)
 			
 
 #	def testXCnot(self):
@@ -65,16 +74,21 @@ class TestExRecTeleportED(testComponent.ComponentTestCase):
 #		tec = TECDecodeAdapter(ec)
 #	@SkipTest
 #	def testPrAccept(self):
+
+	def testProbabilities(self):
+		# The normal probability test doesn't work for the Forward ExRec because
+		# some of the counts are filtered out after the Ga.
+		pass
+	
 		
 	def _getComponent(self, kGood, code):
 		empty = Empty(code) 
 		
 		ec = testTeleport.TestTeleportED.TeleportED(kGood, code)
 		lec = InputAdapter(ec, (0,))
-		lec = LECSyndromeAdapter(lec)
 		tec = TECDecodeAdapter(ec)
 		
-		exRec = ExRec(kGood, lec, empty, tec)
+		exRec = ExRecForward(kGood, lec, empty, tec)
 		return exRec
 
 if __name__ == "__main__":

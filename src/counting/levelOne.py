@@ -3,20 +3,18 @@ Created on Apr 29, 2011
 
 @author: Adam
 '''
-from component.exrec import countRestExRecZero, countRestExRecPlus, \
-	countPrepZeroExRec, countPrepPlusExRec, countMeasZExRec, countMeasXExRec, \
-	countCnotExRec, exRecXOnly, exRecZOnly
-from component.xverify import countXVerifyXOnly
-from component.zverify import countZVerifyZOnly
+
 from counting.bounding import computeWeights
 from counting.countErrors import CountResult
 from counting.probability import countResultAsPoly, calcPrBad
-from counting.threshold import pseudoThresh
+from counting.threshold import pseudoThresh, findIntersection
 from util.cache import fetchable
 from util.counterUtils import loccnot
 from util.listutils import addLists
 from util.plotting import plotPolyList
 import logging
+from counting import probability
+import counting
 
 logger = logging.getLogger('levelOne')
 
@@ -165,6 +163,7 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	#thresh = pseudoThresh(prFail, pMin, pMax)
 	thresh = pseudoThresh(prFail, pMin, pMax)
 	
+
 #	settingsStr = str(ancillaPairs) + str(settings)
 #	settingsStr = settingsStr.replace(' ', '').replace('.', '').replace(')','').replace('(','')
 #	settingsStr = settingsStr.replace('}', ']').replace('{', '[')	
@@ -181,3 +180,22 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	print 'pseudothreshold (p) >=', thresh
 	
 	return thresh/cnotWeight
+
+def pseudoThreshold(counts, locTotals, prBad, prAccept, noise):
+	
+	logger.info('Computing CNOT pseudothreshold')
+	
+	gMin, gMax = noise.noiseRange()
+	cnotLoc = loccnot('A', 0, 'A', 1)
+	cnotWeight = sum(noise.getWeight(cnotLoc, e) for e in range(noise.numErrors(cnotLoc)))
+	pMin = cnotWeight * gMin
+	pMax = min(cnotWeight * gMax, 1)
+	
+	prFailGamma = probability.countsToPoly(counts, locTotals, noise) / prAccept + prBad
+	prFail = lambda p: prFailGamma(p/cnotWeight)
+		
+	thresh = counting.threshold.pseudoThresh(prFail, pMin, pMax, tolerance=1e-5)
+
+	print 'pseudothreshold (p) >=', thresh
+	
+	return thresh
