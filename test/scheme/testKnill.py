@@ -15,6 +15,7 @@ from qec.error import Pauli
 from qec.qecc import StabilizerState
 from settings.noise import CountingNoiseModelX, CountingNoiseModelZ
 import unittest
+from scheme.knill import KnillScheme
 
 
 class TestKnill(unittest.TestCase):
@@ -58,6 +59,28 @@ class TestKnill(unittest.TestCase):
         
         result = exRec.count(noises, pauli)
         print result.counts
+        
+    def testCount(self):
+        kGood = {Pauli.X: 1, Pauli.Z: 1}
+        noise = self.countingNoiseModels
+        
+        scheme = KnillScheme(kGood, kGood, kGood, kGood)
+
+        exRec = scheme.getExecs()['cnot']
+        for pauli in (Pauli.X, Pauli.Z):
+            result = exRec.count(noise, pauli)
+            print result.counts
+            assert result.counts == expected[pauli]
+        
+        def checkCount(code, expected):
+
+                
+        # There are 7 ways to produce an X/Z-error from the output of the
+        # first ED with one fault.  There are also many ways to produce
+        # the trivial error, but these get filtered out by the Forward
+        # exRec.
+        expected = {pauli: [{}, {pauli: 7}] for pauli in (Pauli.X, Pauli.Z)}
+        checkCount(self.trivialCode, expected)
 
 
 

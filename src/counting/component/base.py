@@ -8,17 +8,14 @@ from counting import probability, key, countErrors
 from counting.block import Block
 from counting.countErrors import mapCounts, countBlocksBySyndrome
 from counting.countParallel import convolve
-from counting.key import SyndromeKeyGenerator, SyndromeKeyMeta,\
-	KeySplitter, KeyManipulator, KeyConcatenator, KeyExtender
+from counting.key import KeySplitter, KeyManipulator, KeyConcatenator, KeyExtender
 from counting.location import Locations
 from counting.result import CountResult
 from qec.error import Pauli
-from util import counterUtils
 from util.cache import fetchable, memoize
 import logging
 import operator
 from util.polynomial import sympoly1d, SymPolyWrapper
-from util.patterns import DelegatingAdapter
 
 logger = logging.getLogger('counting.component')
 
@@ -26,8 +23,8 @@ logger = logging.getLogger('counting.component')
 class Component(object):
 	'''
 	Abstract class for circuit "components" of the extended rectangle (exRec).
-	To count errors, the exRec is divided up into a hierarchy of components.
 	
+	To count errors, the exRec is divided up into a hierarchy of components.
 	Each component contains a number of sub-components.  Errors are counted
 	recursively by first counting small numbers of errors in each sub-component
 	and then combining the error information.
@@ -45,6 +42,10 @@ class Component(object):
 	The count() method is a template.  So rather than overriding count(),
 	subclasses should instead implement hook methods _count(), _convolve(),
 	and _postCount().
+	
+	Other useful public methods include prBad(), and prAccept(), which return
+	polynomials representing the probability that the component is "bad" and
+	that the component accepts, respectively.
 	'''
 
 	def __init__(self, kGood, nickname=None, subcomponents={}):
@@ -55,15 +56,61 @@ class Component(object):
 		self._nickname = nickname
 		self._subs = subcomponents
 		
-	def __setitem__(self, name, component):
-		self._subs[name] = component
+#################
+# Public methods
+#################
+
+	@fetchable
+	def count(self, noiseModels, pauli):
+		'''
+		Counts errors in the component.
+		Returns a CountResult. 
+		
+		:param dict noiseModels: A dictionary, indexed by Pauli error, of noise models.
+		:param pauli: The error type to count.  Use Pauli.Y to count X and Z errors together.
+		'''
+		self._log(logging.INFO, 'Counting: ' + str(pauli))
+		results = self._count(noiseModels, pauli)
+		
+		self._log(logging.DEBUG, 'Convolving')
+		result = self._convolve(results, noiseModels, pauli)
+		
+		self._log(logging.DEBUG, 'Post processing')
+		result = self._postCount(result, noiseModels, pauli)
+		
+		self._log(logging.DEBUG, 'counts=%s', result.counts)		
+		return result
 	
-	def __getitem__(self, name):
-		return self._subs[name]
+	def prBad(self, noise, pauli, kMax=None):
+		'''
+		Returns polynomial representing an upper bound on the probability that the component is
+		bad.
+		:param noise: The noise model.
+		:param pauli: The error type
+		:param kmax: The maximum number of faults to consider.
+		'''
+		prSelf = probability.prBadPoly(self.kGood[pauli], self.locations(pauli), noise, kMax)
+		self._log(logging.DEBUG, 'Pr[bad] (self)=%s', prSelf)
+		prSubs = [sub.prBad(noise, pauli, kMax=self.kGood[pauli]) for sub in self.subcomponents().values()]
+		return sum(prSubs) + prSelf
 	
+	def prAccept(self, noiseModels, kMax=None):
+		'''
+		Returns a polynomial representing a lower bound on the probability that the component
+		accepts.  (This is just 1 for components without postselection.)
+		
+		:param dict noiseModels: A dictionary of noise models, indexed by Pauli error type.
+		:param kMax: (optional) The maximum number of faults to consider. (i.e., Pr[accept, K <= kMax])
+		'''
+		prSubs = [sub.prAccept(noiseModels, kMax=self.kGood) for sub in self.subcomponents().values()]
+		return reduce(operator.mul, prSubs, SymPolyWrapper(sympoly1d([1])))
+		
 	def locations(self, pauli=Pauli.Y):
 		'''
 		Returns the set of locations contained in the component (and all sub-components).
+		Note that the order of returned set of locations need not match the physical order
+		of locations in the circuit.
+		
 		:rtype: :class:`Locations`
 		'''
 		locs = Locations()
@@ -79,56 +126,52 @@ class Component(object):
 		return Locations()
 	
 	def inBlocks(self):
+		'''
+		Returns the list of input blocks.
+		'''
 		return tuple()
 	
 	def outBlocks(self):
+		'''
+		Returns the list of output blocks.
+		'''
 		raise NotImplementedError
 	
 	def logicalStabilizers(self):
+		'''
+		TODO: necessary?
+		'''
 		return tuple([])
 	
 	def subcomponents(self):
+		'''
+		Returns the list of sub-components.
+		'''
 		return self._subs
-		
-	@fetchable
-	def count(self, noiseModels, pauli):
-		'''
-		Counts errors in the component.
-		Returns a CountResult. 
-		'''
-		self._log(logging.INFO, 'Counting: ' + str(pauli))
-		results = self._count(noiseModels, pauli)
-		
-		self._log(logging.DEBUG, 'Convolving')
-		result = self._convolve(results, noiseModels, pauli)
-		
-		self._log(logging.DEBUG, 'Post processing')
-		result = self._postCount(result, noiseModels, pauli)
-		
-		self._log(logging.DEBUG, 'counts=%s', result.counts)		
-		return result
-	
-	def prBad(self, noise, pauli, kMax=None):
-		prSelf = probability.prBadPoly(self.kGood[pauli], self.locations(pauli), noise, kMax)
-		self._log(logging.DEBUG, 'Pr[bad] (self)=%s', prSelf)
-		prSubs = [sub.prBad(noise, pauli, kMax=self.kGood[pauli]) for sub in self.subcomponents().values()]
-		return sum(prSubs) + prSelf
-	
-	def prAccept(self, noiseModels, kMax=None):
-		prSubs = [sub.prAccept(noiseModels, kMax=self.kGood) for sub in self.subcomponents().values()]
-		prAccept = self._prAccept(noiseModels, kMax)
-		return reduce(operator.mul, prSubs, prAccept)
-	
-	def _prAccept(self, noiseModels, kMax):
-		return SymPolyWrapper(sympoly1d([1]))
 	
 	def propagateCounts(self, counts, keyMeta):
+		'''
+		Propagates the given counts through the component.
+		
+		:param dict counts: Counts indexed by [k][key][count]
+		:param keyMeta: The key metadata for counts.
+		:rtype tuple: The propagated counts and corresponding key metadata
+		'''
 		propagator = self.keyPropagator(keyMeta)
 		propagated = mapCounts(counts, propagator)		
 		return propagated, propagator.meta()
 	
 	def keyPropagator(self, keyMeta):
+		'''
+		Returns an object that may be used to propagate keys through the component.
+		:param keyMeta: The key metadata (or another KeyPropagator)
+		:rtype: :class:`KeyPropagator`
+		'''
 		return keyMeta
+	
+###################################
+# Private methods (subclass hooks)
+###################################
 	
 	def _count(self, *args):
 		'''
@@ -144,10 +187,10 @@ class Component(object):
 		'''
 		Subclass hook.
 		Combines errors from each of the sub-components.
-		The default implementation simply returns 'counts'.
-		Any non-trivial component will need to implement this method.
+		The default implementation assumes that all subcomponents contain the same
+		number of blocks and that those blocks line up correctly.
 		
-		Returns a CountResult object.
+		:rtype: :class:`CountResult`
 		'''
 		
 		# The sub-component names won't be used
@@ -177,10 +220,20 @@ class Component(object):
 		Subclass hook.
 		Performs (optional) error count post-processing.
 		
-		Returns a CountResult object.
+		:rtype: :class:`CountResult`
 		'''
+		# TODO: this could be a good place to check for, and compute XZ corrections.
 		return result
 	
+
+#################################
+	
+	def __setitem__(self, name, component):
+		self._subs[name] = component
+	
+	def __getitem__(self, name):
+		return self._subs[name]
+		
 	def _log(self, level, msg, *args, **kwargs):
 		classname = self.__class__.__name__
 		logger.log(level, ''.join([classname, ': ', msg]), *args, **kwargs)
@@ -204,7 +257,7 @@ class Component(object):
 	
 class CountableComponent(Component):
 	'''
-	This is a component which, in addition to (or instead of) having sub-components,
+	A component which, in addition to (or instead of) having sub-components,
 	also has its own physical locations that must be counted.
 	'''
 	
@@ -241,6 +294,9 @@ class CountableComponent(Component):
 		return subcounts
 	
 class Empty(CountableComponent):
+	'''
+	A completely empty component.
+	'''
 	
 	def __init__(self, code, blockname='0'):
 		locs = Locations([])
@@ -248,12 +304,23 @@ class Empty(CountableComponent):
 		super(Empty, self).__init__(locs, [blockname], {blockname: code}, kGood)
 
 class Prep(CountableComponent):
+	'''
+	Codeword preparation.
+	'''
 	
 	def __init__(self, kGood, locations, code):
 		blocknames = list(locations.blocknames())
 		super(Prep, self).__init__(locations, blocknames, {name: code for name in blocknames}, kGood)
 		
 class InputDependentComponent(Component):
+	'''
+	Abstract class for components which require input.
+	
+	Many components can be counted by specifying only the number of faults. Input to those components
+	can be specified later on and convolved with the count of the original component.
+	The behavior of some components, however, depends on the input.  This class accounts for the input
+	by adding an additional input parameter to the necessary Component methods.  See also :class:`InputAdapter`.
+	'''
 
 	def count(self, noiseModels, pauli, inputResult):
 		# Counting and convolving may manipulate the input directly.
@@ -270,42 +337,52 @@ class InputDependentComponent(Component):
 		return self._postCount(result, noiseModels, pauli)
 	
 	def prAccept(self, noiseModels, inputResult, kMax=None):
-		prSubs = [sub.prAccept(noiseModels, kMax=self.kGood) for sub in self.subcomponents().values()]
-		prAccept = self._prAccept(noiseModels, inputResult, kMax)
-		return reduce(operator.mul, prSubs, prAccept)
-	
-	def _prAccept(self, noiseModels, inputResult, kMax):
-		return super(InputDependentComponent, self)._prAccept(noiseModels, kMax)
+		return super(InputDependentComponent, self).prAccept(noiseModels, kMax)
 		
 	@memoize
 	def _count(self, noiseModels, pauli):
 		return super(InputDependentComponent, self)._count(noiseModels, pauli)
 	
 	def _convolve(self, results, noiseModels, pauli, inputResult):
-		inputResult = self._propagateInput(inputResult)
+		inputResult = self._prepareInput(inputResult)
 		inputResult.blocks = results.values()[0].blocks
 		results['input'] = inputResult
 		return super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
 
-	def _propagateInput(self, inputResult):
+	def _prepareInput(self, inputResult):
 		raise NotImplementedError
 	
+	def keyPropagator(self, keyMeta):
+		raise Exception('Cannot propagate keys through an input dependent component.')
+	
 class PostselectingComponent(InputDependentComponent):
+	'''
+	Special case of an input-dependent component in which postselection is used.
+	Postselecting components accept some errors, passing them to the output, and reject other errors.
+	'''
 	
 	def __init__(self, kGood, pauliDependency=Pauli.Y, **kwargs):
 		super(PostselectingComponent, self).__init__(kGood, **kwargs)
 		self._pauliDependency = pauliDependency
 	
-	def _prAccept(self, noiseModels, inputResult, kMax):
+	def prAccept(self, noiseModels, inputResult, kMax):
+		'''
+		Computes a lower bound on the acceptance probability using upper bounds on the
+		rejection probability.
+		'''
+		
+		# First, compute the acceptance probabililty of the subcomponents.
+		prSubs = super(PostselectingComponent, self).prAccept(noiseModels, inputResult, kMax)
+		
 		pauli = self._pauliDependency
 		rejected = self.count(noiseModels, pauli, inputResult).rejected
 		prBad = self.prBad(noiseModels[pauli], pauli, kMax)
 		locTotals = self.locations(pauli).getTotals()
 		
 		prAccept = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[pauli])
-		self._log(logging.DEBUG, 'Pr[accept](self) = %s', prAccept)
+		self._log(logging.DEBUG, 'Pr[accept] = %s', prAccept)
 		
-		return prAccept
+		return prAccept * prSubs
 
 	def _postCount(self, result, noiseModels, pauli):
 		'''
@@ -314,53 +391,12 @@ class PostselectingComponent(InputDependentComponent):
 		raise NotImplementedError
 	
 	
-
-
-#def InputAdapter(component, inputKey):
-#	
-#	blocks = component.inBlocks()
-#	code = blocks[0].getCode()
-#	parityChecks = SyndromeKeyGenerator.ParityChecks(code)
-#	keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
-#	inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
-#		
-#	def countInputAdapter(noiseModels, pauli):
-#		return component.countNonAdapted(noiseModels, pauli, inputResult)
-#	
-#	def prAcceptInputAdapter(noiseModels, kMax=None):
-#		return component.prAcceptNonAdapted(noiseModels, inputResult, kMax)
-#	
-#	InputAdapterType = type('InputAdapter', ())
-#	component.countNonAdapted = component.count
-#	component.count = countInputAdapter
-#	component.prAcceptNonAdapted = component.prAccept
-#	component.prAccept = prAcceptInputAdapter
-#	
-#def InputAdapter2(componentClass, inputKey, *args, **kwargs):
-#	
-#	def getType
-#	
-#	def __init__(self, *args):
-#		super()
-#	blocks = component.inBlocks()
-#	code = blocks[0].getCode()
-#	parityChecks = SyndromeKeyGenerator.ParityChecks(code)
-#	keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
-#	inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
-#		
-#	def countInputAdapter(noiseModels, pauli):
-#		return component.countNonAdapted(noiseModels, pauli, inputResult)
-#	
-#	def prAcceptInputAdapter(noiseModels, kMax=None):
-#		return component.prAcceptNonAdapted(noiseModels, inputResult, kMax)
-#	
-#	InputAdapterType = type('InputAdapter', ())
-#	component.countNonAdapted = component.count
-#	component.count = countInputAdapter
-#	component.prAcceptNonAdapted = component.prAccept
-#	component.prAccept = prAcceptInputAdapter
-				
 class ConcatenatedComponent(Component):
+	'''
+	Wraps multiple independent components so that they act as a single component.
+	This is useful, for example, when a component with many output blocks
+	is connected to several components with smaller numbers of inputs.
+	'''
 	
 	def __init__(self, kGood, *components):
 		subs = {i: comp for i,comp in enumerate(components)}

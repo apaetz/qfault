@@ -32,7 +32,7 @@ class CnotRectangle(InputDependentComponent):
                         }
         super(CnotRectangle, self).__init__(kGood, subcomponents=subcomponents)
         
-#    def _propagateInput(self, inputResult):
+#    def _prepareInput(self, inputResult):
 #        cnot = self[self.cnotName]
 #        ucTeleport = self[self.ucTeleportName]
 #        
@@ -52,7 +52,7 @@ class CnotRectangle(InputDependentComponent):
 #        
 #        return propagated, outMeta
 
-    def _propagateInput(self, inputResult):
+    def _prepareInput(self, inputResult):
         cnot = self[self.cnotName]
         counts, keyMeta = cnot.propagateCounts(inputResult.counts, inputResult.keyMeta)
         

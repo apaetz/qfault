@@ -129,7 +129,7 @@ class TeleportED(PostselectingComponent):
     def outBlocks(self):
         return (self._outBlock,)
     
-    def _propagateInput(self, inputResult):
+    def _prepareInput(self, inputResult):
         ucTeleport = self[self.ucTeleportName]
         counts, keyMeta = ucTeleport.propagateCounts(inputResult.counts, inputResult.keyMeta)
                 

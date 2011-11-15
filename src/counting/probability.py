@@ -143,7 +143,7 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	# types. Each product term is computed in parallel.
 	#===============================================================================
 
-	bound = Bound.UpperBound
+	boundType = Bound.UpperBound
 	locTotals = locations.getTotals()
 	nTotal = reduce(operator.add, locTotals)
 	if None == kMax:
@@ -178,12 +178,12 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	locsList = [locsList[i] for i in range(len(locsList)) if nList[i]]
 	nList = [n for n in nList if n]
 	
-	prIdealList = [noiseModel.prIdeal(l, bound=bound) for l in locsList]
+	prIdealList = [noiseModel.prIdeal(l, boundType) for l in locsList]
 	
 	weightList = []
 	for l in locsList:
 		nErrors = len(noiseModel.errorList(l))
-		w = sum(noiseModel.getWeight(l,e, bound=bound) for e in range(nErrors))
+		w = sum(noiseModel.getWeight(l,e, boundType) for e in range(nErrors))
 		weightList.append(w)
 
 	# This should look something like (1-12g)^nCnot * (1-8g)^nRest * ...
@@ -203,8 +203,8 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	nList = newNList
 					
 	pr = 0
-	likelyhood = noiseModel.likelyhood(bound=bound)
-	weights = boundedFailureWeights(kMin, locTotals, noiseModel, kMax, bound)
+	likelyhood = noiseModel.likelyhood(boundType)
+	weights = boundedFailureWeights(kMin, locTotals, noiseModel, kMax, boundType)
 	for k in range(kMin, kMax):
 		pr += weights[k-kMin] * (likelyhood ** k)
 		
@@ -218,7 +218,7 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 		# likelyhoods)
 		
 		iterator = PartitionIterator(kMax, len(nList), nList) 
-		prFailList = [noiseModel.prFail(l) for l in locsList]
+		prFailList = [noiseModel.prFail(l, boundType) for l in locsList]
 		results = countParallel.iterParallel(iterator, constructLocLikely, [nList, prFailList])
 		cap = sum(r.get() for r in results)
 		logger.debug('adding bounding cap: %s', cap)
@@ -603,7 +603,7 @@ def calcP1(prMaligX, prMaligZ, prAccept, prBad):
 	
 
 
-def likelyhoodPrefactorPoly(locTotals, noise):
+def likelyhoodPrefactorPoly(locTotals, noise, bound):
 	nCnot = locTotals.cnot
 	nRest = locTotals.rest
 	nPrepX = locTotals.prepX
@@ -618,23 +618,23 @@ def likelyhoodPrefactorPoly(locTotals, noise):
 	prepZLoc = locZprep('A', 0)
 	measZLoc = locZmeas('A', 0)
 	
-	prefactor = noise.prIdeal(cnotLoc) ** nCnot
-	prefactor *= noise.prIdeal(restLoc) ** nRest
-	prefactor *= noise.prIdeal(prepXLoc) ** nPrepX
-	prefactor *= noise.prIdeal(measXLoc) ** nMeasX
-	prefactor *= noise.prIdeal(prepZLoc) ** nPrepZ
-	prefactor *= noise.prIdeal(measZLoc) ** nMeasZ
+	prefactor = noise.prIdeal(cnotLoc, bound) ** nCnot
+	prefactor *= noise.prIdeal(restLoc, bound) ** nRest
+	prefactor *= noise.prIdeal(prepXLoc, bound) ** nPrepX
+	prefactor *= noise.prIdeal(measXLoc, bound) ** nMeasX
+	prefactor *= noise.prIdeal(prepZLoc, bound) ** nPrepZ
+	prefactor *= noise.prIdeal(measZLoc, bound) ** nMeasZ
 				
 	return prefactor
 	
 
-def countsToPoly(counts, locTotals, noise):
+def countsToPoly(counts, locTotals, noise, bound=Bound.UpperBound):
 	'''
 	Convert weighed error likelyhood counts into a polynomial in gamma (= p/15).
 	'''
 	
-	prefactor = likelyhoodPrefactorPoly(locTotals, noise)
-	countPr =  countsAsProbability(counts, noise.likelyhood())
+	prefactor = likelyhoodPrefactorPoly(locTotals, noise, bound)
+	countPr =  countsAsProbability(counts, noise.likelyhood(bound))
 	return prefactor * countPr
 
 	

@@ -3,13 +3,14 @@ Created on 2011-10-25
 
 @author: adam
 '''
-from counting import key
+from counting import key, probability
 from counting.component.base import Component
 from counting.component.ec import TECDecodeAdapter, LECSyndromeAdapter
 from counting.component.transversal import TransCnot
 from counting.countParallel import convolve
 from counting.result import CountResult
 from util import listutils
+from qec.error import Pauli
 
 class ExRec(Component):
     
@@ -37,7 +38,16 @@ class ExRec(Component):
             # is calculated by the count() method.  Effectively we
             # have pushed acceptance from the TEC up to the entire
             # exRec.
-            prTEC = self._prAccept(noiseModels, kMax=self.kGood)
+            #prTEC = super(ExRec, self).self.prAccept(noiseModels, kMax=self.kGood)
+            
+            # TODO: hardcoded for now.  need to parameterize and probably refactor
+            # to a different class.
+            pauli = Pauli.Y
+            rejected = self.count(noiseModels, pauli).rejected
+            prBad = self.prBad(noiseModels[pauli], pauli, kMax)
+            locTotals = self.locations(pauli).getTotals()
+
+            prTEC = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[pauli])
         
         return prLEC * prGa * prTEC
         

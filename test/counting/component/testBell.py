@@ -4,29 +4,29 @@ Created on May 3, 2011
 @author: Adam
 '''
 
-import logging
-from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
-from unittest.case import SkipTest
 from counting import probability
-import testBase, testComponent
-logging.basicConfig(level=logging.DEBUG)
-
-from counting.component.transversal import TransCnot
-from counting.component.base import Prep, Empty, InputAdapter,\
-	ConcatenatedComponent
+from counting.component.base import Prep, Empty, ConcatenatedComponent
 from counting.component.bell import BellPair, BellMeas
+from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
 from counting.component.exrec import ExRec
 from counting.component.rectangle import CnotRectangle
 from counting.component.teleport import UncorrectedTeleport, TeleportED
+from counting.component.transversal import TransCnot
 from counting.countErrors import mapCounts
 from counting.location import Locations
 from qec.error import Pauli, xType, zType
 from qec.qecc import TrivialStablizerCode, StabilizerState
 from settings.noise import NoiseModelXSympy, CountingNoiseModel, \
-	CountingNoiseModelX, CountingNoiseModelZ, NoiseModelZSympy, NoiseModelXZLowerSympy
+	CountingNoiseModelX, CountingNoiseModelZ, NoiseModelZSympy, NoiseModelXZSympy
+from unittest.case import SkipTest
 from util import counterUtils
 import golay
+import logging
+import testBase
+import testComponent
 import unittest
+logging.basicConfig(level=logging.DEBUG)
+
 
 	
 	
