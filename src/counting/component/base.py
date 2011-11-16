@@ -16,6 +16,7 @@ from util.cache import fetchable, memoize
 import logging
 import operator
 from util.polynomial import sympoly1d, SymPolyWrapper
+import hashlib
 
 logger = logging.getLogger('counting.component')
 
@@ -53,8 +54,10 @@ class Component(object):
 		Constructor
 		'''
 		self.kGood = {pauli: kGood.get(pauli, 0) for pauli in (Pauli.X, Pauli.Z, Pauli.Y)}
-		self._nickname = nickname
+		#self._nickname = nickname
 		self._subs = subcomponents
+		
+		self._id = hashlib.md5(self._hashStr())
 		
 #################
 # Public methods
@@ -169,6 +172,9 @@ class Component(object):
 		'''
 		return keyMeta
 	
+	def identifier(self):
+		return self._id
+	
 ###################################
 # Private methods (subclass hooks)
 ###################################
@@ -238,22 +244,31 @@ class Component(object):
 		classname = self.__class__.__name__
 		logger.log(level, ''.join([classname, ': ', msg]), *args, **kwargs)
 	
-	def nickname(self):
-		return self._nickname
+#	def nickname(self):
+#		return self._nickname
+#	
+#	def fullname(self):
+#		full = str(self.__class__.name)
+#		if None != self._nickname:
+#			full += '.' + self._nickname
+#		
+#		return full
 	
-	def fullname(self):
-		full = str(self.__class__.name)
-		if None != self._nickname:
-			full += '.' + self._nickname
-		
-		return full
-	
-	def __repr__(self):
+	def descriptor(self):
 		rep = str(self.__class__.__name__)
-		if None != self._nickname:
-			rep += '-' + self._nickname + '-'
 		rep += str(self.kGood)
 		return rep
+	
+	def _hashStr(self):
+		subkeys = sorted(self.subcomponents().keys())
+		hashStr = self.descriptor() + ''.join([self[key].identifier().hexdigest() for key in subkeys])
+		return hashStr
+	
+	def __str__(self):
+		return self.__repr__()
+	
+	def __repr__(self):
+		return ''.join([self.descriptor(), '.', self.identifier().hexdigest()])
 	
 class CountableComponent(Component):
 	'''
@@ -261,16 +276,20 @@ class CountableComponent(Component):
 	also has its own physical locations that must be counted.
 	'''
 	
+	locsName = 'locations'
+	
 	def __init__(self, locations, blocknames, codes, kGood, nickname=None, subcomponents={}):
 		# The number of faulty locations cannot exceed the total
 		# number of locations.
-		if None == nickname:
-			nickname=str(locations)
-		super(CountableComponent, self).__init__(kGood, nickname=nickname)
-		
+#		if None == nickname:
+#			nickname=str(locations)
+				
 		self._locations = locations
 		self.blocks = tuple([Block(name, codes[name]) for name in blocknames])
 		
+		super(CountableComponent, self).__init__(kGood, nickname=nickname)
+
+				
 	def internalLocations(self, pauli=Pauli.Y):
 		return countErrors.pauliFilter(copy(self._locations), pauli)
 	
@@ -288,10 +307,13 @@ class CountableComponent(Component):
 		locations = self.internalLocations(pauli)
 		counts, meta = countBlocksBySyndrome(locations, self.blocks, noiseModels[pauli], self.kGood[pauli])
 		
-		cb = CountResult(counts, meta, self.blocks, name=self.nickname())
+		cb = CountResult(counts, meta, self.blocks, name=str(self))
 		
-		subcounts[self.nickname()] = cb
+		subcounts[self.locsName] = cb
 		return subcounts
+	
+	def _hashStr(self):
+		return super(CountableComponent, self)._hashStr() + str(self._locations.list)
 	
 class Empty(CountableComponent):
 	'''
@@ -327,13 +349,13 @@ class InputDependentComponent(Component):
 		# Copy to avoid changing the user's input.
 		inputResult = copy(inputResult)
 		
-		logger.info('Counting ' + str(self) + ': ' + str(pauli))
+		logger.info('Counting : ' + str(pauli))
 		results = self._count(noiseModels, pauli)
 		
-		logger.debug('Convolving ' + str(self))
+		logger.debug('Convolving')
 		result = self._convolve(results, noiseModels, pauli, inputResult)
 		
-		logger.debug('Post processing ' + str(self))
+		logger.debug('Post processing')
 		return self._postCount(result, noiseModels, pauli)
 	
 	def prAccept(self, noiseModels, inputResult, kMax=None):
@@ -391,7 +413,7 @@ class PostselectingComponent(InputDependentComponent):
 		raise NotImplementedError
 	
 	
-class ConcatenatedComponent(Component):
+class Concatenator(Component):
 	'''
 	Wraps multiple independent components so that they act as a single component.
 	This is useful, for example, when a component with many output blocks
@@ -400,7 +422,7 @@ class ConcatenatedComponent(Component):
 	
 	def __init__(self, kGood, *components):
 		subs = {i: comp for i,comp in enumerate(components)}
-		super(ConcatenatedComponent, self).__init__(kGood, subcomponents=subs)
+		super(Concatenator, self).__init__(kGood, subcomponents=subs)
 		
 	def inBlocks(self):
 		return sum((self[i].inBlocks() for i in range(len(self.subcomponents()))), tuple())
@@ -445,16 +467,16 @@ class ConcatenatedComponent(Component):
 			
 			result.blocks = blocks
 			
-		return super(ConcatenatedComponent, self)._convolve(results, noiseModels, pauli)
+		return super(Concatenator, self)._convolve(results, noiseModels, pauli)
 	
 	def __repr__(self):
 		subStr = ''.join(sub.__class__.__name__ for sub in self.subcomponents().values())
-		return super(ConcatenatedComponent, self).__repr__() + '-' + subStr
+		return super(Concatenator, self).__repr__() + '.' + subStr
 	
 	class Propagator(KeyManipulator):
 		
 		def __init__(self, subcomponents, splitter):
-			super(ConcatenatedComponent.Propagator, self).__init__(splitter)
+			super(Concatenator.Propagator, self).__init__(splitter)
 			
 			self._metas = splitter.meta()
 			self._propagators = [subcomponents[i].keyPropagator(self._metas[i]) 

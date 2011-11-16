@@ -4,7 +4,7 @@ Created on 2011-10-30
 @author: adam
 '''
 from counting.component import base
-from counting.component.base import Prep, InputAdapter, ConcatenatedComponent
+from counting.component.base import Prep, InputAdapter, Concatenator
 from counting.component.bell import BellPair, BellMeas
 from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
 from counting.component.exrec import ExRec

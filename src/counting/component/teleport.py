@@ -7,7 +7,7 @@ from copy import copy
 from counting import probability, key
 from counting.block import Block
 from counting.component.base import Component, InputDependentComponent,\
-    PostselectingComponent, Empty, ConcatenatedComponent
+    PostselectingComponent, Empty, Concatenator
 from counting.countErrors import mapCounts
 from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator, \
     KeyConcatenator, IntegerKey, KeyCopier
@@ -43,8 +43,8 @@ class UncorrectedTeleport(Component):
         
         # Extend the Bell measurement and the Bell pair so that they
         # contain the same number of blocks, some of which are empty.
-        bellPair = ConcatenatedComponent(kGood, emptyMeasX, bellPair)
-        bellMeas = ConcatenatedComponent(kGood, bellMeas, emptyOut)
+        bellPair = Concatenator(kGood, emptyMeasX, bellPair)
+        bellMeas = Concatenator(kGood, bellMeas, emptyOut)
         
         subs = {self.bpName: bellPair,
                 self.bmName: bellMeas}
@@ -54,7 +54,7 @@ class UncorrectedTeleport(Component):
             measOut = TransRest(kGood, outBlock.getCode())
             
             # Extend the measurement to include the other two blocks, as well.
-            measOut = ConcatenatedComponent(kGood, emptyMeasX, emptyMeasZ, measOut)
+            measOut = Concatenator(kGood, emptyMeasX, emptyMeasZ, measOut)
             
             subs[self.measOutName] = measOut
         

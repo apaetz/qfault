@@ -4,7 +4,7 @@ Created on 2011-10-25
 @author: adam
 '''
 from counting.block import Block
-from counting.component.base import Component, ConcatenatedComponent
+from counting.component.base import Component, Concatenator
 from counting.component.transversal import CnotConvolver, TransCnot, TransMeas
 from qec.error import Pauli
 import logging
@@ -32,7 +32,7 @@ class BellMeas(Component):
         
         measX = TransMeas(kGoodMeasX, code, Pauli.X)
         measZ = TransMeas(kGoodMeasZ, code, Pauli.Z)
-        meas = ConcatenatedComponent(kGood, measX, measZ)
+        meas = Concatenator(kGood, measX, measZ)
         
         subs = {self.cnotName: TransCnot(kGoodCnot, code, code),
                 self.measName: meas}
