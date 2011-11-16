@@ -1,3 +1,4 @@
+- Change component repr() and str() to be more specific.  Right now, the same file is being fetched for distinct exRecs.
  - Modify TECDecodeAdapter to also calculate 1-block syndrome counts (upper bounds) for each type of logical error.
 
 

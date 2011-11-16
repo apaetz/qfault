@@ -5,7 +5,7 @@ Created on May 3, 2011
 '''
 
 from counting import probability
-from counting.component.base import Prep, Empty, ConcatenatedComponent
+from counting.component.base import Prep, Empty, Concatenator
 from counting.component.bell import BellPair, BellMeas
 from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
 from counting.component.exrec import ExRec

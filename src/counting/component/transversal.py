@@ -4,7 +4,7 @@ Created on 2011-10-25
 @author: adam
 '''
 from counting.component.base import CountableComponent, Component,\
-    ConcatenatedComponent
+    Concatenator
 from counting.key import KeyCopier, KeyMasker
 from counting.location import Locations
 from qec.error import zType, xType, Pauli
@@ -161,7 +161,7 @@ class CnotConvolver(Component):
         targCode = targInput.outBlocks()[0].getCode()
         cnot = TransCnot(kGoodCnot, ctrlCode, targCode)
         
-        ctrltarg = ConcatenatedComponent(kGood, ctrlInput, targInput)
+        ctrltarg = Concatenator(kGood, ctrlInput, targInput)
         
         super(CnotConvolver, self).__init__(kGood, subcomponents={self.inName: ctrltarg,
                                                                   self.cnotName: cnot})

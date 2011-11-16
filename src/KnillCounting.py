@@ -11,7 +11,7 @@ from settings.noise import NoiseModelXZSympy, NoiseModelXSympy, NoiseModelZSympy
     CountingNoiseModelX, CountingNoiseModelZ
 import util.cache
 from counting.component.adapter import InputAdapter
-from counting.component.base import ConcatenatedComponent
+from counting.component.base import Concatenator
 from counting.component.transversal import TransCnot
 from counting.component.exrec import ExRec, ExRecForward
 from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC,\
@@ -59,7 +59,7 @@ from scheme.knill import KnillScheme
 #    ed = makeED(kGood)
 #    led = InputAdapter(ed, (0,))
 #    #led = LECSyndromeAdapter(led)
-#    led = ConcatenatedComponent(kGood, led, led)
+#    led = Concatenator(kGood, led, led)
 #    cnot = TransCnot(kGood, code, code)
 #    ted = TECDecodeAdapter(ed)
 #    ted = ConcatenatedTEC(kGood, ted, ted)

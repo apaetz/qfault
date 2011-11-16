@@ -6,7 +6,7 @@ Created on 2011-10-27
 from copy import copy
 from counting import key
 from counting.block import Block
-from counting.component.base import Component, ConcatenatedComponent
+from counting.component.base import Component, Concatenator
 from counting.component.adapter import ComponentAdapter
 from counting.convolve import convolveDict
 from counting.countParallel import convolve
@@ -22,8 +22,8 @@ from counting.countErrors import mapCounts
 import logging
 from util.patterns import DelegatingAdapter
 
-class ConcatenatedTEC(ConcatenatedComponent):
-    # TODO: Using ConcatenatedComponent directly doesn't work because the counts
+class ConcatenatedTEC(Concatenator):
+    # TODO: Using Concatenator directly doesn't work because the counts
     # returned by TECDecodeAdapter are non-standard.
     
     def __init__(self, kGood, tec1, tec2):
