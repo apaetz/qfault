@@ -32,16 +32,20 @@ class InputAdapter(ComponentAdapter):
         keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
         inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
         
-        super(InputAdapter, self).__init__(component)
-        
         self._component = component
         self._inResult = inputResult
+        super(InputAdapter, self).__init__(component)
+        
+ 
         
     def count(self, noiseModels, pauli):
         return self._component.count(noiseModels, pauli, self._inResult)
     
     def prAccept(self, noiseModels, kMax=None):
         return self._component.prAccept(noiseModels, self._inResult, kMax=kMax)
+    
+    def _hashStr(self):
+        return super(InputAdapter, self)._hashStr() + str(self._inResult)
     
 class NonzeroSyndromeOutputAdapter(ComponentAdapter):
     
