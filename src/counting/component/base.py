@@ -324,7 +324,20 @@ class Empty(CountableComponent):
 		locs = Locations([])
 		kGood = {}
 		super(Empty, self).__init__(locs, [blockname], {blockname: code}, kGood)
+	
+class FixedOutput(Empty):
+	
+	def __init__(self, code, outputCounts, keyMeta):
+		self._outputCounts = outputCounts
+		self._keyMeta = keyMeta
+		super(FixedOutput, self).__init__(code)
+	
+	def count(self, noiseModels, pauli):
+		return CountResult(self._outputCounts, self._keyMeta, self.outBlocks())
 
+	def _hashStr(self):
+		return super(CountableComponent, self)._hashStr() + str([self._outputCounts, self._keyMeta])
+	
 class Prep(CountableComponent):
 	'''
 	Codeword preparation.

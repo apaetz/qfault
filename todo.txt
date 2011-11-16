@@ -1,7 +1,8 @@
-- Change component repr() and str() to be more specific.  Right now, the same file is being fetched for distinct exRecs.
+- Component IDs require redefinition of _hashStr for components with extra internal data.  Better solution?
+- Simply inserting a syndrome in place of an LED will not work, because order-1 errors can occur even conditioned on acceptance.
+Instead, could count all possible combinations of two overlapping exRecs and condition on the first exRec being bad.
  - Modify TECDecodeAdapter to also calculate 1-block syndrome counts (upper bounds) for each type of logical error.
 
 
 - Eliminate dead code.
 - Documentation
-- pylint (or other static analysis)
