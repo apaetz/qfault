@@ -211,7 +211,7 @@ class NoiseModelMarginalSympy(DepolarizingNoiseModelSympy):
 			return []
 	
 	def __str__(self):
-		return 'w=4.r=8'
+		return 'w4r8'
 	
 class NoiseModelXSympy(NoiseModelMarginalSympy):
 	
@@ -256,7 +256,7 @@ class NoiseModelXZSympy(DepolarizingNoiseModelSympy):
 			return []
 	
 	def __str__(self):
-		return 'lower-w=4.c=1'
+		return 'w4c1'
 
 class TransformedNoiseModelSympy(DepolarizingNoiseModelSympy):
 	'''

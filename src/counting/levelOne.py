@@ -15,6 +15,7 @@ from util.plotting import plotPolyList
 import logging
 from counting import probability
 import counting
+from qec.error import Pauli
 
 logger = logging.getLogger('levelOne')
 
@@ -183,19 +184,33 @@ def cnotPseudoThresh(ancillaPairs, settings):
 
 def pseudoThreshold(counts, locTotals, prBad, prAccept, noise):
 	
-	logger.info('Computing CNOT pseudothreshold')
+	#logger.info('Computing CNOT pseudothreshold')
 	
 	gMin, gMax = noise.noiseRange()
+	
+	# prAccept is a lower bound on the probability of acceptance.
+	# When gamma (gMax) is too high, prAccept could be negative.
+	# Avoid this by explicitly checking.
+	while 0 >= prAccept(gMax):
+		gMax *= .95
+	
 	cnotLoc = loccnot('A', 0, 'A', 1)
 	cnotWeight = sum(noise.getWeight(cnotLoc, e) for e in range(noise.numErrors(cnotLoc)))
 	pMin = cnotWeight * gMin
 	pMax = min(cnotWeight * gMax, 1)
-	
-	prFailGamma = probability.countsToPoly(counts, locTotals, noise) / prAccept + prBad
-	prFail = lambda p: prFailGamma(p/cnotWeight)
-		
-	thresh = counting.threshold.pseudoThresh(prFail, pMin, pMax, tolerance=1e-5)
 
-	print 'pseudothreshold (p) >=', thresh
+	summedCounts = []
+	for count in counts:
+		summedCount = sum(count[key] for key in count.keys() if key != Pauli.I)
+		summedCounts.append({None: summedCount})	
+		
+	print 'summed counts=', summedCounts
+		
+	countPoly = probability.countsToPoly(summedCounts, locTotals, noise)
+	prFailGamma = countPoly / prAccept + prBad
+	prFail = lambda p: prFailGamma(p/cnotWeight)
+	pthresh = counting.threshold.pseudoThresh(prFail, pMin, pMax, tolerance=1e-5)
 	
-	return thresh
+	#print 'pseudothreshold (p) >=', thresh
+	
+	return pthresh

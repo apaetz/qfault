@@ -4,7 +4,7 @@ Created on 2011-11-14
 @author: adam
 '''
 from counting.component.adapter import InputAdapter
-from counting.component.base import Prep, Concatenator
+from counting.component.base import Prep, Concatenator, FixedOutput
 from counting.component.bell import BellPair, BellMeas
 from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
 from counting.component.exrec import ExRecForward
@@ -15,6 +15,7 @@ from qec.error import Pauli, PauliError
 from qec.qecc import StabilizerState
 from scheme import Scheme
 from counting.key import MultiBlockSyndromeKeyGenerator
+import logging
 
 class KnillScheme(Scheme):
     '''
@@ -48,28 +49,28 @@ class KnillScheme(Scheme):
         keyGen = MultiBlockSyndromeKeyGenerator(self.ed.inBlocks())
         blockname = self.ed.inBlocks()[0].name
         
-        inKeys = {}
+        inKeys = set()
         for eX in range(1 << 4):
             for eZ in range(1 << 4):
                 pauliError = PauliError(xbits=eX, zbits=eZ)
-                inKeys[pauliError] = keyGen.getKey({blockname: pauliError})
+                inKeys.add(keyGen.getKey({blockname: pauliError}))
         
         exrecs = {}
         
         # Generate CNOT exRecs for all possible configurations of the leading EDs.
-        for haveLEDa, haveLEDb in [(False, False),
-                                   (False, True),
-                                   (True, False),
-                                   (True, True)]:
+        for haveLEDa, haveLEDb in [#(False, False),
+                                   #(False, True),
+                                   #(True, False),
+                                   (True, True)]: 
             if haveLEDa:
-                ledsA = [InputAdapter(self.ed, inKeys[Pauli.I])]
+                ledsA = [InputAdapter(self.ed, keyGen.getKey({blockname: Pauli.I}))]
             else:
-                ledsA = [InputAdapter(self.ed, key) for key in inKeys.values()]
+                ledsA = [FixedOutput(code, [{key:1}], keyGen.keyMeta()) for key in inKeys]
                 
             if haveLEDb:
-                ledsB = [InputAdapter(self.ed, inKeys[Pauli.I])]
+                ledsB = [InputAdapter(self.ed, keyGen.getKey({blockname: Pauli.I}))]
             else:
-                ledsB = [InputAdapter(self.ed, key) for key in inKeys.values()]
+                ledsB = [FixedOutput(code, [{key:1}], keyGen.keyMeta()) for key in inKeys]
                 
             leds = []
             for ledA in ledsA:
@@ -89,9 +90,11 @@ if __name__ == '__main__':
     from counting import countParallel
     countParallel.setPool(countParallel.DummyPool())
     
+    logging.getLogger('counting.threshold').setLevel(logging.DEBUG)
+    
     kPrep = {Pauli.Y: 2}
     kCnot = {Pauli.Y: 2}
-    kEC = {Pauli.Y: 2}
-    kExRec = {Pauli.Y: 3}
+    kEC = {Pauli.Y: 4}
+    kExRec = {Pauli.Y: 11}
     scheme = KnillScheme(kPrep, kCnot, kEC, kExRec)
     scheme.count()
