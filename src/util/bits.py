@@ -155,6 +155,15 @@ def concatenate(seq, lengths):
         bits = (bits << lengths[i]) + b
     return bits
 
+def lsbMask(n):
+    '''
+    Returns a mask that selects the n least significant bits.
+    >>> mask = lsbMask(5)
+    >>> '{0:b}'.format(mask)
+    '11111'
+    '''
+    return (1 << n) - 1
+
 if __name__ == '__main__':
     import doctest
     doctest.testmod()

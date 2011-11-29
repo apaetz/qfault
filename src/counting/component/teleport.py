@@ -10,7 +10,7 @@ from counting.component.base import Component, InputDependentComponent,\
     PostselectingComponent, Empty, Concatenator
 from counting.countErrors import mapCounts
 from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator, \
-    KeyConcatenator, IntegerKey, KeyCopier
+    KeyConcatenator, IntegerKey, KeyCopier, KeyMasker, SyndromeKeyMeta
 from counting.result import CountResult
 from qec.error import Pauli, xType, zType
 from util import bits
@@ -20,6 +20,7 @@ import logging
 import warnings
 from counting.component import transversal
 from counting.component.transversal import TransRest
+from util.bits import listToBits
 
 logger = logging.getLogger('component')
 
@@ -112,6 +113,41 @@ class UncorrectedTeleport(Component):
 #        def _manipulate(self, key):
 #            keyBM, keyOut = key
 #            return (self._bmPropagator(keyBM), keyOut)
+
+class UCTSyndromeOut(UncorrectedTeleport):
+    
+    def outBlocks(self):
+        return (self[self.bpName].outBlocks()[1], )
+    
+    def _postCount(self, result, noiseModels, pauli):
+        code = self.outBlocks()[0].getCode()
+        stabilizers = code.stabilizerGenerators()
+        parityChecks = result.keyMeta.parityChecks()
+        syndromeBits = [(check in stabilizers) for check in parityChecks]
+        syndromeMask = listToBits(syndromeBits)
+        
+        reducer = self.KeyReducer(result.keyMeta, syndromeMask)
+        result.counts = mapCounts(result.counts, reducer)
+        result.keyMeta = reducer.meta()
+        result.blocks = (result.blocks[2], )
+        
+        return result
+        
+    class KeyReducer(KeyManipulator):
+        
+        def __init__(self, meta, syndromeMask):
+            super(UCTSyndromeOut.KeyReducer, self).__init__(meta)
+            self.syndromeMask = syndromeMask
+            self.masker = KeyMasker(self.meta(), syndromeMask)
+        
+        def meta(self):
+            meta = super(UCTSyndromeOut.KeyReducer, self).meta()
+            return SyndromeKeyMeta(meta.parityChecks(), 1)
+        
+        def _manipulate(self, key):
+            key = keyForBlock(key, 2, self.meta())
+            return self.masker(key)
+            
     
 class TeleportED(PostselectingComponent):
     
@@ -139,17 +175,7 @@ class TeleportED(PostselectingComponent):
         '''
         Post-select for the trivial syndrome on the two measured blocks.
         '''
-        result.counts, result.rejected = self._postselect(result, pauli)
-        result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()[1]
-        result.blocks = (result.blocks[2],)
-        return result
         
-    def _postselect(self, result, pauli):
-        '''
-        Post-select for the trivial syndrome on the two measured blocks, and make
-        logical corrections if necessary.
-        '''
-        counts = result.counts
         keyMeta = result.keyMeta
         outBlock = result.blocks[2]
         stabilizers = set(outBlock.getCode().stabilizerGenerators())
@@ -159,15 +185,19 @@ class TeleportED(PostselectingComponent):
         
         logicals = logicals[0]
         
+        accept = self._acceptor(keyMeta, stabilizers)
+        outputKey = self._outputter(keyMeta, logicals)
+        
+        result.counts, result.rejected = self._postselect(result.counts, pauli, accept, outputKey)
+        
+        result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()[1]
+        result.blocks = (result.blocks[2],)
+        return result
+    
+    def _acceptor(self, keyMeta, stabilizers):
         parityChecks = keyMeta.parityChecks()
-        
         syndromeBits = [(check in stabilizers) for check in parityChecks]
-        logicalBitsX =  [check == logicals[xType] for check in parityChecks]
-        logicalBitsZ =  [check == logicals[zType] for check in parityChecks]
-        
         rejectMask = bits.listToBits(syndromeBits)
-        logicalMaskX = bits.listToBits(logicalBitsX)
-        logicalMaskZ = bits.listToBits(logicalBitsZ)
         
         warnings.warn('Detection of normalizer generators is not yet implemented')
         # The UncorrectedTeleport component blocks are setup as follows:
@@ -177,6 +207,17 @@ class TeleportED(PostselectingComponent):
         def accept(key):
             # TODO also check additional normalizers.
             return not(key[0] & rejectMask) and not(key[1] & rejectMask)
+    
+        return accept
+    
+    def _outputter(self, keyMeta, logicalOperators):
+        parityChecks = keyMeta.parityChecks()
+        
+        logicalBitsX =  [check == logicalOperators[xType] for check in parityChecks]
+        logicalBitsZ =  [check == logicalOperators[zType] for check in parityChecks]
+        
+        logicalMaskX = bits.listToBits(logicalBitsX)
+        logicalMaskZ = bits.listToBits(logicalBitsZ)
         
         # Apply the logical operator parity checks (i.e. the logical corrections)
         # to the output key
@@ -185,6 +226,14 @@ class TeleportED(PostselectingComponent):
         def outputKey(key):
             key = copier(key)
             return keyForBlock(key, 2, keyMeta)
+        
+        return outputKey
+        
+    def _postselect(self, counts, pauli, accept, outputKey):
+        '''
+        Post-select for the trivial syndrome on the two measured blocks, and make
+        logical corrections if necessary.
+        '''
         
         accepted = []
         rejected = []
@@ -216,3 +265,41 @@ class TeleportED(PostselectingComponent):
             rejected.append({counting.key.rejectKey: rejectedK})
             
         return accepted, rejected
+    
+class TeleportEDFilter(TeleportED):
+    '''
+    Teleportation ED gadget that filters out rejected inputs.
+    This ED doesn't actually propagate the input through the teleportation component.
+    Rather, it simulates the action of the teleportation and outputs the original input
+    only if it was accepted.
+    '''
+    
+    def _convolve(self, results, noiseModels, pauli, inputResult):
+        
+        # We don't want any errors from the teleportation itself to go to the output.
+        # Zero-out all of the syndromes on the output block of the UCT.
+        uct = results[self.ucTeleportName]
+        masker = KeyMasker(uct.keyMeta, 0, [2])
+        uct.counts = mapCounts(uct.counts, masker)
+        uct.keyMeta = masker.meta()
+        
+        return super(TeleportEDFilter, self)._convolve(results, noiseModels, pauli, inputResult)
+    
+    def _outputter(self, keyMeta, logicalOperators):
+        
+        def outputKey(key):
+            return keyForBlock(key, 2, keyMeta)
+        
+        return outputKey
+    
+    def _prepareInput(self, inputResult):
+        # 1. Extend the input to all three blocks, 
+        # 2. copy from the original input block to the output block.
+        # 3. Propagate through the Bell measurement  
+        extender = KeyExtender(inputResult.keyMeta, blocksAfter=2)
+        copier = KeyCopier(extender, 0, 2)
+        uct = self[self.ucTeleportName]
+        propagator = uct[uct.bmName].keyPropagator(copier)
+        counts = mapCounts(inputResult.counts, propagator)
+                
+        return CountResult(counts, propagator.meta(), None, inputResult.rejected)

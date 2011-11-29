@@ -80,30 +80,16 @@ class ConcatenatedTEC(Concatenator):
 #                convolved[key] = listutils.addDicts(convolved.get(key, {}), counts)
 #                
 #        return convolved
-
-class TECDecodeAdapter(ComponentAdapter):
+    
+class TECAdapter(ComponentAdapter):
     
     def __init__(self, tec):
-        super(TECDecodeAdapter, self).__init__(tec)
+        super(TECAdapter, self).__init__(tec)
         self.tec = tec
     
-    @staticmethod
-    def decodeCounts(counts, decoder):
-        decodeCounts = []
-        for countK in counts:
-            decodeCountK = {}
-            for key, val in countK.iteritems():
-                decoded = decoder.decode(key)
-                decodeCountK[decoded] = decodeCountK.get(decoded, 0) + val
-                    
-            decodeCounts.append(decodeCountK)
-            
-        return decodeCounts
-
-    @staticmethod
     @fetchable
-    def lookupTable(tec, noiseModels, pauli):
-        code = tec.inBlocks()[0].getCode()
+    def lookupTable(self, noiseModels, pauli):
+        code = self.tec.inBlocks()[0].getCode()
         keyMeta = SyndromeKeyGenerator(code, '').keyMeta()
         nchecks = len(keyMeta.parityChecks())
         
@@ -117,19 +103,18 @@ class TECDecodeAdapter(ComponentAdapter):
         keyMask = bits.listToBits(keyMask)
         keys = set(key & keyMask for key in xrange(1 << nchecks))
         
-        decoder = SyndromeKeyDecoder(code)
-        countLookup = [{} for _ in range(tec.kGood[pauli] + 1)]
-        rejectLookup = [{} for _ in range(tec.kGood[pauli] + 1)]
+        countLookup = [{} for _ in range(self.tec.kGood[pauli] + 1)]
+        rejectLookup = [{} for _ in range(self.tec.kGood[pauli] + 1)]
         for key in keys:
             inCount = [{(key,): 1}]
             inResult = CountResult(inCount, keyMeta, [None])
-            outResult = tec.count(noiseModels, pauli, inResult)
+            outResult = self.tec.count(noiseModels, pauli, inResult)
             outMeta = outResult.keyMeta
             outBlocks = outResult.blocks
             
-            dCounts = TECDecodeAdapter.decodeCounts(outResult.counts, decoder)
+            counts = self._processCounts(outResult.counts)
             for k in range(len(countLookup)):
-                countLookup[k][(key,)] = dCounts[k]
+                countLookup[k][(key,)] = counts[k]
                 rejectLookup[k][(key,)] = outResult.rejected[k]
             
         return countLookup, rejectLookup, outMeta, outBlocks
@@ -144,12 +129,35 @@ class TECDecodeAdapter(ComponentAdapter):
         # k failures in the TEC when the input to the TEC
         # is 'key'.
         
-        counts, rejected, meta, blocks = self.lookupTable(self.tec, noiseModels, pauli)
+        counts, rejected, meta, blocks = self.lookupTable(noiseModels, pauli)
         return CountResult(counts, meta, blocks, rejectedCounts=rejected)
         
     def outBlocks(self):
         code = QeccNone(1)
         return tuple(Block(block.name, code) for block in self.tec.outBlocks())
+    
+    def _processCounts(self, counts):
+        return counts
+    
+    
+class TECDecodeAdapter(ComponentAdapter):
+    @staticmethod
+    def decodeCounts(counts, decoder):
+        decodeCounts = []
+        for countK in counts:
+            decodeCountK = {}
+            for key, val in countK.iteritems():
+                decoded = decoder.decode(key)
+                decodeCountK[decoded] = decodeCountK.get(decoded, 0) + val
+                    
+            decodeCounts.append(decodeCountK)
+            
+        return decodeCounts
+    
+    def _processCounts(self, counts):
+        code = self.tec.inBlocks()[0].getCode()
+        decoder = SyndromeKeyDecoder(code)
+        return self.decodeCounts(counts, decoder)
             
             
 class LECSyndromeAdapter(ComponentAdapter):

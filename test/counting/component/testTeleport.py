@@ -5,7 +5,8 @@ Created on May 3, 2011
 '''
 
 from counting.component.adapter import InputAdapter
-from counting.component.teleport import TeleportED, UncorrectedTeleport
+from counting.component.teleport import TeleportED, UncorrectedTeleport,\
+	TeleportEDFilter
 from qec.error import Pauli, PauliError, xType, zType
 from unittest.case import SkipTest
 import logging
@@ -135,6 +136,26 @@ class TestTeleportED(testComponent.ComponentTestCase):
 				
 	def _getComponent(self, kGood, code):
 		return InputAdapter(self.TeleportED(kGood, code), (0,))		
+	
+class TestTeleportEDFilter(testComponent.ComponentTestCase):
+	
+	def testCount(self):
+		kGood = {Pauli.X: 2, Pauli.Z: 2}
+			
+		for inSyndrome in (0, 1, 2):
+			teleportED = self._getComponent(kGood, self.trivialCode, inputSyndrome=inSyndrome)
+			
+			for pauli in (Pauli.X, Pauli.Z):
+				result = teleportED.count(self.countingNoiseModels, pauli)
+				expected = [{(inSyndrome,): 1}, {(inSyndrome,): 9}, {(inSyndrome,): 30}]
+				print result.counts
+				assert expected == result.counts
+	
+	def _getComponent(self, kGood, code, inputSyndrome=0):
+		bellPair = testBell.TestBellPair.BellPair(kGood, code)
+		bellMeas = testBell.TestBellMeas.BellMeas(kGood, code)
+		teleport = TeleportEDFilter(kGood, bellPair, bellMeas)
+		return InputAdapter(teleport, (inputSyndrome,))
 	
 if __name__ == "__main__":
 

@@ -72,16 +72,22 @@ class Component(object):
 		:param dict noiseModels: A dictionary, indexed by Pauli error, of noise models.
 		:param pauli: The error type to count.  Use Pauli.Y to count X and Z errors together.
 		'''
-		self._log(logging.INFO, 'Counting: ' + str(pauli))
-		results = self._count(noiseModels, pauli)
 		
-		self._log(logging.DEBUG, 'Convolving')
-		result = self._convolve(results, noiseModels, pauli)
+		try:
+			self._log(logging.INFO, 'Counting: ' + str(pauli))
+			results = self._count(noiseModels, pauli)
+			
+			self._log(logging.DEBUG, 'Convolving')
+			result = self._convolve(results, noiseModels, pauli)
+			
+			self._log(logging.DEBUG, 'Post processing')
+			result = self._postCount(result, noiseModels, pauli)
+			
+			self._log(logging.DEBUG, 'counts=%s', result.counts)		
+		except:
+			self._log(logging.ERROR, 'Error while counting')
+			raise
 		
-		self._log(logging.DEBUG, 'Post processing')
-		result = self._postCount(result, noiseModels, pauli)
-		
-		self._log(logging.DEBUG, 'counts=%s', result.counts)		
 		return result
 	
 	def prBad(self, noise, pauli, kMax=None):

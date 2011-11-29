@@ -16,6 +16,7 @@ import logging
 from counting import probability
 import counting
 from qec.error import Pauli
+from util.polynomial import sympoly1d, SymPolyWrapper
 
 logger = logging.getLogger('levelOne')
 
@@ -182,7 +183,7 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	
 	return thresh/cnotWeight
 
-def pseudoThreshold(counts, locTotals, prBad, prAccept, noise):
+def pseudoThreshold(counts, locTotals, prBad, prAccept, noise, prInput=1):
 	
 	#logger.info('Computing CNOT pseudothreshold')
 	
@@ -207,7 +208,8 @@ def pseudoThreshold(counts, locTotals, prBad, prAccept, noise):
 	print 'summed counts=', summedCounts
 		
 	countPoly = probability.countsToPoly(summedCounts, locTotals, noise)
-	prFailGamma = countPoly / prAccept + prBad
+	
+	prFailGamma = prInput * (countPoly / prAccept) + prBad
 	prFail = lambda p: prFailGamma(p/cnotWeight)
 	pthresh = counting.threshold.pseudoThresh(prFail, pMin, pMax, tolerance=1e-5)
 	
