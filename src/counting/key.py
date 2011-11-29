@@ -306,7 +306,7 @@ class KeyCopier(KeyManipulator):
     def __init__(self, meta, fromBlock, toBlock, mask=None):
         super(KeyCopier, self).__init__(meta)
         if None == mask:
-            blocklen = len(meta.meta())
+            blocklen = len(meta.meta().parityChecks())
             # Select all of the bits of fromBlock
             mask = (1 << blocklen) - 1
         
@@ -316,17 +316,31 @@ class KeyCopier(KeyManipulator):
     
     def _manipulate(self, key):
         newKey = list(key)
+        if (len(key) <= self._fromBlock) or (len(key) <= self._toBlock):
+            print 'foo' 
         newKey[self._toBlock] ^= key[self._fromBlock] & self._mask
         return tuple(newKey)
     
 class KeyMasker(KeyManipulator):
     
-    def __init__(self, meta, mask):
+    def __init__(self, meta, mask, blocks=None):
         super(KeyMasker, self).__init__(meta)
-        self._mask = mask
+        nblocks = meta.meta().nblocks
+        if None == blocks:
+            blocks = range(nblocks)
+            
+        # Mask only the selected blocks.
+        pc = meta.meta().parityChecks()
+        self._masks = [bits.lsbMask(len(pc))]*nblocks
+        for block in blocks:
+            self._masks[block] = mask
+            
+        self._masks = tuple(self._masks)
+    
     
     def _manipulate(self, key):
-        newKey = tuple(k & self._mask for k in key)
+        masks = self._masks
+        newKey = tuple(k & masks[block] for block,k in enumerate(key))
         return newKey
     
 #def keyCopier(keyMeta, fromBlock, toBlock, mask=None):

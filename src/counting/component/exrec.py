@@ -22,6 +22,12 @@ class ExRec(Component):
         subs = {self.lecName: lec, self.gaName: gadget, self.tecName: tec}
         super(ExRec, self).__init__(kGood, subcomponents=subs)
         
+    def inBlocks(self):
+        return self[self.lecName].inBlocks()
+    
+    def outBlocks(self):
+        return self[self.tecName].outBlocks()
+        
     def prAccept(self, noiseModels, kMax=None):
         prLEC = self[self.lecName].prAccept(noiseModels, self.kGood)
         prGa = self[self.gaName].prAccept(noiseModels, self.kGood)
@@ -50,8 +56,8 @@ class ExRec(Component):
             prTEC = 1 - probability.upperBoundPoly(rejected, prBad, locTotals, noiseModels[pauli])
         
         return prLEC * prGa * prTEC
-        
-    def _convolve(self, results, noiseModels, pauli):
+
+    def _convolve(self, results, noiseModels, pauli, inResult):
         # The LEC should have already stripped all counts of the
         # logical error information.  That is, all LEC error keys
         # should now decode to the trivial error.  The LEC
@@ -152,9 +158,9 @@ class ExRecForward(ExRec):
         convolved = super(ExRec, self)._convolve(results, noiseModels, pauli)
         
         # Now filter out the nonzero syndromes.
-        zeroKey = tuple([0]*convolved.keyMeta.nblocks) # hack!
-        for count in convolved.counts:
-            count.pop(zeroKey, 0)
+#        zeroKey = tuple([0]*convolved.keyMeta.nblocks) # hack!
+#        for count in convolved.counts:
+#            count.pop(zeroKey, 0)
         
         # Now compute the result of propagating the LEC/CNOT input through the TEC
         decodeCounts = convolve(convolved.counts, 

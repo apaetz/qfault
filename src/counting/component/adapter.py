@@ -25,12 +25,15 @@ class ComponentAdapter(Component):
     
 class InputAdapter(ComponentAdapter):
     
-    def __init__(self, component, inputKey):
+    def __init__(self, component, inputCounts):
+        if type(inputCounts) == int:
+            inputCounts = [{inputCounts: 1}]
+        
         blocks = component.inBlocks()
         code = blocks[0].getCode()
         parityChecks = SyndromeKeyGenerator.ParityChecks(code)
         keyMeta = SyndromeKeyMeta(parityChecks, len(blocks))
-        inputResult = CountResult([{inputKey: 1}], keyMeta, blocks)
+        inputResult = CountResult(inputCounts, keyMeta, blocks)
         
         self._component = component
         self._inResult = inputResult
