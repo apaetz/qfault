@@ -96,9 +96,9 @@ class Scheme(object):
         inputs = {}
         for errors in itertools.combinations_with_replacement(errorList, len(inBlocks)):
             errors = {inBlocks[k].name: errors[k] for k in range(len(errors))}
-            pr = listutils.mul(self.prInputSyndrome(code.getSyndrome(e)) for e in errors.values())
-            if 0 != pr:
-                inputs[keyGen.getKey(errors)] = pr
+            syndromes = tuple(code.getSyndrome(e) for e in errors.values())
+            #pr = listutils.mul(self.prInputSyndrome(code.getSyndrome(e)) for e in errors.values())
+            inputs[syndromes] = keyGen.getKey(errors)
             
         return inputs
 

@@ -140,7 +140,7 @@ class TECAdapter(ComponentAdapter):
         return counts
     
     
-class TECDecodeAdapter(ComponentAdapter):
+class TECDecodeAdapter(TECAdapter):
     @staticmethod
     def decodeCounts(counts, decoder):
         decodeCounts = []

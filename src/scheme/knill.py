@@ -4,7 +4,8 @@ Created on 2011-11-14
 @author: adam
 '''
 from counting.component.adapter import InputAdapter
-from counting.component.base import Prep, Concatenator, FixedOutput
+from counting.component.base import Prep, Concatenator, FixedOutput, Empty,\
+    EmptyIDC
 from counting.component.bell import BellPair, BellMeas
 from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC, TECAdapter
 from counting.component.exrec import ExRecForward, ExRec
@@ -53,96 +54,119 @@ class KnillScheme(Scheme):
         self.kExRec = kExRec
         self.kCnot = kCnot
         self.kEC = kEC
+        self.code = ed422.ED412Code(gaugeType=error.xType)
         
     def count(self):
-        code = ed422.ED412Code(gaugeType=error.xType)
-        keyGen = MultiBlockSyndromeKeyGenerator(self.ed.inBlocks())
-        blockname = self.ed.inBlocks()[0].name
-        
-#        inKeys = set()
-#        for eX in range(1 << 4):
-#            for eZ in range(1 << 4):
-#                pauliError = PauliError(xbits=eX, zbits=eZ)
-#                inKeys.add(keyGen.getKey({blockname: pauliError}))
+        pr = self.prEgivenAccept(Pauli.X, self.defaultNoiseModels)
+        print pr(0.001/15)
 
-        #inputs = self.getInputs(self.ed)
-        inputs = {keyGen.getKey({blockname: Pauli.X}): self.prInputSyndrome(code.getSyndrome(Pauli.X))}
+
+    def prEgivenAccept(self, e, noiseModels):
+        r'''
+        Returns an upper bound on :math:`\Pr[E=e \vert \text{global accept}`, the probability that a rectangle
+        induces logical error :math:`e` given acceptance of all EDs.
+        '''
+        
+        code = ed422.ED412Code(gaugeType=error.xType)
+
+        inputs = self.getInputs(self.ed)
+        #inputs = {keyGen.getKey({blockname: Pauli.X}): self.prInputSyndrome(code.getSyndrome(Pauli.X))}
 
         cnot = TransCnot(self.kCnot, code, code)
-        ted = TECDecodeAdapter(self.ed)
+        
+        # We're just counting the rectangle, so the TED is just an ideal decoder.
+        ted = TECDecodeAdapter(EmptyIDC(code))
         ted = ConcatenatedTEC(self.kExRec, ted, ted)
         
         #inKeys = {keyGen.getKey({blockname: Pauli.X})}
         #exrecs = {'cnot': [ExRecForward(self.kExRec, led, cnot, ted)]}
         
-        for inKeyA, inPrA in inputs.iteritems():
-            ledA = InputAdapter(self.ed, [{inKeyA: 1}])                
-            for inKeyB, inPrB in inputs.iteritems():
-                ledB = InputAdapter(self.ed, [{inKeyB: 1}])
-            
-                led = Concatenator(self.kExRec, ledA, ledB)
-                exrec = ExRecForward(self.kExRec, led, cnot, ted)
-                logger.info('Counting CNOT exRec for inputs: %s, %s', inKeyA, inKeyB)
-                self.countExRec(exrec, self.defaultNoiseModels, prInput=inPrA * inPrB)                
+        prTable = {}
+        for inKeyA in inputs.values():           
+            for inKeyB in inputs.values():
+                logger.info('Counting CNOT 1-Rec for inputs: %s, %s', inKeyA, inKeyB)
+                prS = self.prEgivenS(cnot, e, (inKeyA, inKeyB), noiseModels) * \
+                      self.prInputSyndrome(inKeyA) * self.prInputSyndrome(inKeyB)
+                
+                prTable[(inKeyA, inKeyB)] = prS
+                
+        for key, pr in prTable.iteritems():
+            print key, pr(0.001/15)
+                
+        # Compute Pr[E=e, ED_R accept, good | Sin=s]
+        # TODO: big-time kludges here
+        led = Concatenator(self.kExRec, self.ed, self.ed)
         
-#        # Generate CNOT exRecs for all possible configurations of the leading EDs.
-#        for haveLEDa, haveLEDb in [
-#                                   (False, False),
-#                                   (False, True),
-#                                   (True, False),
-#                                   (True, True)
-#                                   ]:
-#            if haveLEDa:
-#                ledsA = [InputAdapter(self.ed, keyGen.getKey({blockname: Pauli.I}))]
-#            else:
-#                #ledsA = [FixedOutput(code, [{}, {key:inWeight}], keyGen.keyMeta()) for key in inKeys]
-#                ledsA = [self.uct]
-#                
-#            if haveLEDb:
-#                ledsB = [InputAdapter(self.ed, keyGen.getKey({blockname: Pauli.I}))]
-#            else:
-#                #ledsB = [FixedOutput(code, [{key:inWeight}], keyGen.keyMeta()) for key in inKeys]
-#                ledsB = [self.uct]
-#                
-#            leds = []
-#            for ledA in ledsA:
-#                for ledB in ledsB:
-#                    led = Concatenator(self.kExRec, ledA, ledB)
-#                    leds.append(led)
-#                    
-#            exrecs['cnot'] = exrecs.get('cnot', []) + [ExRecForward(self.kExRec, led, cnot, ted) for led in leds]
-
+        prBad = ExRecForward(self.kExRec, led, cnot, ted).prBad(noiseModels[Pauli.Y], Pauli.Y)
+        rectLocs = cnot.locations() + self.ed.locations() + self.ed.locations()
+        prK0 = probability.prMinFailures(0, rectLocs, noiseModels[Pauli.Y], 0)
+        omega = 0 # TODO
+        
+        pr = (pr + prBad) / (prK0 * (1 - omega))
+        
+        return pr
+        
+    
+    def prEgivenS(self, ga, e, s, noiseModels):
+        r'''
+        Returns an upper bound on :math:`\Pr[E=e, ED_R~\text{accept}, \text{good} \vert S_\text{in}=s]` for
+        input syndrome :math:`s` and logical error :math:`e`.
+        '''
+        
+        # Compute Pr[E=e, ED_R accept, good | Sin=s]
+        leds = [InputAdapter(self.ed, sin) for sin in s]
+        led = Concatenator(self.kExRec, *leds)
+        
+        # We're just counting the rectangle, so the TED is just an ideal decoder.
+        ted = TECDecodeAdapter(EmptyIDC(self.code))
+        ted = ConcatenatedTEC(self.kExRec, *([ted]*len(s)))
+        
+        rect = ExRecForward(self.kExRec, led, ga, ted)
+        
+        result = rect.count(noiseModels, Pauli.Y)
+        counts = [{e: count.get(e,0)} for count in result.counts]
+        prE = probability.countsToPoly(counts, rect.locations().getTotals(), noiseModels[Pauli.Y])
+        
+        return prE
     
     def prInputSyndrome(self, s):
+        r'''
+        Returns an upper bound on :math:`\Pr[S_\text{in} = s]`, the probability that the input syndrome to 
+        (a single block of) the rectangle is equivalent to :math:`s`.
+        '''
+        # TODO: count all possible input rectangle combinations and compute an upper bound.
         if 0 == s:
             return 1
-        # TODO: this is a crude estimate of Pr[S_in!=0].  Need to get an upper bound.
-        #return SymPolyWrapper(sympoly1d([(76*15*28*15), 0, 0]))
     
         code = ed422.ED412Code(gaugeType=error.xType)
         led = UCTSyndromeOut(self.kEC, self.bp, self.bm)
-        led = Concatenator(self.kExRec, led, led)
-        ted = TeleportEDFilter(self.kEC, self.bp, self.bm)
-        ted = TECAdapter(ted)
-        ted = ConcatenatedTEC(self.kExRec, ted, ted)
+#        led = Concatenator(self.kExRec, led, led)
+#        ted = TeleportEDFilter(self.kEC, self.bp, self.bm)
+#        ted = TECAdapter(ted)
+#        ted = ConcatenatedTEC(self.kExRec, ted, ted)
         cnot = TransCnot(self.kCnot, code, code)
-        exrec = ExRecForward(self.kExRec, led, cnot, ted)
+#        exrec = ExRecForward(self.kExRec, led, cnot, ted)
         
-        result = exrec.count(self.defaultNoiseModels, Pauli.Y)
-        sCounts = [{s:0} for _ in range(len(result.counts))]
-        sKey = s # TODO: hack!
-        for k,counts in enumerate(result.counts):
-            for key, count in counts.iteritems():
-                key1, key2 = key # TODO: hack!
-                if sKey == key1 or sKey == key2: 
-                    sCounts[k][s] += count
-            
-        
-        pr = probability.countsToPoly(sCounts, exrec.locations(Pauli.Y).getTotals(), self.defaultNoiseModels[Pauli.Y])
-        # TODO: compute denominator
-        pr0 = probability.prMinFailures(0, self.ed.locations(Pauli.Y), self.defaultNoiseModels[Pauli.Y], kMax=0)
-        prCnot0 = probability.prMinFailures(0, cnot.locations(Pauli.Y), self.defaultNoiseModels[Pauli.Y], kMax=0)
-        pr = pr / (1 - 2/prCnot0 * (1/pr0 - 1))
+        # TODO: crude upper bound of Pr[S_in!=0] <= Pr[K != 0]
+        # A better bound can be obtained by counting
+        n = 3 * len(led.locations()) + len(cnot.locations())
+        pr = SymPolyWrapper(sympoly1d([n, 0]))
+#        
+#        result = exrec.count(self.defaultNoiseModels, Pauli.Y)
+#        sCounts = [{s:0} for _ in range(len(result.counts))]
+#        sKey = s # TODO: hack!
+#        for k,counts in enumerate(result.counts):
+#            for key, count in counts.iteritems():
+#                key1, key2 = key # TODO: hack!
+#                if sKey == key1 or sKey == key2: 
+#                    sCounts[k][s] += count
+#            
+#        
+#        pr = probability.countsToPoly(sCounts, exrec.locations(Pauli.Y).getTotals(), self.defaultNoiseModels[Pauli.Y])
+#        # TODO: compute denominator
+#        pr0 = probability.prMinFailures(0, self.ed.locations(Pauli.Y), self.defaultNoiseModels[Pauli.Y], kMax=0)
+#        prCnot0 = probability.prMinFailures(0, cnot.locations(Pauli.Y), self.defaultNoiseModels[Pauli.Y], kMax=0)
+#        pr = pr / (1 - 2/prCnot0 * (1/pr0 - 1))
         return pr    
     
 if __name__ == '__main__':
@@ -151,9 +175,9 @@ if __name__ == '__main__':
     
     logging.getLogger('counting.threshold').setLevel(logging.DEBUG)
     
-    kPrep = {Pauli.Y: 2}
-    kCnot = {Pauli.Y: 2}
-    kEC = {Pauli.Y: 4}
-    kExRec = {Pauli.Y: 11}
+    kPrep = {Pauli.Y: 1}
+    kCnot = {Pauli.Y: 1}
+    kEC = {Pauli.Y: 1}
+    kExRec = {Pauli.Y: 1}
     scheme = KnillScheme(kPrep, kCnot, kEC, kExRec)
     scheme.count()
