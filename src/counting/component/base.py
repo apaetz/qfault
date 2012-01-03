@@ -36,9 +36,9 @@ class Component(object):
 	
 	The primary public method of interest is count().  This method counts errors
 	in the component in three steps:
-	  1. Errors in the sub-components are counted.
-	  2. Errors from each sub-component are combined.
-	  3. Optional post-processing is performed.
+	1. Errors in the sub-components are counted.
+	2. Errors from each sub-component are combined.
+	3. Optional post-processing is performed.
 	  
 	The count() method is a template.  So rather than overriding count(),
 	subclasses should instead implement hook methods _count(), _convolve(),
@@ -144,7 +144,7 @@ class Component(object):
 		'''
 		Returns the list of output blocks.
 		'''
-		raise NotImplementedError
+		return self.inBlocks()
 	
 	def logicalStabilizers(self):
 		'''
@@ -386,7 +386,8 @@ class InputDependentComponent(Component):
 	
 	def _convolve(self, results, noiseModels, pauli, inputResult):
 		inputResult = self._prepareInput(inputResult)
-		inputResult.blocks = results.values()[0].blocks
+		if len(results):
+			inputResult.blocks = results.values()[0].blocks
 		results['input'] = inputResult
 		return super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
 
@@ -395,6 +396,22 @@ class InputDependentComponent(Component):
 	
 	def keyPropagator(self, keyMeta):
 		raise Exception('Cannot propagate keys through an input dependent component.')
+	
+class EmptyIDC(InputDependentComponent):
+	'''
+	A completely empty component, that takes an input.
+	'''
+	
+	def __init__(self, code):
+		kGood = {}
+		self.blocks = (Block('0', code), )
+		super(EmptyIDC, self).__init__(kGood)
+		
+	def inBlocks(self):
+		return self.blocks
+	
+	def _prepareInput(self, inputResult):
+		return inputResult
 	
 class PostselectingComponent(InputDependentComponent):
 	'''

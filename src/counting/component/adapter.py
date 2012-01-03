@@ -26,7 +26,8 @@ class ComponentAdapter(Component):
 class InputAdapter(ComponentAdapter):
     
     def __init__(self, component, inputCounts):
-        if type(inputCounts) == int:
+        # TODO: kludgey. need to clean up.
+        if type(inputCounts) == tuple:
             inputCounts = [{inputCounts: 1}]
         
         blocks = component.inBlocks()
