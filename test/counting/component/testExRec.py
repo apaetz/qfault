@@ -7,13 +7,14 @@ Created on May 3, 2011
 from copy import copy
 from counting.component.adapter import InputAdapter
 from counting.component.base import Empty
-from counting.component.ec import TECDecodeAdapter, LECSyndromeAdapter
-from counting.component.exrec import ExRec, ExRecForward
+from counting.component.ec import DecodeAdapter, LECSyndromeAdapter
+from counting.component.exrec import ExRec
 from qec.error import Pauli
 import logging
 import testComponent
 import testTeleport
 import unittest
+from counting.key import SyndromeKeyGenerator
 
 	
 class TestExRecTeleportED(testComponent.ComponentTestCase):
@@ -26,16 +27,14 @@ class TestExRecTeleportED(testComponent.ComponentTestCase):
 			exRec = self._getComponent(kGood, code)
 			for pauli in (Pauli.X, Pauli.Z):
 				result = exRec.count(noise, pauli)
-				print result.counts
 				assert result.counts == expected[pauli]
 				
 		# There are 7 ways to produce an X/Z-error from the output of the
-		# first ED with one fault.  There are also many ways to produce
-		# the trivial error, but these get filtered out by the Forward
-		# exRec.  There are 7*2 ways to get an X with one fault in each ED, and
-		# 10 ways to get an X with two faults in the first ED.  There are 7*7
-		# ways to get an X in both ED's, resulting in an overall I error.
-		expected = {pauli: [{}, {pauli: 7}, {Pauli.I: 7*7, pauli: 7*2 + 10}] for pauli in (Pauli.X, Pauli.Z)}
+		# an ED with one fault, and 2 ways to produce an I-error with one fault.  
+		# There are 10 ways to get an X with two faults in an ED, and 20 ways to
+		# get an I-error.
+		key = {pauli: (SyndromeKeyGenerator(self.trivialCode, None).getKey(pauli),) for pauli in kGood.keys()}
+		expected = {pauli: [{(0,): 1}, {(0,): 4, key[pauli]: 2*7}, {(0,): 7*7 + 2*2 + 2*20, key[pauli]: 2*7*2 + 2*10}] for pauli in (Pauli.X, Pauli.Z)}
 		checkCount(self.trivialCode, expected)
 			
 
@@ -48,7 +47,7 @@ class TestExRecTeleportED(testComponent.ComponentTestCase):
 #		ec = TestTeleportED.TeleportED(kGood, code)
 #		lec = InputAdapter(ec, (0,))
 #		lec = ConcatenatedComponent(kGood, lec, lec)
-#		tec = TECDecodeAdapter(ec)
+#		tec = DecodeAdapter(ec)
 #		tec = ConcatenatedTEC(kGood, tec, tec)
 #					
 #		exRec = ExRec(kGood, lec, cnot, tec)
@@ -71,7 +70,7 @@ class TestExRecTeleportED(testComponent.ComponentTestCase):
 #		print pr
 #		print pr(0.000)
 #		tec = ConcatenatedTEC(kGood, tec, tec)
-#		tec = TECDecodeAdapter(ec)
+#		tec = DecodeAdapter(ec)
 #	@SkipTest
 #	def testPrAccept(self):
 
@@ -85,10 +84,10 @@ class TestExRecTeleportED(testComponent.ComponentTestCase):
 		empty = Empty(code) 
 		
 		ec = testTeleport.TestTeleportED.TeleportED(kGood, code)
-		lec = InputAdapter(ec, (0,))
-		tec = TECDecodeAdapter(ec)
+		lec = ec
+		tec = DecodeAdapter(ec)
 		
-		exRec = ExRecForward(kGood, lec, empty, tec)
+		exRec = ExRec(kGood, lec, empty, tec)
 		return exRec
 
 if __name__ == "__main__":

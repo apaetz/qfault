@@ -3,6 +3,7 @@ Created on May 1, 2011
 
 @author: Adam
 '''
+from warnings import warn
 
 class Block(object):
 	'''
@@ -10,7 +11,7 @@ class Block(object):
 	'''
 
 
-	def __init__(self, name, code):
+	def __init__(self, name, code, keyMeta=None):
 		'''
 		Constructor
 		'''
@@ -27,4 +28,10 @@ class Block(object):
 		return self.name + '.' + str(self.code)
 	
 	def __repr__(self):
-		return 'Block(' + self.name + ', ' + str(self.code) + ')'		
+		return 'Block(' + self.name + ', ' + str(self.code) + ')'
+	
+	def __eq__(self, other):
+		if self.code == other.code:
+			return True
+		
+		return False

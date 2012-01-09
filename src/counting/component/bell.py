@@ -4,26 +4,32 @@ Created on 2011-10-25
 @author: adam
 '''
 from counting.block import Block
-from counting.component.base import Component, Concatenator
-from counting.component.transversal import CnotConvolver, TransCnot, TransMeas
+from counting.component.base import Component, ParallelComponent,\
+    SequentialComponent
+from counting.component.transversal import TransCnot, TransMeas
 from qec.error import Pauli
 import logging
 
 logger = logging.getLogger('component')
 
-class BellPair(CnotConvolver):
+class BellPair(SequentialComponent):
     
-    ctrlName = '|+>'
-    targName = '|0>'
+#    ctrlName = '|+>'
+#    targName = '|0>'
 
     def __init__(self, kGood, plus, zero, kGoodCnot):
-        super(BellPair, self).__init__(kGood, kGoodCnot, plus, zero, self.ctrlName, self.targName)
-    
-    
-class BellMeas(Component):
+        # Construct a transversal CNOT component from the two input codes.
+        ctrlCode = plus.outBlocks()[0].getCode()
+        targCode = zero.outBlocks()[0].getCode()
+        cnot = TransCnot(kGoodCnot, ctrlCode, targCode)
+        
+        prep = ParallelComponent(kGood, plus, zero)
 
-    cnotName = 'cnot'
-    measName = 'measX,measZ'
+        # Order is important here.  The preps must be in front of the CNOT.
+        super(BellPair, self).__init__(kGood, subcomponents=(prep, cnot))
+    
+    
+class BellMeas(SequentialComponent):
     
     def __init__(self, kGood, code, kGoodMeasX=None, kGoodMeasZ=None, kGoodCnot=None):
         if None == kGoodMeasX: kGoodMeasX = kGood
@@ -32,42 +38,9 @@ class BellMeas(Component):
         
         measX = TransMeas(kGoodMeasX, code, Pauli.X)
         measZ = TransMeas(kGoodMeasZ, code, Pauli.Z)
-        meas = Concatenator(kGood, measX, measZ)
+        meas = ParallelComponent(kGood, measX, measZ)
         
-        subs = {self.cnotName: TransCnot(kGoodCnot, code, code),
-                self.measName: meas}
+        subs = (TransCnot(kGoodCnot, code, code), meas)
         
         super(BellMeas, self).__init__(kGood, subcomponents=subs)
         self.code = code
-        
-    def inBlocks(self):
-        return self[self.cnotName].inBlocks()
-        
-    def outBlocks(self):
-        return self[self.measName].outBlocks()
-
-    def keyPropagator(self, keyMeta):
-        # First propagate through the CNOT, then propagate through the measurements.
-        cnot = self[self.cnotName]
-        meas = self[self.measName]
-        return meas.keyPropagator(cnot.keyPropagator(keyMeta))
-        
-    def _convolve(self, results, noiseModels, pauli):
-        
-        cnotResult = results[self.cnotName]
-        meas = self[self.measName]
-        
-        # Propagate the CNOT counts through the measurements.
-        cnotResult.counts, cnotResult.keyMeta = meas.propagateCounts(cnotResult.counts, cnotResult.keyMeta)
-        
-#        measX = results[self.measXName]
-#        measZ = results[self.measZName]
-#        
-#        measX.counts, measX.keyMeta = extendCounts(measX.counts, measX.keyMeta, blocksAfter=1)
-#        measZ.counts, measZ.keyMeta = extendCounts(measZ.counts, measZ.keyMeta, blocksBefore=1)
-#            
-#        measX.blocks = cnot.blocks
-#        measZ.blocks = cnot.blocks
-            
-        # Now convolve.
-        return super(BellMeas, self)._convolve(results, noiseModels, pauli)

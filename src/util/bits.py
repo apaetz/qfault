@@ -123,36 +123,50 @@ def endianSwap(bits, n):
         
     return listToBits(bitsToList(bits, n, bigEndian=False))
     
-def split(bits, lengths):
+def split(bits, lengths, reverse=False):
     '''
     Split the given value into a tuple according to the given bit lengths.
     The tuple ordering is big endian (the most significant bits are mapped
     to the first item in the tuple).
     >>> split(0b110100, [1,2,3])
     (1, 2, 4)
+    >>> split(0b110100, [3,2,1], reverse=True)
+    (4, 2, 1)
     '''
+    
     n = len(lengths)
     items = [0] * n
-    for i in reversed(range(n)):
+    indices = range(n)
+    if not reverse:
+        indices = reversed(indices)
+    
+    for i in indices:
         l = lengths[i]
         items[i] = bits & ((1 << l) - 1)
         bits >>= l
         
     return tuple(items)
 
-def concatenate(seq, lengths):
+def concatenate(seq, lengths, reverse=False):
     '''
     Concatenate the sequence of values according to the given bit lengths.
-    The resulting value is big endian (the first item of the sequence maps
-    to the most significant bits of the result).
+    By default the resulting value is big endian (the first item of the sequence maps
+    to the most significant bits of the result).  If reverse=True, then the
+    resulting value is little endian (first item -> lsb)
     >>> cat = concatenate([1, 2, 3], [1, 3, 2])
     >>> '{0:b}'.format(cat)
     '101011'
+    >>> cat = concatenate([1, 2, 3], [1, 3, 2], reverse=True)
+    >>> '{0:b}'.format(cat)
+    '110101'
     '''
-    
+    indices = range(len(seq))
+    if reverse:
+        indices = reversed(indices)
+        
     bits = 0
-    for i,b in enumerate(seq):
-        bits = (bits << lengths[i]) + b
+    for i in indices:
+        bits = (bits << lengths[i]) + seq[i]
     return bits
 
 def lsbMask(n):

@@ -6,7 +6,7 @@ Created on May 3, 2011
 
 from counting.component.adapter import InputAdapter
 from counting.component.teleport import TeleportED, UncorrectedTeleport,\
-	TeleportEDFilter
+	TeleportEDFilter, Teleport
 from qec.error import Pauli, PauliError, xType, zType
 from unittest.case import SkipTest
 import logging
@@ -21,25 +21,29 @@ import counting
 import qec
 
 
-#class TestUncorrectedTeleport(testComponent.ComponentTestCase):
-#	
-#	def _getComponent(self, kGood, code):
-#		bellPair = testBell.TestBellPair.BellPair(kGood, code)
-#		bellMeas = testBell.TestBellMeas.BellMeas(kGood, code)
-#		return UncorrectedTeleport(kGood, bellPair, bellMeas)
-#	
-#	def testCount(self):
-#		kGood = {Pauli.X: 1, Pauli.Z: 1}
-#		teleport = self._getComponent(kGood, self.trivialCode)
-#		
-#		expected = {Pauli.X: [{(0, 0, 0): 1}, {(0, 1, 1): 1, (0, 1, 0): 4, (0, 0, 0): 1, (0, 0, 1): 3}],
-#				    Pauli.Z: [{(0, 0, 0): 1}, {(2, 0, 2): 1, (2, 0, 0): 5, (0, 0, 0): 1, (0, 0, 2): 2}]}
-#		
-#		for pauli in (Pauli.X, Pauli.Z):
-#			result = teleport.count(self.countingNoiseModels, pauli)
-#			print result.counts
-#			assert expected[pauli] == result.counts
-#		
+class TestTeleport(testComponent.ComponentTestCase):
+	
+	def _getComponent(self, kGood, code):
+		bellPair = testBell.TestBellPair.BellPair(kGood, code)
+		bellMeas = testBell.TestBellMeas.BellMeas(kGood, code)
+		return Teleport(kGood, bellPair, bellMeas)
+	
+	def testCount(self):
+		kGood = {Pauli.X: 1, Pauli.Z: 1}
+		teleport = self._getComponent(kGood, self.trivialCode)
+		
+		expected = {Pauli.X: [{(0, 0, 0): 1}, {(0, 1, 1): 1, (0, 1, 0): 4, (0, 0, 0): 1, (0, 0, 1): 3}],
+				    Pauli.Z: [{(0, 0, 0): 1}, {(2, 0, 2): 1, (2, 0, 0): 5, (0, 0, 0): 1, (0, 0, 2): 2}]}
+		
+		expected = {Pauli.X: [{(0, 0, 0): 1}, {(0, 1, 0): 1, (0, 1, 1): 4, (0, 0, 0): 1, (0, 0, 1): 3}],
+				    Pauli.Z: [{(0, 0, 0): 1}, {(2, 0, 0): 1, (2, 0, 2): 5, (0, 0, 0): 1, (0, 0, 2): 2}]}
+		
+		for pauli in (Pauli.X, Pauli.Z):
+			inputResult = testComponent.trivialInput(teleport)
+			result = teleport.count(self.countingNoiseModels, pauli, inputResult)
+			print result.counts
+			assert expected[pauli] == result.counts
+		
 	
 class TestTeleportED(testComponent.ComponentTestCase):
 	
@@ -60,6 +64,7 @@ class TestTeleportED(testComponent.ComponentTestCase):
 			print result.counts
 			assert expected == result.counts
 			
+	@SkipTest
 	def testPostselect(self):
 		'''
 		Check that error-detection and Pauli frame updates work correctly.
@@ -98,7 +103,7 @@ class TestTeleportED(testComponent.ComponentTestCase):
 				else:
 					keyOut = keyOutGen.getKey({'2': logical[pauliType] * logical[dualType]})
 				
-				result = CountResult([{keyIn: 42}], keyInGen.keyMeta(), blocks)
+				result = CountResult([{keyIn: 42}], blocks)
 				postResult = teleportED._postCount(result, {}, Pauli.X)
 				
 #				print 'keyIn=', keyIn
@@ -135,27 +140,28 @@ class TestTeleportED(testComponent.ComponentTestCase):
 		print prBad(0), prBad(0.001)
 				
 	def _getComponent(self, kGood, code):
-		return InputAdapter(self.TeleportED(kGood, code), (0,))		
+		return self.TeleportED(kGood, code)		
 	
 class TestTeleportEDFilter(testComponent.ComponentTestCase):
 	
+	@SkipTest
 	def testCount(self):
 		kGood = {Pauli.X: 2, Pauli.Z: 2}
 			
 		for inSyndrome in (0, 1, 2):
-			teleportED = self._getComponent(kGood, self.trivialCode, inputSyndrome=inSyndrome)
+			teleportED = self._getComponent(kGood, self.trivialCode)
 			
 			for pauli in (Pauli.X, Pauli.Z):
-				result = teleportED.count(self.countingNoiseModels, pauli)
+				inputs = tuple([inSyndrome] * len(teleportED.inBlocks()))
+				inputResult = CountResult([{inputs: 1}], teleportED.inBlocks())
+				result = teleportED.count(self.countingNoiseModels, pauli, inputResult=inputResult)
 				expected = [{(inSyndrome,): 1}, {(inSyndrome,): 9}, {(inSyndrome,): 30}]
 				print result.counts
 				assert expected == result.counts
 	
-	def _getComponent(self, kGood, code, inputSyndrome=0):
-		bellPair = testBell.TestBellPair.BellPair(kGood, code)
-		bellMeas = testBell.TestBellMeas.BellMeas(kGood, code)
-		teleport = TeleportEDFilter(kGood, bellPair, bellMeas)
-		return InputAdapter(teleport, (inputSyndrome,))
+	def _getComponent(self, kGood, code):
+		teleport = TeleportEDFilter(code)
+		return teleport
 	
 if __name__ == "__main__":
 

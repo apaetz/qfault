@@ -6,25 +6,26 @@ Created on 2011-10-27
 from copy import copy
 from counting import key
 from counting.block import Block
-from counting.component.base import Component, Concatenator
-from counting.component.adapter import ComponentAdapter
+from counting.component.adapter import ComponentAdapter, IdealDecoder
+from counting.component.base import Component, ParallelComponent, \
+    SequentialComponent
 from counting.convolve import convolveDict
+from counting.countErrors import mapCounts
 from counting.countParallel import convolve
 from counting.key import SyndromeKeyGenerator, SyndromeKeyDecoder, \
-    SyndromeKeyMeta, KeyConcatenator, KeyMasker
+    KeyConcatenator, KeyMasker, IdentityManipulator
 from counting.result import CountResult
 from qec.error import Pauli, xType, zType
 from qec.qecc import QeccNone
 from util import listutils, bits
 from util.cache import fetchable
-import operator
-from counting.countErrors import mapCounts
-import logging
 from util.patterns import DelegatingAdapter
+import logging
+import operator
 
-class ConcatenatedTEC(Concatenator):
-    # TODO: Using Concatenator directly doesn't work because the counts
-    # returned by TECDecodeAdapter are non-standard.
+class ConcatenatedTEC(ParallelComponent):
+    # TODO: Using ParallelComponent directly doesn't work because the counts
+    # returned by DecodeAdapter are non-standard.
     
     def __init__(self, kGood, tec1, tec2):
         super(ConcatenatedTEC, self).__init__(kGood, tec1, tec2)
@@ -62,7 +63,7 @@ class ConcatenatedTEC(Concatenator):
                              listMergeOp=mergeOp)
         
         
-        return CountResult(convolved, concatenator.meta(), self.outBlocks(), rejectedCounts=convRejected)
+        return CountResult(convolved, self.outBlocks(), rejectedCounts=convRejected)
         
 #    def _convolveTEC(self, tecCounts1, tecCounts2, meta):
 #        # TEC counts are indexed by [key][pauli]
@@ -107,7 +108,7 @@ class TECAdapter(ComponentAdapter):
         rejectLookup = [{} for _ in range(self.tec.kGood[pauli] + 1)]
         for key in keys:
             inCount = [{(key,): 1}]
-            inResult = CountResult(inCount, keyMeta, [None])
+            inResult = CountResult(inCount, [None])
             outResult = self.tec.count(noiseModels, pauli, inResult)
             outMeta = outResult.keyMeta
             outBlocks = outResult.blocks
@@ -130,7 +131,7 @@ class TECAdapter(ComponentAdapter):
         # is 'key'.
         
         counts, rejected, meta, blocks = self.lookupTable(noiseModels, pauli)
-        return CountResult(counts, meta, blocks, rejectedCounts=rejected)
+        return CountResult(counts, blocks, rejectedCounts=rejected)
         
     def outBlocks(self):
         code = QeccNone(1)
@@ -140,24 +141,31 @@ class TECAdapter(ComponentAdapter):
         return counts
     
     
-class TECDecodeAdapter(TECAdapter):
-    @staticmethod
-    def decodeCounts(counts, decoder):
-        decodeCounts = []
-        for countK in counts:
-            decodeCountK = {}
-            for key, val in countK.iteritems():
-                decoded = decoder.decode(key)
-                decodeCountK[decoded] = decodeCountK.get(decoded, 0) + val
-                    
-            decodeCounts.append(decodeCountK)
-            
-        return decodeCounts
+class DecodeAdapter(SequentialComponent):
     
-    def _processCounts(self, counts):
-        code = self.tec.inBlocks()[0].getCode()
-        decoder = SyndromeKeyDecoder(code)
-        return self.decodeCounts(counts, decoder)
+    def __init__(self, tec):
+        outBlocks = tec.outBlocks()
+        idealDecoders = [IdealDecoder(block.getCode()) for block in outBlocks]
+        decoder = ParallelComponent({}, *idealDecoders)
+        super(DecodeAdapter, self).__init__(tec.kGood, (tec, decoder))
+    
+#    @staticmethod
+#    def decodeCounts(counts, decoder):
+#        decodeCounts = []
+#        for countK in counts:
+#            decodeCountK = {}
+#            for key, val in countK.iteritems():
+#                decoded = decoder.decode(key)
+#                decodeCountK[decoded] = decodeCountK.get(decoded, 0) + val
+#                    
+#            decodeCounts.append(decodeCountK)
+#            
+#        return decodeCounts
+#    
+#    def _processCounts(self, counts):
+#        code = self.tec.inBlocks()[0].getCode()
+#        decoder = SyndromeKeyDecoder(code)
+#        return self.decodeCounts(counts, decoder)
             
             
 class LECSyndromeAdapter(ComponentAdapter):
@@ -178,8 +186,8 @@ class LECSyndromeAdapter(ComponentAdapter):
         
         return masker
     
-    def keyPropagator(self, keyMeta):
-        return self.logicalMasker(self.lec.keyPropagator(keyMeta))
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        return self.logicalMasker(self.lec.keyPropagator(subPropagator))
     
     def _postCount(self, result, noiseModels, pauli):
         result = self.lec._postCount(result, noiseModels, pauli)

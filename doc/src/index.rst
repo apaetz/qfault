@@ -18,3 +18,9 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
+.. automodule:: counting.component.base
+    :members:
+    
+.. automodule:: scheme.knill
+    :members:  
+    

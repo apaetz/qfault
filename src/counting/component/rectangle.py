@@ -3,17 +3,17 @@ Created on 2011-10-26
 
 @author: adam
 '''
-from counting.component.base import InputDependentComponent
 from counting.component.transversal import TransCnot
-from counting.key import keyForBlock, \
-    SyndromeKeyMeta, SyndromeKeyGenerator, SyndromeKeyDecoder, KeySplitter
 from counting.countErrors import mapCounts
-from counting.result import CountResult
-from util.cache import fetchable, memoizeFetchable
 from counting.countParallel import convolve
+from counting.key import keyForBlock, SyndromeKeyGenerator, \
+	SyndromeKeyDecoder, KeySplitter
+from counting.result import CountResult
 from util import listutils
+from util.cache import fetchable, memoizeFetchable
+from counting.component.base import Component
 
-class CnotRectangle(InputDependentComponent):
+class CnotRectangle(Component):
     '''
     classdocs
     '''
@@ -94,7 +94,7 @@ class CnotRectangle(InputDependentComponent):
                 for j in range(len(convolved)):
                     decodeCounts[j+k] = listutils.addDicts(decodeCounts[j+k], convolved[j])
                
-        return CountResult(decodeCounts, None, None)
+        return CountResult(decodeCounts, None)
         
 class TECDecoder(object):
     # TODO: this could probably be a component.
