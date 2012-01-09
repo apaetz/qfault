@@ -4,9 +4,9 @@ Created on 2011-10-30
 @author: adam
 '''
 from counting.component import base
-from counting.component.base import Prep, InputAdapter, Concatenator
+from counting.component.base import Prep, InputAdapter, ParallelComponent
 from counting.component.bell import BellPair, BellMeas
-from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC
+from counting.component.ec import DecodeAdapter, ConcatenatedTEC
 from counting.component.exrec import ExRec
 from counting.component.teleport import TeleportED
 from counting.component.transversal import TransCnot
@@ -53,7 +53,7 @@ class TestKnill(unittest.TestCase):
         
         ed = self.makeED(kGood)
         led = InputAdapter(ed, (0,))
-        ted = TECDecodeAdapter(ed)
+        ted = DecodeAdapter(ed)
         
         exRec = ExRec(kGood, led, id, ted)
         

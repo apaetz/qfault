@@ -102,3 +102,6 @@ def uniqify(seq):
 if __name__ == "__main__":
 	import doctest
 	doctest.testmod()
+	
+def cycle(seq):
+	pass

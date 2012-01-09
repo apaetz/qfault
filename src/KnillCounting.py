@@ -11,10 +11,10 @@ from settings.noise import NoiseModelXZSympy, NoiseModelXSympy, NoiseModelZSympy
     CountingNoiseModelX, CountingNoiseModelZ
 import util.cache
 from counting.component.adapter import InputAdapter
-from counting.component.base import Concatenator
+from counting.component.base import ParallelComponent
 from counting.component.transversal import TransCnot
 from counting.component.exrec import ExRec, ExRecForward
-from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC,\
+from counting.component.ec import DecodeAdapter, ConcatenatedTEC,\
     LECSyndromeAdapter
 from counting import probability, levelOne
 import logging
@@ -59,9 +59,9 @@ from scheme.knill import KnillScheme
 #    ed = makeED(kGood)
 #    led = InputAdapter(ed, (0,))
 #    #led = LECSyndromeAdapter(led)
-#    led = Concatenator(kGood, led, led)
+#    led = ParallelComponent(kGood, led, led)
 #    cnot = TransCnot(kGood, code, code)
-#    ted = TECDecodeAdapter(ed)
+#    ted = DecodeAdapter(ed)
 #    ted = ConcatenatedTEC(kGood, ted, ted)
 #    
 #    exRec = ExRecForward(kGood, led, cnot, ted)

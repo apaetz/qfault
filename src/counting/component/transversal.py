@@ -4,8 +4,9 @@ Created on 2011-10-25
 @author: adam
 '''
 from counting.component.base import CountableComponent, Component,\
-    Concatenator
-from counting.key import KeyCopier, KeyMasker
+    ParallelComponent
+from counting.key import KeyCopier, KeyMasker, IdentityManipulator,\
+    SyndromeKeyGenerator
 from counting.location import Locations
 from qec.error import zType, xType, Pauli
 from qec.qecc import StabilizerState, StabilizerCode
@@ -13,6 +14,7 @@ from util import counterUtils, bits
 import logging
 from counting.countErrors import mapCounts
 from util.counterUtils import locrest
+from counting.block import Block
 
 logger = logging.getLogger('component')
 
@@ -33,13 +35,24 @@ class TransCnot(CountableComponent):
         nickname='transCNOT.'+str(n)
         locs = Locations([counterUtils.loccnot(self.ctrlName, i, self.targName, i) for i in range(n)], nickname)
         
-        if isinstance(ctrlCode, StabilizerState): ctrlCode = ctrlCode.getCode()
-        if isinstance(targCode, StabilizerState): targCode = targCode.getCode()
-        
-        codes = {self.ctrlName: ctrlCode, self.targName: targCode}
-        
-        super(TransCnot, self).__init__(locs, blockorder, codes, kGood, nickname)
+        super(TransCnot, self).__init__(kGood, locs)
         self.blockorder = blockorder
+        self.codes = {self.ctrlName: ctrlCode, self.targName: targCode}
+        
+    def inBlocks(self):
+        return tuple(Block(name, self.codes[name]) for name in self.blockorder)
+    
+    def outBlocks(self):
+        outCodes = self.codes
+        # Input codes may actually be codewords.  But the output may be
+        # entangled, so the output codes are just the underlying code.
+        for block, code in outCodes.iteritems():
+            try:
+                outCodes[block] = code.getCode()
+            except AttributeError:
+                pass
+            
+        return tuple(Block(name, outCodes[name]) for name in self.blockorder)
         
     def _logicalChecks(self, codes):
         code = TransCnotCode(codes)
@@ -53,8 +66,11 @@ class TransCnot(CountableComponent):
         
         return newOp
     
-    def keyPropagator(self, keyMeta):
-        parityChecks = keyMeta.meta().parityChecks()
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        
+        # TODO: this assumes that the parity checks for both blocks are identical.
+        # Need to explicitly check this condition?
+        parityChecks = SyndromeKeyGenerator(self.outBlocks()[0].getCode(), None).parityChecks()
         
         # On the control input X errors propagate through to the target
         # block.
@@ -67,7 +83,7 @@ class TransCnot(CountableComponent):
         ctrlNum = self.blockorder.index(self.ctrlName)
         targNum = not ctrlNum
         
-        ctrlCopier = KeyCopier(keyMeta, ctrlNum, targNum, mask=fromCtrlMask)
+        ctrlCopier = KeyCopier(subPropagator, ctrlNum, targNum, mask=fromCtrlMask)
         targCopier = KeyCopier(ctrlCopier, targNum, ctrlNum, mask=fromTargMask)
             
         return targCopier
@@ -147,58 +163,6 @@ class TransCnotCode(StabilizerCode):
                 
         return newOps
     
-class CnotConvolver(Component):
-    
-    ctrlName = 'ctrl'
-    targName = 'targ'
-    inName = 'ctrl,targ'
-    cnotName = 'cnot'
-    
-    def __init__(self, kGood, kGoodCnot, ctrlInput, targInput, ctrlName=ctrlName, targName=targName):
-        
-        # Construct a transversal CNOT component from the two input codes.
-        ctrlCode = ctrlInput.outBlocks()[0].getCode()
-        targCode = targInput.outBlocks()[0].getCode()
-        cnot = TransCnot(kGoodCnot, ctrlCode, targCode)
-        
-        ctrltarg = Concatenator(kGood, ctrlInput, targInput)
-        
-        super(CnotConvolver, self).__init__(kGood, subcomponents={self.inName: ctrltarg,
-                                                                  self.cnotName: cnot})
-        self.ctrlName = ctrlName
-        self.targName = targName
-        
-    def outBlocks(self):
-        return self.subcomponents()[self.cnotName].outBlocks()
-    
-    def _convolve(self, results, noiseModels, pauli):
-        
-        cnot = self.subcomponents()[self.cnotName]
-#        ctrlResult = results[self.ctrlName]
-#        targResult = results[self.targName]
-        #cnotResult = results[self.cnotName]
-        inResult = results[self.inName]
-        
-        # First, propagate the input results through the CNOT
-        inResult.counts, inResult.keyMeta = cnot.propagateCounts(inResult.counts, inResult.keyMeta)
-#        
-
-#        ctrlExtender = KeyExtender(ctrlResult.keyMeta, blocksAfter=1)
-#        ctrlResult.counts = mapCounts(ctrlResult.counts, ctrlExtender)
-#        ctrlResult.keyMeta = ctrlExtender.meta()
-#        ctrlResult.counts, ctrlResult.keyMeta = cnot.propagateCounts(ctrlResult.counts, ctrlResult.keyMeta)
-#        
-#        targExtender, targResult.keyMeta = keyExtender(targResult.keyMeta, blocksBefore=1)
-#        targResult.counts = mapCounts(targResult.counts, targExtender)
-#        targResult.counts, targResult.keyMeta = cnot.propagateCounts(targResult.counts, targResult.keyMeta)
-#        
-#        ctrlResult.blocks = cnotResult.blocks
-#        targResult.blocks = cnotResult.blocks
-#                    
-        # Now convolve.
-        return super(CnotConvolver, self)._convolve(results, noiseModels, pauli)            
-
-    
 class TransMeas(CountableComponent):
     
     def __init__(self, kGood, code, basis, blockname='0'):
@@ -214,18 +178,24 @@ class TransMeas(CountableComponent):
             raise Exception('{0}-basis measurement is not supported'.format(basis))
         
         locs = Locations([loc(blockname, i) for i in range(n)], nickname)
-        super(TransMeas, self).__init__(locs, [blockname], {blockname: code}, kGood, nickname)
+        super(TransMeas, self).__init__(kGood, locs)
         
         self._basis = basis
+        self._block = Block(blockname, code)
         
-    def keyPropagator(self, keyMeta):
-        parityChecks = keyMeta.parityChecks()
+    def inBlocks(self):
+        return (self._block,)
+        
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        code = self.inBlocks()[0].getCode()
+        parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
         
         # Eliminate bits corresponding to checks of the same type as the
         # measurement.  These errors/syndromes cannot be detected.
         mask = bits.listToBits((0 != check[self._basisType]) for check in parityChecks)
         
-        return KeyMasker(keyMeta, mask)
+        blocks = range(len(self.inBlocks()))
+        return KeyMasker(subPropagator, mask, blocks=blocks)
         
 class TransRest(CountableComponent):
     
@@ -233,6 +203,10 @@ class TransRest(CountableComponent):
         nickname = 'transRest' + str(code.n)
         locs = Locations([locrest(blockname, i) for i in range(code.n)], nickname)
         
-        super(TransRest, self).__init__(locs, [blockname], {blockname: code}, kGood, nickname)
+        super(TransRest, self).__init__(kGood, locs)
         
+        self._block = Block(blockname, code)
+        
+    def inBlocks(self):
+        return (self._block,)
   

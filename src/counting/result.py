@@ -10,7 +10,7 @@ class CountResult(object):
     ''' 
     '''
     
-    def __init__(self, counts, keyMeta, blocks, rejectedCounts=None, name=None):
+    def __init__(self, counts, blocks, rejectedCounts=None, name=None):
                     
         self.blocks = blocks
         self.counts = counts
@@ -20,7 +20,6 @@ class CountResult(object):
             
         self.rejected = rejectedCounts
         #self.prAccept = prAccept
-        self.keyMeta = keyMeta
         
     def __get__(self, etype):
         return self.counts[etype]
@@ -39,3 +38,9 @@ class CountResult(object):
 #    
 #    def keyMeta(self):
 #        return self.keyMeta
+
+
+def TrivialResult(blocks):
+    inputs = tuple([0]*len(blocks))
+    counts = [{inputs: 1}]
+    return CountResult(counts, blocks)

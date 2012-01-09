@@ -6,11 +6,12 @@ Created on 2011-10-25
 from copy import copy
 from counting import probability, key
 from counting.block import Block
-from counting.component.base import Component, InputDependentComponent,\
-    PostselectingComponent, Empty, Concatenator
+from counting.component.base import Component,\
+    PostselectionFilter, Empty, ParallelComponent, SequentialComponent
 from counting.countErrors import mapCounts
 from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator, \
-    KeyConcatenator, IntegerKey, KeyCopier, KeyMasker, SyndromeKeyMeta
+    KeyConcatenator, IntegerKey, KeyCopier, KeyMasker, IdentityManipulator,\
+    SyndromeKeyGenerator
 from counting.result import CountResult
 from qec.error import Pauli, xType, zType
 from util import bits
@@ -44,8 +45,8 @@ class UncorrectedTeleport(Component):
         
         # Extend the Bell measurement and the Bell pair so that they
         # contain the same number of blocks, some of which are empty.
-        bellPair = Concatenator(kGood, emptyMeasX, bellPair)
-        bellMeas = Concatenator(kGood, bellMeas, emptyOut)
+        bellPair = ParallelComponent(kGood, emptyMeasX, bellPair)
+        bellMeas = ParallelComponent(kGood, bellMeas, emptyOut)
         
         subs = {self.bpName: bellPair,
                 self.bmName: bellMeas}
@@ -55,7 +56,7 @@ class UncorrectedTeleport(Component):
             measOut = TransRest(kGood, outBlock.getCode())
             
             # Extend the measurement to include the other two blocks, as well.
-            measOut = Concatenator(kGood, emptyMeasX, emptyMeasZ, measOut)
+            measOut = ParallelComponent(kGood, emptyMeasX, emptyMeasZ, measOut)
             
             subs[self.measOutName] = measOut
         
@@ -70,10 +71,10 @@ class UncorrectedTeleport(Component):
         # component which will be able to define the output blocks.
         raise NotImplementedError
     
-    def keyPropagator(self, keyMeta):
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
         # Extend the input to all three blocks, then propagate
         # through the Bell measurement.
-        extender = KeyExtender(keyMeta, blocksAfter=2)
+        extender = KeyExtender(subPropagator, blocksAfter=2)
         return self[self.bmName].keyPropagator(extender)
 
 
@@ -147,55 +148,248 @@ class UCTSyndromeOut(UncorrectedTeleport):
         def _manipulate(self, key):
             key = keyForBlock(key, 2, self.meta())
             return self.masker(key)
+        
+        
+class Teleport(SequentialComponent):   
+    
+#    inName = 'input'
+#    bpName = 'BP'
+#    bmName = 'BM'
+#    measOutName = 'measOut'
+    
+    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
+
+        # Order of the Bell pair and Bell measurement output blocks
+        # is hardcoded.
+        measXBlock, measZBlock = bellMeas.outBlocks()
+        outBlock = bellPair.outBlocks()[1]
+        
+        emptyMeasX = Empty(measXBlock.getCode(), measXBlock.name)
+        emptyMeasZ = Empty(measZBlock.getCode(), measZBlock.name)
+        emptyOut = Empty(outBlock.getCode(), outBlock.name)
+        
+        # Extend the Bell measurement and the Bell pair so that they
+        # contain the same number of blocks, some of which are empty.
+        bellPair = ParallelComponent(kGood, emptyMeasX, bellPair)
+        bellMeas = ParallelComponent(kGood, bellMeas, emptyOut)
+        
+        subs = (bellPair, bellMeas)
+        
+        # TODO: Bell measurement is two time steps.  Need to include
+        # both rests??
+        if enableRest:
+            outBlock = bellPair.outBlocks()[1]
+            rest = TransRest(kGood, outBlock.getCode())
+            
+            # Extend the rest to include the other two blocks, as well.
+            rest = ParallelComponent(kGood, emptyMeasX, emptyMeasZ, rest)
+            
+            subs += (rest,)
+        
+        super(Teleport, self).__init__(kGood, subcomponents=subs)
+        #self._outblockOrder = outblockOrder
+#        
+#    def inBlocks(self):
+#        return (self[self.bmName].inBlocks()[0], )
+#    
+#    def outBlocks(self):
+#        return self[self.bmName].outBlocks() + (self[self.bpName].outBlocks()[1],)
+
+    def inBlocks(self):
+        return (self.subcomponents()[1].inBlocks()[0],)
+    
+    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        # First, extend the input to all three blocks.
+        extender = KeyExtender(IdentityManipulator(), blocksAfter=2)
+        extendedInput = inputResult
+        extendedInput.counts = mapCounts(inputResult.counts, extender)
+        extendedInput.blocks *= 3
+        
+        # Now count normally.
+        result = super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
+        
+        # Finally, make the logical corrections necessary for teleportation.
+        inBlock = self.inBlocks()[0]
+        code = inBlock.getCode()
+        corrector = self._corrector(code)
+        result.counts = mapCounts(result.counts, corrector)
+        
+        return result
+        
+    
+#    def keyPropagator(self, keyMeta):
+#        # Extend the input to all three blocks, then propagate
+#        # through the Bell measurement.
+#        extender = KeyExtender(keyMeta, blocksAfter=2)
+#        return self[self.bmName].keyPropagator(extender)
+        
+    def _corrector(self, code):
+        parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
+        
+        # TODO: this assumes that the code contains only one logical qubit.
+        logicalOperators = code.logicalOperators()[0]
+        
+        logicalBitsX =  [check == logicalOperators[xType] for check in parityChecks]
+        logicalBitsZ =  [check == logicalOperators[zType] for check in parityChecks]
+        
+        logicalMaskX = bits.listToBits(logicalBitsX)
+        logicalMaskZ = bits.listToBits(logicalBitsZ)
+        
+        # Apply the logical operator parity checks (i.e. the logical corrections)
+        # to the output key
+        copier = KeyCopier(IdentityManipulator(), 0, 2, logicalMaskX)
+        copier = KeyCopier(copier, 1, 2, logicalMaskZ)
+        def outputKey(key):
+            key = copier(key)
+            return key
+        
+        return outputKey
             
     
-class TeleportED(PostselectingComponent):
+class TeleportED(SequentialComponent):
     
-    ucTeleportName = 'uct'
-    inName = 'input'
+#    teleportName = 'uct'
+#    inName = 'input'
     
     def __init__(self, kGood, bellPair, bellMeas):
-        ucTeleport = UncorrectedTeleport(kGood, bellPair, bellMeas)
-        super(TeleportED, self).__init__(kGood, subcomponents={self.ucTeleportName: ucTeleport})
+        inBlock = bellMeas.inBlocks()[0]
+        teleport = Teleport(kGood, bellPair, bellMeas)
+        edFilter = TeleportEDFilter(inBlock.getCode())
+        super(TeleportED, self).__init__(kGood, subcomponents=(teleport, edFilter))
         self._outBlock = bellPair.outBlocks()[1]
         
-        # Delegate to ucTeleport
-        self.inBlocks = ucTeleport.inBlocks
+        # Delegate to subcomponents
+        self.inBlocks = teleport.inBlocks
+        self.outBlocks = edFilter.outBlocks
             
+#    def outBlocks(self):
+#        return (self._outBlock,)
+#    
+#    def _prepareInput(self, inputResult):
+#        ucTeleport = self[self.teleportName]
+#        counts, keyMeta = ucTeleport.propagateCounts(inputResult.counts, inputResult.keyMeta)
+#                
+#        return CountResult(counts, None, inputResult.rejected)
+#    
+#    def _postCount(self, result, noiseModels, pauli):
+#        '''
+#        Post-select for the trivial syndrome on the two measured blocks.
+#        '''
+#        
+#        keyMeta = result.keyMeta
+#        outBlock = result.blocks[2]
+#        stabilizers = set(outBlock.getCode().stabilizerGenerators())
+#        logicals = outBlock.getCode().logicalOperators()
+#        if 1 != len(logicals):
+#            raise Exception('Incorrect number of logical qubits ({0})'.format(len(logicals)))
+#        
+#        logicals = logicals[0]
+#        
+#        accept = self._acceptor(keyMeta, stabilizers)
+#        outputKey = self._outputter(keyMeta, logicals)
+#        
+#        result.counts, result.rejected = self._postselect(result.counts, pauli, accept, outputKey)
+#        
+#        result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()[1]
+#        result.blocks = (result.blocks[2],)
+#        return result
+#    
+#    def _acceptor(self, keyMeta, stabilizers):
+#        parityChecks = keyMeta.parityChecks()
+#        syndromeBits = [(check in stabilizers) for check in parityChecks]
+#        rejectMask = bits.listToBits(syndromeBits)
+#        
+#        warnings.warn('Detection of normalizer generators is not yet implemented')
+#        # The UncorrectedTeleport component blocks are setup as follows:
+#        # block 0 - Transversal X-basis measurement
+#        # block 1 - Transversal Z-basis measurement
+#        # block 2 - Teleported data
+#        def accept(key):
+#            # TODO also check additional normalizers.
+#            return not(key[0] & rejectMask) and not(key[1] & rejectMask)
+#    
+#        return accept
+#    
+#    def _outputter(self, keyMeta, logicalOperators):
+#        parityChecks = keyMeta.parityChecks()
+#        
+#        logicalBitsX =  [check == logicalOperators[xType] for check in parityChecks]
+#        logicalBitsZ =  [check == logicalOperators[zType] for check in parityChecks]
+#        
+#        logicalMaskX = bits.listToBits(logicalBitsX)
+#        logicalMaskZ = bits.listToBits(logicalBitsZ)
+#        
+#        # Apply the logical operator parity checks (i.e. the logical corrections)
+#        # to the output key
+#        copier = KeyCopier(keyMeta, 0, 2, logicalMaskX)
+#        copier = KeyCopier(copier, 1, 2, logicalMaskZ)
+#        def outputKey(key):
+#            key = copier(key)
+#            return keyForBlock(key, 2, keyMeta)
+#        
+#        return outputKey
+#        
+#    def _postselect(self, counts, pauli, accept, outputKey):
+#        '''
+#        Post-select for the trivial syndrome on the two measured blocks, and make
+#        logical corrections if necessary.
+#        '''
+#        
+#        accepted = []
+#        rejected = []
+#        
+#        # Error detection involves looking at both the X and Z
+#        # syndromes.  We can upper bound the rejection probability
+#        # only when counting both types of errors.  When counting
+#        # only X, or only Z, we must assume (for the purpose of the
+#        # rejected counts) that all errors are rejected, unless
+#        # k = 0.
+#        rejectAll = (Pauli.Y != pauli)
+#        
+#        for k, count in enumerate(counts):
+#            acceptedK = {}
+#            rejectedK = 0
+#            for key, c in count.iteritems():
+#                if accept(key):
+#                    outKey = outputKey(key)
+#                    self._log(logging.DEBUG, 'accepted %s, output=%s, count=%d', key, outKey, c)
+#                    acceptedK[outKey] = acceptedK.get(outKey, 0) + c
+#                    
+#                    if rejectAll and (0 != k):
+#                        rejectedK += c
+#                else:
+#                    self._log(logging.DEBUG, 'rejected %s', key)
+#                    rejectedK += c
+#                    
+#            accepted.append(acceptedK)
+#            rejected.append({counting.key.rejectKey: rejectedK})
+#            
+#        return accepted, rejected
+    
+class TeleportEDFilter(PostselectionFilter):
+    '''
+    '''
+    
+    def __init__(self, code):
+        super(TeleportEDFilter, self).__init__()
+        self.code = code
+        
+    def inBlocks(self):
+        blocks = (Block('X', self.code), Block('Z', self.code), Block('out', self.code))
+        return blocks
+        
     def outBlocks(self):
-        return (self._outBlock,)
+        return (Block('out', self.code),)
     
-    def _prepareInput(self, inputResult):
-        ucTeleport = self[self.ucTeleportName]
-        counts, keyMeta = ucTeleport.propagateCounts(inputResult.counts, inputResult.keyMeta)
-                
-        return CountResult(counts, keyMeta, None, inputResult.rejected)
-    
-    def _postCount(self, result, noiseModels, pauli):
-        '''
-        Post-select for the trivial syndrome on the two measured blocks.
-        '''
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        accept = self._acceptor(self.code)
+        keyAcceptor = self.KeyAcceptor(subPropagator, accept)
+        return keyAcceptor
         
-        keyMeta = result.keyMeta
-        outBlock = result.blocks[2]
-        stabilizers = set(outBlock.getCode().stabilizerGenerators())
-        logicals = outBlock.getCode().logicalOperators()
-        if 1 != len(logicals):
-            raise Exception('Incorrect number of logical qubits ({0})'.format(len(logicals)))
-        
-        logicals = logicals[0]
-        
-        accept = self._acceptor(keyMeta, stabilizers)
-        outputKey = self._outputter(keyMeta, logicals)
-        
-        result.counts, result.rejected = self._postselect(result.counts, pauli, accept, outputKey)
-        
-        result.keyMeta = KeySplitter(result.keyMeta, [2]).meta()[1]
-        result.blocks = (result.blocks[2],)
-        return result
-    
-    def _acceptor(self, keyMeta, stabilizers):
-        parityChecks = keyMeta.parityChecks()
+    def _acceptor(self, code):
+        stabilizers = set(code.stabilizerGenerators())
+        # TODO: more robust way to get parity checks?
+        parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
         syndromeBits = [(check in stabilizers) for check in parityChecks]
         rejectMask = bits.listToBits(syndromeBits)
         
@@ -209,97 +403,18 @@ class TeleportED(PostselectingComponent):
             return not(key[0] & rejectMask) and not(key[1] & rejectMask)
     
         return accept
-    
-    def _outputter(self, keyMeta, logicalOperators):
-        parityChecks = keyMeta.parityChecks()
         
-        logicalBitsX =  [check == logicalOperators[xType] for check in parityChecks]
-        logicalBitsZ =  [check == logicalOperators[zType] for check in parityChecks]
+    class KeyAcceptor(KeyManipulator):
         
-        logicalMaskX = bits.listToBits(logicalBitsX)
-        logicalMaskZ = bits.listToBits(logicalBitsZ)
+        def __init__(self, manipulator, accept):
+            super(TeleportEDFilter.KeyAcceptor, self).__init__(manipulator)
+            self.accept = accept
         
-        # Apply the logical operator parity checks (i.e. the logical corrections)
-        # to the output key
-        copier = KeyCopier(keyMeta, 0, 2, logicalMaskX)
-        copier = KeyCopier(copier, 1, 2, logicalMaskZ)
-        def outputKey(key):
-            key = copier(key)
-            return keyForBlock(key, 2, keyMeta)
+        def _manipulate(self, key):
+            if not self.accept(key):
+                return None
+            return keyForBlock(key, 2)
         
-        return outputKey
         
-    def _postselect(self, counts, pauli, accept, outputKey):
-        '''
-        Post-select for the trivial syndrome on the two measured blocks, and make
-        logical corrections if necessary.
-        '''
-        
-        accepted = []
-        rejected = []
-        
-        # Error detection involves looking at both the X and Z
-        # syndromes.  We can upper bound the rejection probability
-        # only when counting both types of errors.  When counting
-        # only X, or only Z, we must assume (for the purpose of the
-        # rejected counts) that all errors are rejected, unless
-        # k = 0.
-        rejectAll = (Pauli.Y != pauli)
-        
-        for k, count in enumerate(counts):
-            acceptedK = {}
-            rejectedK = 0
-            for key, c in count.iteritems():
-                if accept(key):
-                    outKey = outputKey(key)
-                    self._log(logging.DEBUG, 'accepted %s, output=%s, count=%d', key, outKey, c)
-                    acceptedK[outKey] = acceptedK.get(outKey, 0) + c
-                    
-                    if rejectAll and (0 != k):
-                        rejectedK += c
-                else:
-                    self._log(logging.DEBUG, 'rejected %s', key)
-                    rejectedK += c
-                    
-            accepted.append(acceptedK)
-            rejected.append({counting.key.rejectKey: rejectedK})
+
             
-        return accepted, rejected
-    
-class TeleportEDFilter(TeleportED):
-    '''
-    Teleportation ED gadget that filters out rejected inputs.
-    This ED doesn't actually propagate the input through the teleportation component.
-    Rather, it simulates the action of the teleportation and outputs the original input
-    only if it was accepted.
-    '''
-    
-    def _convolve(self, results, noiseModels, pauli, inputResult):
-        
-        # We don't want any errors from the teleportation itself to go to the output.
-        # Zero-out all of the syndromes on the output block of the UCT.
-        uct = results[self.ucTeleportName]
-        masker = KeyMasker(uct.keyMeta, 0, [2])
-        uct.counts = mapCounts(uct.counts, masker)
-        uct.keyMeta = masker.meta()
-        
-        return super(TeleportEDFilter, self)._convolve(results, noiseModels, pauli, inputResult)
-    
-    def _outputter(self, keyMeta, logicalOperators):
-        
-        def outputKey(key):
-            return keyForBlock(key, 2, keyMeta)
-        
-        return outputKey
-    
-    def _prepareInput(self, inputResult):
-        # 1. Extend the input to all three blocks, 
-        # 2. copy from the original input block to the output block.
-        # 3. Propagate through the Bell measurement  
-        extender = KeyExtender(inputResult.keyMeta, blocksAfter=2)
-        copier = KeyCopier(extender, 0, 2)
-        uct = self[self.ucTeleportName]
-        propagator = uct[uct.bmName].keyPropagator(copier)
-        counts = mapCounts(inputResult.counts, propagator)
-                
-        return CountResult(counts, propagator.meta(), None, inputResult.rejected)

@@ -31,8 +31,8 @@ class TestPrep(testComponent.ComponentTestCase):
 	def Plus(kGood, code):
 		return Prep(kGood, Locations([counterUtils.locXprep('|+>', 0)], '|+>'), StabilizerState(code, [xType]))
 	
-	def _getComponent(self, kGood):
-		return self.Zero(kGood, self.trivialCode)
+	def _getComponent(self, kGood, code):
+		return self.Zero(kGood, code)
 	
 	def testCount(self):
 		expectedZero = [{(0,): 1}, {(1,): 1}]
@@ -53,6 +53,7 @@ class TestPrep(testComponent.ComponentTestCase):
 		
 		zero = self.Zero(kGood, self.code)
 		result = zero.count(self.noise, pauli)
+		print result.counts
 		assert result.counts == expectedZero
 		
 	def testPrBad(self):
@@ -81,14 +82,14 @@ class TestPrep(testComponent.ComponentTestCase):
 		prBad = plus.prBad(self.noise[Pauli.Z], pauli, 1)
 		assert 1 == prBad
 		
-	def testPrAccept(self):
-		kGood = {Pauli.X: 1, Pauli.Z: 1}
-		plus = self.Plus(kGood, self.code)
-		zero = self.Zero(kGood, self.code)
-		
-		paulis = (Pauli.X, Pauli.Z)
-		assert all((1 == plus.prAccept(self.noise, 1) for pauli in paulis))
-		assert all((1 == zero.prAccept(self.noise, 1) for pauli in paulis))		
+#	def testPrAccept(self):
+#		kGood = {Pauli.X: 1, Pauli.Z: 1}
+#		plus = self.Plus(kGood, self.code)
+#		zero = self.Zero(kGood, self.code)
+#		
+#		paulis = (Pauli.X, Pauli.Z)
+#		assert all((1 == plus.prAccept(self.noise, 1) for pauli in paulis))
+#		assert all((1 == zero.prAccept(self.noise, 1) for pauli in paulis))		
 
 if __name__ == "__main__":
 

@@ -4,10 +4,10 @@ Created on 2011-11-14
 @author: adam
 '''
 from counting.component.adapter import InputAdapter
-from counting.component.base import Prep, Concatenator, FixedOutput, Empty,\
+from counting.component.base import Prep, ParallelComponent, FixedOutput, Empty,\
     EmptyIDC
 from counting.component.bell import BellPair, BellMeas
-from counting.component.ec import TECDecodeAdapter, ConcatenatedTEC, TECAdapter
+from counting.component.ec import DecodeAdapter, ConcatenatedTEC, TECAdapter
 from counting.component.exrec import ExRecForward, ExRec
 from counting.component.teleport import TeleportED, UCTSyndromeOut,\
     TeleportEDFilter
@@ -75,7 +75,7 @@ class KnillScheme(Scheme):
         cnot = TransCnot(self.kCnot, code, code)
         
         # We're just counting the rectangle, so the TED is just an ideal decoder.
-        ted = TECDecodeAdapter(EmptyIDC(code))
+        ted = DecodeAdapter(EmptyIDC(code))
         ted = ConcatenatedTEC(self.kExRec, ted, ted)
         
         #inKeys = {keyGen.getKey({blockname: Pauli.X})}
@@ -95,7 +95,7 @@ class KnillScheme(Scheme):
                 
         # Compute Pr[E=e, ED_R accept, good | Sin=s]
         # TODO: big-time kludges here
-        led = Concatenator(self.kExRec, self.ed, self.ed)
+        led = ParallelComponent(self.kExRec, self.ed, self.ed)
         
         prBad = ExRecForward(self.kExRec, led, cnot, ted).prBad(noiseModels[Pauli.Y], Pauli.Y)
         rectLocs = cnot.locations() + self.ed.locations() + self.ed.locations()
@@ -115,10 +115,10 @@ class KnillScheme(Scheme):
         
         # Compute Pr[E=e, ED_R accept, good | Sin=s]
         leds = [InputAdapter(self.ed, sin) for sin in s]
-        led = Concatenator(self.kExRec, *leds)
+        led = ParallelComponent(self.kExRec, *leds)
         
         # We're just counting the rectangle, so the TED is just an ideal decoder.
-        ted = TECDecodeAdapter(EmptyIDC(self.code))
+        ted = DecodeAdapter(EmptyIDC(self.code))
         ted = ConcatenatedTEC(self.kExRec, *([ted]*len(s)))
         
         rect = ExRecForward(self.kExRec, led, ga, ted)
@@ -140,7 +140,7 @@ class KnillScheme(Scheme):
     
         code = ed422.ED412Code(gaugeType=error.xType)
         led = UCTSyndromeOut(self.kEC, self.bp, self.bm)
-#        led = Concatenator(self.kExRec, led, led)
+#        led = ParallelComponent(self.kExRec, led, led)
 #        ted = TeleportEDFilter(self.kEC, self.bp, self.bm)
 #        ted = TECAdapter(ted)
 #        ted = ConcatenatedTEC(self.kExRec, ted, ted)

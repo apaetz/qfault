@@ -38,7 +38,7 @@ class TestCnot(testComponent.ComponentTestCase):
 		cnot = self._getComponent({}, self.trivialCode)
 		blocks = [Block('0', self.trivialCode), Block('1', self.trivialCode)]
 		generator = MultiBlockSyndromeKeyGenerator(blocks)
-		propagator = cnot.keyPropagator(generator.keyMeta())
+		propagator = cnot.keyPropagator()
 		
 		for e0 in (Pauli.I, Pauli.X, Pauli.Z, Pauli.Y):
 			for e1 in (Pauli.I, Pauli.X, Pauli.Z, Pauli.Y):
