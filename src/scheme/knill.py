@@ -3,23 +3,23 @@ Created on 2011-11-14
 
 @author: adam
 '''
+from counting import probability
 from counting.component.adapter import InputAdapter
-from counting.component.base import Prep, ParallelComponent, FixedOutput, Empty,\
-    EmptyIDC
+from counting.component.base import Prep, ParallelComponent, Empty
 from counting.component.bell import BellPair, BellMeas
 from counting.component.ec import DecodeAdapter, ConcatenatedTEC, TECAdapter
-from counting.component.exrec import ExRecForward, ExRec
-from counting.component.teleport import TeleportED, UCTSyndromeOut,\
-    TeleportEDFilter
+from counting.component.exrec import ExRec, Rectangle
+from counting.component.teleport import TeleportED, UCTSyndromeOut, \
+    TeleportEDFilter, Teleport
 from counting.component.transversal import TransCnot
+from counting.key import MultiBlockSyndromeKeyGenerator
+from counting.result import CountResult
 from qec import ed422, error
 from qec.error import Pauli, PauliError
 from qec.qecc import StabilizerState
 from scheme import Scheme
-from counting.key import MultiBlockSyndromeKeyGenerator
-import logging
 from util.polynomial import SymPolyWrapper, sympoly1d
-from counting import probability
+import logging
 
 logger = logging.getLogger('scheme.knill')
 
@@ -45,19 +45,20 @@ class KnillScheme(Scheme):
         bellMeas = BellMeas(kEC, ed422.ED412Code(), kGoodCnot=kCnot, kGoodMeasX=kCnot, kGoodMeasZ=kCnot)
         
         ed = TeleportED(kEC, bellPair, bellMeas)
-        uct = UCTSyndromeOut(kEC, bellPair, bellMeas)
+#        uct = UCTSyndromeOut(kEC, bellPair, bellMeas)
         
         self.bp = bellPair
         self.bm = bellMeas
         self.ed = ed
-        self.uct = uct
+#        self.uct = uct
         self.kExRec = kExRec
         self.kCnot = kCnot
         self.kEC = kEC
         self.code = ed422.ED412Code(gaugeType=error.xType)
         
     def count(self):
-        pr = self.prEgivenAccept(Pauli.X, self.defaultNoiseModels)
+        # TODO: prEgivenAccept should take Pauli types as input, rather than syndrome keys.
+        pr = self.prEgivenAccept((1,0), self.defaultNoiseModels)
         print pr(0.001/15)
 
 
@@ -73,10 +74,8 @@ class KnillScheme(Scheme):
         #inputs = {keyGen.getKey({blockname: Pauli.X}): self.prInputSyndrome(code.getSyndrome(Pauli.X))}
 
         cnot = TransCnot(self.kCnot, code, code)
-        
-        # We're just counting the rectangle, so the TED is just an ideal decoder.
-        ted = DecodeAdapter(EmptyIDC(code))
-        ted = ConcatenatedTEC(self.kExRec, ted, ted)
+        led = ParallelComponent(self.kExRec, self.ed, self.ed)
+        rec = Rectangle(self.kExRec, led, cnot)
         
         #inKeys = {keyGen.getKey({blockname: Pauli.X})}
         #exrecs = {'cnot': [ExRecForward(self.kExRec, led, cnot, ted)]}
@@ -85,7 +84,7 @@ class KnillScheme(Scheme):
         for inKeyA in inputs.values():           
             for inKeyB in inputs.values():
                 logger.info('Counting CNOT 1-Rec for inputs: %s, %s', inKeyA, inKeyB)
-                prS = self.prEgivenS(cnot, e, (inKeyA, inKeyB), noiseModels) * \
+                prS = self.prEgivenS(cnot, e, inKeyA + inKeyB, noiseModels) * \
                       self.prInputSyndrome(inKeyA) * self.prInputSyndrome(inKeyB)
                 
                 prTable[(inKeyA, inKeyB)] = prS
@@ -97,7 +96,7 @@ class KnillScheme(Scheme):
         # TODO: big-time kludges here
         led = ParallelComponent(self.kExRec, self.ed, self.ed)
         
-        prBad = ExRecForward(self.kExRec, led, cnot, ted).prBad(noiseModels[Pauli.Y], Pauli.Y)
+        prBad = rec.prBad(noiseModels[Pauli.Y], Pauli.Y)
         rectLocs = cnot.locations() + self.ed.locations() + self.ed.locations()
         prK0 = probability.prMinFailures(0, rectLocs, noiseModels[Pauli.Y], 0)
         omega = 0 # TODO
@@ -114,18 +113,19 @@ class KnillScheme(Scheme):
         '''
         
         # Compute Pr[E=e, ED_R accept, good | Sin=s]
-        leds = [InputAdapter(self.ed, sin) for sin in s]
+        leds = [self.ed for _ in s]
         led = ParallelComponent(self.kExRec, *leds)
+        rec = Rectangle(self.kExRec, led, ga)
         
         # We're just counting the rectangle, so the TED is just an ideal decoder.
-        ted = DecodeAdapter(EmptyIDC(self.code))
-        ted = ConcatenatedTEC(self.kExRec, *([ted]*len(s)))
+        decRec = DecodeAdapter(rec)
         
-        rect = ExRecForward(self.kExRec, led, ga, ted)
-        
-        result = rect.count(noiseModels, Pauli.Y)
+        # TODO: hack!
+        inputResult = CountResult([{s: 1}], rec.inBlocks())
+
+        result = decRec.count(noiseModels, Pauli.Y, inputResult=inputResult)
         counts = [{e: count.get(e,0)} for count in result.counts]
-        prE = probability.countsToPoly(counts, rect.locations().getTotals(), noiseModels[Pauli.Y])
+        prE = probability.countsToPoly(counts, decRec.locations().getTotals(), noiseModels[Pauli.Y])
         
         return prE
     
@@ -139,7 +139,7 @@ class KnillScheme(Scheme):
             return 1
     
         code = ed422.ED412Code(gaugeType=error.xType)
-        led = UCTSyndromeOut(self.kEC, self.bp, self.bm)
+        led = Teleport(self.kEC, self.bp, self.bm)
 #        led = ParallelComponent(self.kExRec, led, led)
 #        ted = TeleportEDFilter(self.kEC, self.bp, self.bm)
 #        ted = TECAdapter(ted)

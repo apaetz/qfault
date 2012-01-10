@@ -152,6 +152,13 @@ class StabilizerCode(Qecc):
 #        on the given qubit.
 #        '''
 #        raise NotImplementedError
+
+    def __eq__(self, other):
+        if self.stabilizerGenerators() == other.stabilizerGenerators() and\
+           self.normalizerGenerators() == other.normalizerGenerators():
+            return True
+        
+        return False
     
 class TrivialStablizerCode(StabilizerCode):
     

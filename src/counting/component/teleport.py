@@ -74,8 +74,8 @@ class UncorrectedTeleport(Component):
     def keyPropagator(self, subPropagator=IdentityManipulator()):
         # Extend the input to all three blocks, then propagate
         # through the Bell measurement.
-        extender = KeyExtender(subPropagator, blocksAfter=2)
-        return self[self.bmName].keyPropagator(extender)
+        extender = KeyExtender(subPropagator, 2, 1)
+        return self[1].keyPropagator(extender)
 
 
     def _convolve(self, results, noiseModels, pauli):
@@ -200,10 +200,10 @@ class Teleport(SequentialComponent):
     
     def count(self, noiseModels, pauli, inputResult=None, kMax=None):
         # First, extend the input to all three blocks.
-        extender = KeyExtender(IdentityManipulator(), blocksAfter=2)
+        extender = KeyExtender(IdentityManipulator(), 2, 1)
         extendedInput = inputResult
         extendedInput.counts = mapCounts(inputResult.counts, extender)
-        extendedInput.blocks *= 3
+        extendedInput.blocks = inputResult.blocks[:1]*3 + inputResult.blocks[1:]
         
         # Now count normally.
         result = super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
@@ -413,7 +413,8 @@ class TeleportEDFilter(PostselectionFilter):
         def _manipulate(self, key):
             if not self.accept(key):
                 return None
-            return keyForBlock(key, 2)
+            # Preserve/ignore keys for blocks outside of the input space
+            return keyForBlock(key, 2) + key[3:]
         
         
 

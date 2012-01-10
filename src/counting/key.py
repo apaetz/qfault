@@ -194,13 +194,13 @@ class IdentityManipulator(KeyManipulator):
     
 class KeyExtender(KeyManipulator):
     
-    def __init__(self, manipulator, blocksBefore=0, blocksAfter=0):
+    def __init__(self, manipulator, numBlocks, insertIndex):
         super(KeyExtender, self).__init__(manipulator)
-        self._before = tuple([0] * blocksBefore)
-        self._after = tuple([0] * blocksAfter)
+        self._extension = tuple([0] * numBlocks)
+        self._index = insertIndex
         
     def _manipulate(self, key):
-        return self._before + key + self._after
+        return key[:self._index] + self._extension + key[self._index:]
     
 class KeySplitter(KeyManipulator):
     
