@@ -222,3 +222,13 @@ class ExRec(SequentialComponent):
 #        lecCtrlResult.blocks = cnotResult.blocks
 #        lecTargResult.blocks = cnotResult.blocks
         
+        
+class Rectangle(SequentialComponent):
+    
+#    lecName = 'LEC'
+#    gaName = 'Ga'
+#    tecName = 'TEC'
+    
+    def __init__(self, kGood, lec, gadget):
+        subs = (lec, gadget)
+        super(Rectangle, self).__init__(kGood, subcomponents=subs)

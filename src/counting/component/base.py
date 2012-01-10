@@ -185,11 +185,6 @@ class Component(object):
 		# Blocks in the input space of the component are converted to the output space.
 		# Other input blocks are unchanged.
 		blocks = self.outBlocks() + tuple(inputResult.blocks[len(self.inBlocks()):])
-		
-		if len(propagated[0].keys()[0]) != len(blocks):
-			print self.outBlocks(), self.inBlocks()
-			print inputResult.blocks
-			print 'foo'
 				
 		return CountResult(propagated, blocks)
 	
@@ -559,6 +554,15 @@ class PostselectionFilter(Filter):
 		super(PostselectionFilter, self).__init__()
 		self._pauliDependency = pauliDependency
 
+	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+		result = super(PostselectionFilter, self).count(noiseModels, pauli, inputResult, kMax)
+		
+		# Remove the rejected counts
+		for count in result.counts:
+			count.pop(None, None)
+			
+		return result
+
 	def prAccept(self, noiseModels, inputResult, kMax):
 		'''
 		Computes a lower bound on the acceptance probability using upper bounds on the
@@ -643,11 +647,6 @@ class ParallelComponent(Component):
 		rotator = self.TupleRotator(len(inputResult.blocks) - len(self.outBlocks()))
 		result.counts = mapCounts(result.counts, rotator)
 		result.blocks = rotator(result.blocks)
-			
-		if len(result.counts[0].keys()[0]) != len(result.blocks):
-			print self.outBlocks(), self.inBlocks()
-			print result.blocks
-			print 'foo'
 		
 		return result
 	
