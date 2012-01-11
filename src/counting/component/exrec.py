@@ -14,6 +14,7 @@ from qec.error import Pauli
 from counting.block import Block
 from qec import qecc
 from counting.key import IdentityManipulator, SyndromeKeyDecoder, KeyManipulator
+from util.cache import fetchable
 
 class ExRec(SequentialComponent):
     
@@ -24,6 +25,10 @@ class ExRec(SequentialComponent):
     def __init__(self, kGood, lec, gadget, tec):
         subs = (lec, gadget, tec)
         super(ExRec, self).__init__(kGood, subcomponents=subs)
+        
+    @fetchable
+    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        return super(ExRec, self).count(noiseModels, pauli, inputResult, kMax)
                 
 #    def prAccept(self, noiseModels, kMax=None):
 #        prLEC = self[self.lecName].prAccept(noiseModels, self.kGood)

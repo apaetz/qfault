@@ -31,23 +31,25 @@ class Component(object):
 	recursively by first counting small numbers of errors in each sub-component
 	and then combining the error information.
 	
-	A component can be treated as a black box which takes as input a maximum
+	Most components can be treated as a black boxes which take as input a maximum
 	number of faults k, and outputs a set of counts, k counts for each possible
-	error that can occur inside of the component.
+	error that can occur inside of the component.  In general, the output of 
+	a component may also depend on errors on its input blocks. Error counts
+	are obtained by calling the count() method.
+	 	
+	Concrete subclasses should, at a minimum, define the input blocks of the component
+	(the inBlocks() method) and probably an input key propagator (the keyPropagator())
+	method.  The key propagator transforms errors on the input blocks into the corresponding
+	errors on the output blocks.
 	
-	The primary public method of interest is count().  This method counts errors
-	in the component in three steps:
-	1. Errors in the sub-components are counted.
-	2. Errors from each sub-component are combined.
-	3. Optional post-processing is performed.
-	  
-	The count() method is a template.  So rather than overriding count(),
-	subclasses should instead implement hook methods _count(), _convolve(),
-	and _postCount().
-	
-	Other useful public methods include prBad(), and prAccept(), which return
-	polynomials representing the probability that the component is "bad" and
-	that the component accepts, respectively.
+	In many cases, the input error counts may contain more blocks than are specified by the
+	component.  Consider, for example, a circuit with three components.  Component 1 outputs
+	3 blocks, component 2 takes two input blocks, and component three takes 3 input blocks.
+	In this case, the input to component 2 is three blocks, even though it only accepts two
+	input blocks.  However, the third block must be maintained for input eventual input to
+	component 3.  As a result, all components must be able to accept inputs with more blocks
+	than specified by inBlocks().  Extra blocks will be preserved (as if the identity was applied
+	on that subspace).
 	'''
 	
 	inputName = 'input'
@@ -157,11 +159,11 @@ class Component(object):
 		'''
 		return self.inBlocks()
 	
-	def logicalStabilizers(self):
-		'''
-		TODO: necessary?
-		'''
-		return tuple([])
+#	def logicalStabilizers(self):
+#		'''
+#		TODO: necessary?
+#		'''
+#		return tuple([])
 	
 	def subcomponents(self):
 		'''
@@ -295,8 +297,8 @@ class Component(object):
 	
 class CountableComponent(Component):
 	'''
-	A component which, in addition to (or instead of) having sub-components,
-	also has its own physical locations that must be counted.
+	A component which, in instead of having sub-components,
+	has its own physical locations that must be counted.
 	'''
 	
 	locsName = 'locations'
@@ -439,19 +441,6 @@ class Empty(CountableComponent):
 	def inBlocks(self):
 		return (self._block,)
 	
-#class FixedOutput(Empty):
-#	
-#	def __init__(self, code, outputCounts, keyMeta):
-#		self._outputCounts = outputCounts
-#		self._keyMeta = keyMeta
-#		super(FixedOutput, self).__init__(code)
-#	
-#	def count(self, noiseModels, pauli):
-#		return CountResult(self._outputCounts, self.outBlocks())
-#
-#	def _hashStr(self):
-#		return super(CountableComponent, self)._hashStr() + str([self._outputCounts, self._keyMeta])
-	
 class Prep(CountableComponent):
 	'''
 	Codeword preparation.
@@ -469,68 +458,11 @@ class Prep(CountableComponent):
 		
 	def outBlocks(self):
 		return self._outBlocks
-		
-#class InputDependentComponent(Component):
-#	'''
-#	Abstract class for components which require input.
-#	
-#	Many components can be counted by specifying only the number of faults. Input to those components
-#	can be specified later on and convolved with the count of the original component.
-#	The behavior of some components, however, depends on the input.  This class accounts for the input
-#	by adding an additional input parameter to the necessary Component methods.  See also :class:`InputAdapter`.
-#	'''
-#
-#	def count(self, noiseModels, pauli, inputResult):
-#		# Counting and convolving may manipulate the input directly.
-#		# Copy to avoid changing the user's input.
-#		inputResult = copy(inputResult)
-#		
-#		logger.info('Counting : ' + str(pauli))
-#		results = self._count(noiseModels, pauli)
-#		
-#		logger.debug('Convolving')
-#		result = self._convolve(results, noiseModels, pauli, inputResult)
-#		
-#		logger.debug('Post processing')
-#		return self._postCount(result, noiseModels, pauli)
-#	
-#	def prAccept(self, noiseModels, inputResult, kMax=None):
-#		return super(InputDependentComponent, self).prAccept(noiseModels, kMax)
-#		
-#	@memoize
-#	def _count(self, noiseModels, pauli):
-#		return super(InputDependentComponent, self)._count(noiseModels, pauli)
-#	
-#	def _convolve(self, results, noiseModels, pauli, inputResult):
-#		inputResult = self._prepareInput(inputResult)
-#		if len(results):
-#			inputResult.blocks = results.values()[0].blocks
-#		results['input'] = inputResult
-#		return super(InputDependentComponent, self)._convolve(results, noiseModels, pauli)
-#
-#	def _prepareInput(self, inputResult):
-#		raise NotImplementedError
-#	
-#	def keyPropagator(self, keyMeta):
-#		raise Exception('Cannot propagate keys through an input dependent component.')
-	
-#class EmptyIDC(InputDependentComponent):
-#	'''
-#	A completely empty component, that takes an input.
-#	'''
-#	
-#	def __init__(self, code):
-#		kGood = {}
-#		self.blocks = (Block('0', code), )
-#		super(EmptyIDC, self).__init__(kGood)
-#		
-#	def inBlocks(self):
-#		return self.blocks
-#	
-#	def _prepareInput(self, inputResult):
-#		return inputResult
 	
 class Filter(Component):
+	'''
+	A component which acts on its input only.
+	'''
 	
 	def __init__(self):
 		super(Filter, self).__init__({})
@@ -546,8 +478,8 @@ class Filter(Component):
 	
 class PostselectionFilter(Filter):
 	'''
-	Special case of an input-dependent component in which postselection is used.
-	Postselecting components accept some errors, passing them to the output, and reject other errors.
+	Special case of a Filter component in which postselection is used.  That is, some inputs
+	are 'accepted' and other inputs are 'rejected', i.e., removed.
 	'''
 	
 	def __init__(self, pauliDependency=Pauli.Y):
@@ -607,21 +539,18 @@ class ParallelComponent(Component):
 		return sum((self[i].outBlocks() for i in range(len(self.subcomponents()))), tuple())
 
 	def keyPropagator(self, subPropagator=IdentityManipulator()):
-		# Split the incoming keys according to each of the components
-		nsubs = len(self.subcomponents())
-		splits = [0] * (nsubs - 1)
-		for i in range(nsubs-1):
-			sub = self[i]
-			nblocks = len(sub.inBlocks())
-			splits[i] = splits[i-1] + nblocks
-		
-		splitter = KeySplitter(subPropagator, splits)
-		# Then propagate the keys through the components
-		propagator = self.Propagator(self.subcomponents(), splitter)
-		
-		# Then glue them back together.
-		mapper = KeyConcatenator(propagator)
-		return mapper
+		propagator = subPropagator
+		for sub in self:
+			propagator = sub.keyPropagator(propagator)
+			
+			# Shift the input blocks for the next component into place.
+			propagator = self.TupleRotator(len(sub.outBlocks()), propagator)
+			
+		# It is possible that the inputResult space is larger than the output space
+		# of the parallel component.
+		propagator = self.TupleRotator(-len(self.outBlocks()), propagator)
+
+		return propagator
 		
 	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
 
@@ -644,7 +573,7 @@ class ParallelComponent(Component):
 			
 		# It is possible that the inputResult space is larger than the output space
 		# of the parallel component.
-		rotator = self.TupleRotator(len(inputResult.blocks) - len(self.outBlocks()))
+		rotator = self.TupleRotator(-len(self.outBlocks()))
 		result.counts = mapCounts(result.counts, rotator)
 		result.blocks = rotator(result.blocks)
 		
@@ -654,14 +583,15 @@ class ParallelComponent(Component):
 #		subStr = ''.join(sub.__class__.__name__ for sub in self)
 #		return super(ParallelComponent, self).__repr__() + '.' + subStr
 	
-	class TupleRotator(object):
+	class TupleRotator(KeyManipulator):
 		'''
 		Performs a left rotation of a tuple by a specified number of indices.
 		'''
 		
-		def __init__(self, rotation):
+		def __init__(self, rotation, manipulator=IdentityManipulator()):
+			super(ParallelComponent.TupleRotator, self).__init__(manipulator)
 			self.rotation = rotation
 			
-		def __call__(self, tup):
+		def _manipulate(self, tup):
 			return tup[self.rotation:] + tup[:self.rotation]
 	

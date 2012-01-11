@@ -3,6 +3,8 @@
 
 - Component IDs require redefinition of _hashStr for components with extra internal data.  Better solution?
 
+- keyPropagator() and propagateCounts() are not well defined for all components (i.e. postselecting components). An equivalent
+way to propagate keys is to call count() with kMax=0, which is well defined for all components.
 
 - Eliminate dead code.
 - Documentation

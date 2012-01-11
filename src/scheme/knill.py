@@ -9,8 +9,8 @@ from counting.component.base import Prep, ParallelComponent, Empty
 from counting.component.bell import BellPair, BellMeas
 from counting.component.ec import DecodeAdapter, ConcatenatedTEC, TECAdapter
 from counting.component.exrec import ExRec, Rectangle
-from counting.component.teleport import TeleportED, UCTSyndromeOut, \
-    TeleportEDFilter, Teleport
+from counting.component.teleport import TeleportED, \
+    TeleportEDFilter, Teleport, EDInputFilter
 from counting.component.transversal import TransCnot
 from counting.key import MultiBlockSyndromeKeyGenerator
 from counting.result import CountResult
@@ -59,7 +59,7 @@ class KnillScheme(Scheme):
     def count(self):
         # TODO: prEgivenAccept should take Pauli types as input, rather than syndrome keys.
         pr = self.prEgivenAccept((1,0), self.defaultNoiseModels)
-        print pr(0.001/15)
+        print pr(0.007/15)
 
 
     def prEgivenAccept(self, e, noiseModels):
@@ -90,7 +90,9 @@ class KnillScheme(Scheme):
                 prTable[(inKeyA, inKeyB)] = prS
                 
         for key, pr in prTable.iteritems():
-            print key, pr(0.001/15)
+            print key, pr(0.007/15)
+            
+        pr = sum(prTable.values())
                 
         # Compute Pr[E=e, ED_R accept, good | Sin=s]
         # TODO: big-time kludges here
@@ -99,33 +101,50 @@ class KnillScheme(Scheme):
         prBad = rec.prBad(noiseModels[Pauli.Y], Pauli.Y)
         rectLocs = cnot.locations() + self.ed.locations() + self.ed.locations()
         prK0 = probability.prMinFailures(0, rectLocs, noiseModels[Pauli.Y], 0)
-        omega = 0 # TODO
+        omega = self.omega(noiseModels[Pauli.Y], cnot)
+        
+        print 'Pr[bad](0.007)=', prBad(0.007/15)
+        print 'pr[K=0](0.007)=', prK0(0.007/15)
+        print 'omega(0.007)=', omega(0.007/15)
         
         pr = (pr + prBad) / (prK0 * (1 - omega))
         
         return pr
+    
+    def omega(self, noiseModel, ga):
+        Lambda = SymPolyWrapper(sympoly1d([7,0])) + probability.prMinFailures(2, self.ed.locations(), noiseModel)
+        e = 2.72
+        prK0Ga = probability.prMinFailures(0, ga.locations(), noiseModel, kMax=0)
+        prK0ED = probability.prMinFailures(0, self.ed.locations(), noiseModel, kMax=0)
+        
+        # (6e) 4 * Lambda / (Pr[K_Ga = 0] Pr[K_ED = 0])
+        return 6*e*4*Lambda / (prK0Ga * prK0ED)
+        
         
     
     def prEgivenS(self, ga, e, s, noiseModels):
         r'''
-        Returns an upper bound on :math:`\Pr[E=e, ED_R~\text{accept}, \text{good} \vert S_\text{in}=s]` for
+        Returns an upper bound on :math:`\Pr[E=e, Ex_R~\text{accept}, \text{good} \vert S_\text{in}=s]` for
         input syndrome :math:`s` and logical error :math:`e`.
         '''
         
         # Compute Pr[E=e, ED_R accept, good | Sin=s]
-        leds = [self.ed for _ in s]
-        led = ParallelComponent(self.kExRec, *leds)
+        eds = [self.ed for _ in s]
+        led = ParallelComponent(self.kExRec, *eds)
         rec = Rectangle(self.kExRec, led, ga)
         
-        # We're just counting the rectangle, so the TED is just an ideal decoder.
-        decRec = DecodeAdapter(rec)
+        # We're really counting the rectangle. So we want the output of the Ga conditioned on
+        # acceptance of the TED, and not the output of the TED itself.
+        teds = [DecodeAdapter(EDInputFilter(ed)) for ed in eds]
+        ted = ParallelComponent(self.kExRec, *teds) 
+        exrec = ExRec(self.kExRec, led, ga, ted)
         
         # TODO: hack!
         inputResult = CountResult([{s: 1}], rec.inBlocks())
 
-        result = decRec.count(noiseModels, Pauli.Y, inputResult=inputResult)
+        result = exrec.count(noiseModels, Pauli.Y, inputResult=inputResult)
         counts = [{e: count.get(e,0)} for count in result.counts]
-        prE = probability.countsToPoly(counts, decRec.locations().getTotals(), noiseModels[Pauli.Y])
+        prE = probability.countsToPoly(counts, exrec.locations().getTotals(), noiseModels[Pauli.Y])
         
         return prE
     
@@ -135,7 +154,7 @@ class KnillScheme(Scheme):
         (a single block of) the rectangle is equivalent to :math:`s`.
         '''
         # TODO: count all possible input rectangle combinations and compute an upper bound.
-        if 0 == s:
+        if (0,) == s:
             return 1
     
         code = ed422.ED412Code(gaugeType=error.xType)
@@ -149,7 +168,7 @@ class KnillScheme(Scheme):
         
         # TODO: crude upper bound of Pr[S_in!=0] <= Pr[K != 0]
         # A better bound can be obtained by counting
-        n = 3 * len(led.locations()) + len(cnot.locations())
+        n = 2 * len(led.locations()) + len(cnot.locations())
         pr = SymPolyWrapper(sympoly1d([n, 0]))
 #        
 #        result = exrec.count(self.defaultNoiseModels, Pauli.Y)
@@ -167,6 +186,8 @@ class KnillScheme(Scheme):
 #        pr0 = probability.prMinFailures(0, self.ed.locations(Pauli.Y), self.defaultNoiseModels[Pauli.Y], kMax=0)
 #        prCnot0 = probability.prMinFailures(0, cnot.locations(Pauli.Y), self.defaultNoiseModels[Pauli.Y], kMax=0)
 #        pr = pr / (1 - 2/prCnot0 * (1/pr0 - 1))
+
+        print 'Pr[s=', s, '](0.007)=', pr(0.007/15)
         return pr    
     
 if __name__ == '__main__':
@@ -175,9 +196,9 @@ if __name__ == '__main__':
     
     logging.getLogger('counting.threshold').setLevel(logging.DEBUG)
     
-    kPrep = {Pauli.Y: 1}
-    kCnot = {Pauli.Y: 1}
-    kEC = {Pauli.Y: 1}
-    kExRec = {Pauli.Y: 1}
+    kPrep = {Pauli.Y: 3}
+    kCnot = {Pauli.Y: 3}
+    kEC = {Pauli.Y: 4}
+    kExRec = {Pauli.Y: 6}
     scheme = KnillScheme(kPrep, kCnot, kEC, kExRec)
     scheme.count()
