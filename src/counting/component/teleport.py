@@ -11,82 +11,83 @@ from counting.component.base import Component,\
 from counting.countErrors import mapCounts
 from counting.key import keyForBlock, KeyExtender, KeySplitter, KeyManipulator, \
     KeyConcatenator, IntegerKey, KeyCopier, KeyMasker, IdentityManipulator,\
-    SyndromeKeyGenerator
-from counting.result import CountResult
+    SyndromeKeyGenerator, KeyRemover
+from counting.result import CountResult, TrivialResult
 from qec.error import Pauli, xType, zType
 from util import bits
-from util.cache import fetchable
+from util.cache import fetchable, memoize
 import counting.key
 import logging
 import warnings
 from counting.component import transversal
 from counting.component.transversal import TransRest
 from util.bits import listToBits
+from counting.countParallel import convolve
 
 logger = logging.getLogger('component')
 
-class UncorrectedTeleport(Component):
-    
-    inName = 'input'
-    bpName = 'BP'
-    bmName = 'BM'
-    measOutName = 'measOut'
-    
-    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
-
-        # Order of the Bell pair and Bell measurement output blocks
-        # is hardcoded.
-        measXBlock, measZBlock = bellMeas.outBlocks()
-        outBlock = bellPair.outBlocks()[1]
-        
-        emptyMeasX = Empty(measXBlock.getCode(), measXBlock.name)
-        emptyMeasZ = Empty(measZBlock.getCode(), measZBlock.name)
-        emptyOut = Empty(outBlock.getCode(), outBlock.name)
-        
-        # Extend the Bell measurement and the Bell pair so that they
-        # contain the same number of blocks, some of which are empty.
-        bellPair = ParallelComponent(kGood, emptyMeasX, bellPair)
-        bellMeas = ParallelComponent(kGood, bellMeas, emptyOut)
-        
-        subs = {self.bpName: bellPair,
-                self.bmName: bellMeas}
-        
-        if enableRest:
-            outBlock = bellPair.outBlocks()[1]
-            measOut = TransRest(kGood, outBlock.getCode())
-            
-            # Extend the measurement to include the other two blocks, as well.
-            measOut = ParallelComponent(kGood, emptyMeasX, emptyMeasZ, measOut)
-            
-            subs[self.measOutName] = measOut
-        
-        super(UncorrectedTeleport, self).__init__(kGood, subcomponents=subs)
-        #self._outblockOrder = outblockOrder
-        
-    def inBlocks(self):
-        return (self[self.bmName].inBlocks()[0], )
-    
-    def outBlocks(self):
-        # It is expected that UncorrectedTeleport will be wrapped by another
-        # component which will be able to define the output blocks.
-        raise NotImplementedError
-    
-    def keyPropagator(self, subPropagator=IdentityManipulator()):
-        # Extend the input to all three blocks, then propagate
-        # through the Bell measurement.
-        extender = KeyExtender(subPropagator, 2, 1)
-        return self[1].keyPropagator(extender)
-
-
-    def _convolve(self, results, noiseModels, pauli):
-        
-        # Propagate the Bell pair through the Bell measurement.
-        bm = self[self.bmName]
-        bpResult = results[self.bpName]
-        bpResult.counts, bpResult.keyMeta = bm.propagateCounts(bpResult.counts, bpResult.keyMeta)
-
-        # Now convolve normally.
-        return super(UncorrectedTeleport, self)._convolve(results, noiseModels, pauli)
+#class UncorrectedTeleport(Component):
+#    
+#    inName = 'input'
+#    bpName = 'BP'
+#    bmName = 'BM'
+#    measOutName = 'measOut'
+#    
+#    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
+#
+#        # Order of the Bell pair and Bell measurement output blocks
+#        # is hardcoded.
+#        measXBlock, measZBlock = bellMeas.outBlocks()
+#        outBlock = bellPair.outBlocks()[1]
+#        
+#        emptyMeasX = Empty(measXBlock.getCode(), measXBlock.name)
+#        emptyMeasZ = Empty(measZBlock.getCode(), measZBlock.name)
+#        emptyOut = Empty(outBlock.getCode(), outBlock.name)
+#        
+#        # Extend the Bell measurement and the Bell pair so that they
+#        # contain the same number of blocks, some of which are empty.
+#        bellPair = ParallelComponent(kGood, emptyMeasX, bellPair)
+#        bellMeas = ParallelComponent(kGood, bellMeas, emptyOut)
+#        
+#        subs = {self.bpName: bellPair,
+#                self.bmName: bellMeas}
+#        
+#        if enableRest:
+#            outBlock = bellPair.outBlocks()[1]
+#            measOut = TransRest(kGood, outBlock.getCode())
+#            
+#            # Extend the measurement to include the other two blocks, as well.
+#            measOut = ParallelComponent(kGood, emptyMeasX, emptyMeasZ, measOut)
+#            
+#            subs[self.measOutName] = measOut
+#        
+#        super(UncorrectedTeleport, self).__init__(kGood, subcomponents=subs)
+#        #self._outblockOrder = outblockOrder
+#        
+#    def inBlocks(self):
+#        return (self[self.bmName].inBlocks()[0], )
+#    
+#    def outBlocks(self):
+#        # It is expected that UncorrectedTeleport will be wrapped by another
+#        # component which will be able to define the output blocks.
+#        raise NotImplementedError
+#    
+#    def keyPropagator(self, subPropagator=IdentityManipulator()):
+#        # Extend the input to all three blocks, then propagate
+#        # through the Bell measurement.
+#        extender = KeyExtender(subPropagator, 2, 1)
+#        return self[1].keyPropagator(extender)
+#
+#
+#    def _convolve(self, results, noiseModels, pauli):
+#        
+#        # Propagate the Bell pair through the Bell measurement.
+#        bm = self[self.bmName]
+#        bpResult = results[self.bpName]
+#        bpResult.counts, bpResult.keyMeta = bm.propagateCounts(bpResult.counts, bpResult.keyMeta)
+#
+#        # Now convolve normally.
+#        return super(UncorrectedTeleport, self)._convolve(results, noiseModels, pauli)
     
 #    def _propagateBP(self, bpCounts, bpMeta):
 #        # Propagate the first half of the bell pair through the bell measurement.
@@ -114,40 +115,40 @@ class UncorrectedTeleport(Component):
 #        def _manipulate(self, key):
 #            keyBM, keyOut = key
 #            return (self._bmPropagator(keyBM), keyOut)
-
-class UCTSyndromeOut(UncorrectedTeleport):
-    
-    def outBlocks(self):
-        return (self[self.bpName].outBlocks()[1], )
-    
-    def _postCount(self, result, noiseModels, pauli):
-        code = self.outBlocks()[0].getCode()
-        stabilizers = code.stabilizerGenerators()
-        parityChecks = result.keyMeta.parityChecks()
-        syndromeBits = [(check in stabilizers) for check in parityChecks]
-        syndromeMask = listToBits(syndromeBits)
-        
-        reducer = self.KeyReducer(result.keyMeta, syndromeMask)
-        result.counts = mapCounts(result.counts, reducer)
-        result.keyMeta = reducer.meta()
-        result.blocks = (result.blocks[2], )
-        
-        return result
-        
-    class KeyReducer(KeyManipulator):
-        
-        def __init__(self, meta, syndromeMask):
-            super(UCTSyndromeOut.KeyReducer, self).__init__(meta)
-            self.syndromeMask = syndromeMask
-            self.masker = KeyMasker(self.meta(), syndromeMask)
-        
-        def meta(self):
-            meta = super(UCTSyndromeOut.KeyReducer, self).meta()
-            return SyndromeKeyMeta(meta.parityChecks(), 1)
-        
-        def _manipulate(self, key):
-            key = keyForBlock(key, 2, self.meta())
-            return self.masker(key)
+#
+#class UCTSyndromeOut(UncorrectedTeleport):
+#    
+#    def outBlocks(self):
+#        return (self[self.bpName].outBlocks()[1], )
+#    
+#    def _postCount(self, result, noiseModels, pauli):
+#        code = self.outBlocks()[0].getCode()
+#        stabilizers = code.stabilizerGenerators()
+#        parityChecks = result.keyMeta.parityChecks()
+#        syndromeBits = [(check in stabilizers) for check in parityChecks]
+#        syndromeMask = listToBits(syndromeBits)
+#        
+#        reducer = self.KeyReducer(result.keyMeta, syndromeMask)
+#        result.counts = mapCounts(result.counts, reducer)
+#        result.keyMeta = reducer.meta()
+#        result.blocks = (result.blocks[2], )
+#        
+#        return result
+#        
+#    class KeyReducer(KeyManipulator):
+#        
+#        def __init__(self, meta, syndromeMask):
+#            super(UCTSyndromeOut.KeyReducer, self).__init__(meta)
+#            self.syndromeMask = syndromeMask
+#            self.masker = KeyMasker(self.meta(), syndromeMask)
+#        
+#        def meta(self):
+#            meta = super(UCTSyndromeOut.KeyReducer, self).meta()
+#            return SyndromeKeyMeta(meta.parityChecks(), 1)
+#        
+#        def _manipulate(self, key):
+#            key = keyForBlock(key, 2, self.meta())
+#            return self.masker(key)
         
         
 class Teleport(SequentialComponent):   
@@ -200,21 +201,51 @@ class Teleport(SequentialComponent):
     
     def count(self, noiseModels, pauli, inputResult=None, kMax=None):
         # First, extend the input to all three blocks.
-        extender = KeyExtender(IdentityManipulator(), 2, 1)
-        extendedInput = inputResult
-        extendedInput.counts = mapCounts(inputResult.counts, extender)
-        extendedInput.blocks = inputResult.blocks[:1]*3 + inputResult.blocks[1:]
+        extendedInput = self._extendInput(inputResult)
+        
+        # Now propagate the input through the sub-components.
+        for sub in self:
+            extendedInput = sub.propagateCounts(extendedInput)
         
         # Now count normally.
-        result = super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
+        result = self._countInternal(noiseModels, pauli, kMax)
+        
+        # TODO: this pattern of memoizing some internal result and then convolving is
+        # likely to be present in other components.  Should generalize this behavior.
+        # TODO: more robust way of getting key lengths?
+        keyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in result.blocks]
+        inKeyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in extendedInput.blocks]
+        result.counts = convolve(extendedInput.counts, 
+                                result.counts, 
+                                kMax=kMax, 
+                                convolveFcn=key.convolveKeyCounts, 
+                                extraArgs=[inKeyLengths, keyLengths])
         
         # Finally, make the logical corrections necessary for teleportation.
         inBlock = self.inBlocks()[0]
         code = inBlock.getCode()
         corrector = self._corrector(code)
         result.counts = mapCounts(result.counts, corrector)
+        result.blocks = extendedInput.blocks
         
         return result
+    
+    def _extendInput(self, inputResult):
+        extender = KeyExtender(IdentityManipulator(), 2, 1)
+        extendedInput = inputResult
+        extendedInput.counts = mapCounts(inputResult.counts, extender)
+        extendedInput.blocks = inputResult.blocks[:1]*3 + inputResult.blocks[1:]
+        return extendedInput
+
+    
+    @memoize
+    def _countInternal(self, noiseModels, pauli, kMax):
+        '''
+        Counts the internal components with the trivial input.
+        '''
+        inputResult = TrivialResult(self.inBlocks())
+        inputResult = self._extendInput(inputResult)
+        return super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
         
     
 #    def keyPropagator(self, keyMeta):
@@ -417,5 +448,35 @@ class TeleportEDFilter(PostselectionFilter):
             return keyForBlock(key, 2) + key[3:]
         
         
-
-            
+class EDInputFilter(SequentialComponent):
+    
+    def __init__(self, ed):
+        super(EDInputFilter, self).__init__(ed.kGood, subcomponents=(ed,))
+        
+    def outBlocks(self):
+        return self.inBlocks()
+        
+    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        teleport = self[0]
+        numBlocks = len(teleport.inBlocks())
+        
+        # Copy the input block.  One of the copies will be propagated through the
+        # teleportation ED, the other will be preserved (so long as the input
+        # passes error detection).
+        copier = KeyExtender(IdentityManipulator(), numBlocks, numBlocks)
+        for block in range(numBlocks):
+            copier = KeyCopier(copier, block, block+numBlocks)
+        extendedInput = inputResult
+        extendedInput.counts = mapCounts(inputResult.counts, copier)
+        extendedInput.blocks = inputResult.blocks[:numBlocks] + inputResult.blocks
+        
+        result = super(EDInputFilter, self).count(noiseModels, pauli, extendedInput, kMax)
+        
+        # Now remove the output block of the teleportation.  We only want to keep the original
+        # input.
+        numBlocks = len(teleport.outBlocks())
+        remover = KeyRemover(IdentityManipulator(), 0, numBlocks-1)
+        result.counts = mapCounts(result.counts, remover)
+        result.blocks = result.blocks[numBlocks:]
+        
+        return result

@@ -39,6 +39,12 @@ class CountResult(object):
 #    def keyMeta(self):
 #        return self.keyMeta
 
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        return str(self.counts) + str(self.blocks)
+
 
 def TrivialResult(blocks):
     inputs = tuple([0]*len(blocks))

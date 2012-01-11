@@ -9,6 +9,7 @@ import cPickle
 import json as json
 import os.path
 import functools
+import copy
 
 logger = logging.getLogger('util.cache')
 
@@ -60,7 +61,7 @@ class memoize(object):
 		self.memo[key] = result
 		
 	def getMemo(self, key):
-		return self.memo[key]
+		return copy.copy(self.memo[key])
 	
 	def getKey(self, args):
 		key = [0] * len(args)
@@ -167,7 +168,7 @@ class fetchable(object):
 	
 	@staticmethod
 	def GetKey(funcName, args, kwargs):
-		args = list(args) + kwargs.keys()
+		args = list(args) + kwargs.values()
 		key =  reduce(lambda s, arg: s + '.' + str(arg), args, funcName)
 		
 		# TODO: create a proper string filter class.

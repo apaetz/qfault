@@ -202,6 +202,16 @@ class KeyExtender(KeyManipulator):
     def _manipulate(self, key):
         return key[:self._index] + self._extension + key[self._index:]
     
+class KeyRemover(KeyManipulator):
+    
+    def __init__(self, manipulator, start, end):
+        super(KeyRemover, self).__init__(manipulator)
+        self.start = start
+        self.endplus1 = end + 1
+        
+    def _manipulate(self, key):
+        return key[:self.start] + key[self.endplus1:]
+    
 class KeySplitter(KeyManipulator):
     
     def __init__(self, manipulator, splits):
