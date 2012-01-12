@@ -59,7 +59,7 @@ class KnillScheme(Scheme):
     def count(self):
         # TODO: prEgivenAccept should take Pauli types as input, rather than syndrome keys.
         pr = self.prEgivenAccept((1,0), self.defaultNoiseModels)
-        print pr(0.007/15)
+        print pr(0.005/15)
 
 
     def prEgivenAccept(self, e, noiseModels):
@@ -90,7 +90,7 @@ class KnillScheme(Scheme):
                 prTable[(inKeyA, inKeyB)] = prS
                 
         for key, pr in prTable.iteritems():
-            print key, pr(0.007/15)
+            print key, pr(0.005/15)
             
         pr = sum(prTable.values())
                 
@@ -103,16 +103,17 @@ class KnillScheme(Scheme):
         prK0 = probability.prMinFailures(0, rectLocs, noiseModels[Pauli.Y], 0)
         omega = self.omega(noiseModels[Pauli.Y], cnot)
         
-        print 'Pr[bad](0.007)=', prBad(0.007/15)
-        print 'pr[K=0](0.007)=', prK0(0.007/15)
-        print 'omega(0.007)=', omega(0.007/15)
+        print 'Pr[bad](0.005)=', prBad(0.005/15)
+        print 'pr[K=0](0.005)=', prK0(0.005/15)
+        print 'omega(0.005)=', omega(0.005/15)
         
         pr = (pr + prBad) / (prK0 * (1 - omega))
         
         return pr
     
     def omega(self, noiseModel, ga):
-        Lambda = SymPolyWrapper(sympoly1d([7,0])) + probability.prMinFailures(2, self.ed.locations(), noiseModel)
+        prefactor = SymPolyWrapper(sympoly1d([-15,1]))**7 * SymPolyWrapper(sympoly1d([-4,1]))**15 * SymPolyWrapper(sympoly1d([-8,1]))
+        Lambda = 4*prefactor*SymPolyWrapper(sympoly1d([7,0])) + probability.prMinFailures(2, self.ed.locations(), noiseModel)
         e = 2.72
         prK0Ga = probability.prMinFailures(0, ga.locations(), noiseModel, kMax=0)
         prK0ED = probability.prMinFailures(0, self.ed.locations(), noiseModel, kMax=0)
@@ -187,7 +188,7 @@ class KnillScheme(Scheme):
 #        prCnot0 = probability.prMinFailures(0, cnot.locations(Pauli.Y), self.defaultNoiseModels[Pauli.Y], kMax=0)
 #        pr = pr / (1 - 2/prCnot0 * (1/pr0 - 1))
 
-        print 'Pr[s=', s, '](0.007)=', pr(0.007/15)
+        print 'Pr[s=', s, '](0.005)=', pr(0.005/15)
         return pr    
     
 if __name__ == '__main__':
