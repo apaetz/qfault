@@ -3,15 +3,13 @@ Created on May 1, 2011
 
 @author: Adam
 '''
-from warnings import warn
 
 class Block(object):
 	'''
-	classdocs
+	Represents a single encoded block.
 	'''
 
-
-	def __init__(self, name, code, keyMeta=None):
+	def __init__(self, name, code):
 		'''
 		Constructor
 		'''

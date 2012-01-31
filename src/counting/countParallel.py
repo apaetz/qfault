@@ -6,12 +6,10 @@ Created on 2010-08-30
 '''
 from counting.convolve import convolveDict
 from multiprocessing.pool import Pool
-from util.counterUtils import convolveCounts, PartitionIterator
-from util.listutils import addLists, addDicts
+from util.counterUtils import PartitionIterator
 import logging
 import math
 import time
-import operator
 from util import listutils
 
 

@@ -1,6 +1,11 @@
 '''
 Created on 2011-10-17
 
+Classes and functions for creating and manipulating syndrome keys.
+The idea of this module is to abstract error syndrome processing away from the Component internals.
+The outcome has been mixed because many components manipulate error syndromes in complicated ways.
+More work is needed to come up with a satisfactory solution.
+
 @author: adam
 '''
 from collections import OrderedDict
@@ -120,60 +125,6 @@ class SyndromeKeyGenerator(object):
 def IntegerKey(value, nblocks=1):
     return tuple([value]*nblocks)
     
-#def IntegerKeyMeta(nblocks=1):
-#    return SyndromeKeyMeta([Pauli.I], nblocks=nblocks)
-    
-#class SyndromeKeyMeta(object):
-#    
-#    def __init__(self, parityChecks, nblocks=1):
-#        self._parityChecks = tuple(parityChecks)
-#        self.nblocks = nblocks
-#
-#    def length(self):
-#        return len(self.parityChecks()) * self.nblocks
-#        
-#    def parityChecks(self):
-#        return self._parityChecks
-#    
-#    def meta(self):
-#        return self
-#    
-#    def __call__(self, key):
-#        return key
-#    
-##    def blocknames(self):
-##        return self._blocks.keys()
-##    
-##    def blockIndex(self, blockname):
-##        return self._blocks[blockname]
-##    
-##    def blockRange(self, blockname):
-##        blocklen = len(self.parityChecks())
-##        start = self.blockIndex(blockname) * blocklen
-##        end = start + blocklen
-##        return range(start, end+1)
-##    
-##    def syndromeOf(self, key):
-##        return key >> self._normalizerBits
-##    
-##    def syndromeMask(self):
-##        return  ((1 << self.length()) - 1) ^ ((1 << self._normalizerBits) - 1)
-#    
-#    def __eq__(self, other):
-#        try:
-#            return (self.parityChecks() == other.parityChecks()) and (self.nblocks == other.nblocks) 
-#        except:
-#            return False
-#        
-#    def __hash__(self):
-#        return self.parityChecks().__hash__() + self.nblocks
-#    
-#    def __str__(self):
-#        return str(self.nblocks) + '*' + str(self.parityChecks())
-#    
-#    def __repr__(self):
-#        return 'SyndromeKeyMeta(' + str(self.parityChecks()) + ',' + str(self.nblocks) + ')'
-    
 identity = lambda key: key
     
 class KeyManipulator(object):
@@ -251,47 +202,8 @@ class MultiManipulatorAdapter(object):
 
     def __call__(self, keys):
         return tuple(self._manipulators[i](key) for i,key in enumerate(keys))
-        
-#def extendKeys(keys, keyMeta, blocksBefore=0, blocksAfter=0):
-#    before = tuple([0] * blocksBefore)
-#    after = tuple([0] * blocksAfter)
-#    keymap = {key: before + key + after for key in keys}
-#    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
-#    
-#    return keymap, keyMeta
-#
-#def keyExtender(keyMeta, blocksBefore=0, blocksAfter=0):
-#    before = tuple([0] * blocksBefore)
-#    after = tuple([0] * blocksAfter)
-#    def extendKey(key):
-#        return before + key + after
-#    
-#    keyMeta = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks + blocksBefore + blocksAfter)
-#    
-#    return extendKey, keyMeta
-#
-#def keySplitter(keyMeta, splitBlock):
-#    
-#    meta1 = SyndromeKeyMeta(keyMeta.parityChecks(), splitBlock)
-#    meta2 = SyndromeKeyMeta(keyMeta.parityChecks(), keyMeta.nblocks - splitBlock)
-#    
-#    def split(key):
-#        return key[:splitBlock], key[splitBlock:]
-#
-#    return split, meta1, meta2
-#
-#def keyConcatenator(keyMeta1, keyMeta2):
-#    
-#    if keyMeta1.parityChecks() != keyMeta2.parityChecks():
-#        raise Exception('Incompatible keys {0}, {1}'.format(keyMeta1, keyMeta2))
-#    
-#    meta = SyndromeKeyMeta(keyMeta1.parityChecks(), keyMeta1.nblocks + keyMeta2.nblocks)
-#    
-#    def cat(key1, key2):
-#        return key1 + key2
-#    
-#    return cat, meta
-
+    
+    
 def keyForBlock(key, block):
     return (key[block],)
 
@@ -345,42 +257,6 @@ class KeyMasker(KeyManipulator):
         mask = self.mask
         newKey = tuple(k & mask for k in key)
         return newKey
-    
-#def keyCopier(keyMeta, fromBlock, toBlock, mask=None):
-#    '''
-#    Copy keys (with the given key metatadata) from one block to another block.  The optional
-#    mask specifies which bits of fromBlock are copied.  By default, all bits are copied.
-#    '''
-#            
-#    if None == mask:
-#        blocklen = len(keyMeta.parityChecks())
-#        # Select all of the bits of fromBlock
-#        mask = (1 << blocklen) - 1
-#    
-#    def newKey(key):
-#        newKey = list(key)
-#        newKey[toBlock] ^= key[fromBlock] & mask
-#        return tuple(newKey)
-#    
-#    return newKey
-
-#def copyKeys(keys, fromBlock, toBlock, mask=None):
-#    '''
-#    Copy keys from one block onto another block.  The optional
-#    mask specifies which bits of fromBlock are copied.  By default, all bits are copied.
-#    '''
-#            
-#    if None == mask:
-#        blocklen = len(keyMeta.parityChecks())
-#        # Select all of the bits of fromBlock
-#        mask = (1 << blocklen) - 1
-#    
-#    def newKey(key):
-#        newKey = list(key)
-#        newKey[toBlock] ^= key[fromBlock] & mask
-#        return tuple(newKey)
-#    
-#    return {key: newKey(key) for key in keys}
         
 def convolveKeyCounts(counts1, counts2, key1Lengths, key2Lengths):
     
@@ -518,15 +394,6 @@ class SyndromeKeyDecoder(object):
         syndrome = key >> nNorms
         
         e = self._code.syndromeCorrection(syndrome)
-        
-#        # TODO: this algorithm is neither robust nor readable.
-#        decoded = [0,0]
-#        for i, check in enumerate(reversed(self._normalizers)):
-#            qubit = i/2
-#            decoded[i % 2] += ((logicalChecks & 1) ^ (not e.commutesWith(check))) << qubit
-#            logicalChecks >>= 1
-
-#        logicalError += PauliError(xbits=decoded[0], zbits=decoded[1])
         
         commutations = [not e.commutesWith(check) for check in self._normalizers]
         commutations = bits.listToBits(commutations)

@@ -8,6 +8,7 @@ from counting import key
 
 class CountResult(object):
     ''' 
+    Container for counting results.
     '''
     
     def __init__(self, counts, blocks, rejectedCounts=None, name=None):
@@ -15,29 +16,13 @@ class CountResult(object):
         self.blocks = blocks
         self.counts = counts
         if None == rejectedCounts:
-            # hack
+            # TODO hack
             rejectedCounts = [{key.rejectKey:0}]
             
         self.rejected = rejectedCounts
-        #self.prAccept = prAccept
         
     def __get__(self, etype):
         return self.counts[etype]
-    
-#    def counts(self):
-#        return self.counts
-#    
-#    def rejectedCounts(self):
-#        return self.rejected
-#    
-#    def prAccept(self):
-#        return self.prAccept
-#    
-#    def blocks(self):
-#        return self.blocks
-#    
-#    def keyMeta(self):
-#        return self.keyMeta
 
     def __str__(self):
         return self.__repr__()
