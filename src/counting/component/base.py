@@ -504,7 +504,7 @@ class PostselectionFilter(Filter):
 	
 		propagated = self.propagateCounts(inputResult)
 		
-		rejected = [count.get(None, 0) for count in propagated.counts]
+		rejected = [{None: count.get(None, 0)} for count in propagated.counts]
 		
 		prBad = self.prBad(noiseModels[pauli], pauli, kMax)
 		locTotals = self.locations(pauli).getTotals()

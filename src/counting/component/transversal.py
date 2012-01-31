@@ -1,6 +1,8 @@
 '''
 Created on 2011-10-25
 
+Basic transversal components such as: CNOT, rest, measurement.
+
 @author: adam
 '''
 from counting.component.base import CountableComponent, Component,\
@@ -54,9 +56,9 @@ class TransCnot(CountableComponent):
             
         return tuple(Block(name, outCodes[name]) for name in self.blockorder)
         
-    def _logicalChecks(self, codes):
-        code = TransCnotCode(codes)
-        return code
+#    def _logicalChecks(self, codes):
+#        code = TransCnotCode(codes)
+#        return code
     
     def propagateOperator(self, op):
         ctrl = self.ctrlName
@@ -88,84 +90,13 @@ class TransCnot(CountableComponent):
             
         return targCopier
         
-class TransCnotCode(StabilizerCode):
-    
-    def __init__(self, codes):
-        self._codes = codes
-        
-        lengths = [code.n for code in codes.values()]
-        if not all(lengths[0] == n for n in lengths):
-            raise Exception('Codes are not all of the same length.')
-        
-        subblockLength = lengths[0]
-        
-        n = sum(code.n for code in codes.values())
-        k = sum(code.k for code in codes.values())
-        d = min(code.d for code in codes.values())
-        name = ''.join(str(code) for code in codes.values())
-        super(TransCnotCode, self).__init__(name, n, k, d)
-        
-        self.subblockLength = subblockLength
-
-    def stabilizerGenerators(self):
-        stabs  = {name: self._codes[name].stabilizerGenerators() 
-                  for name in [TransCnot.ctrlName, TransCnot.targName]}
-        
-        # We assume that the transversal CNOT operation is a valid operation
-        # in the code, and therefore the stabilizer generators do not change.
-        # Additionally, we assume that the result of the CNOT leaves the
-        # two blocks unentangled (as in, e.g., error correction).
-        # Thus, we need only extend the operators into the larger space.
-        
-        I = Pauli.I ** self.subblockLength
-        
-        block0Stabs = [I + stab for stab in stabs[self._codes.keys()[0]]]
-        block1Stabs = [stab + I for stab in stabs[self._codes.keys()[1]]]
-        
-        return tuple(block0Stabs + block1Stabs)
-    
-    def normalizerGenerators(self):
-        ctrlNorms = self._codes[TransCnot.ctrlName].normalizerGenerators()
-        targNorms = self._codes[TransCnot.targName].normalizerGenerators()
-        
-        return self.PropagateOperators(ctrlNorms, targNorms, self.subblockLength, self._codes.keys())
-    
-    @staticmethod
-    def PropagateOperators(ctrlOps, targOps, blocklength, blockorder):
-        newOps = []
-        
-        I = Pauli.I ** blocklength
-        
-        # For now, assume that the block ordering is [ctrl, targ].
-        for stab in ctrlOps:
-            if 0 == stab[zType]:
-                # This is an X stabilizer. (X -> XX)
-                newOps.append(stab+stab)
-            else:
-                # This is a Z stabilizer. (Z -> ZI)
-                newOps.append(stab+I)
-                
-        for stab in targOps:
-            if 0 == stab[zType]:
-                # This is an X stabilizer. (X -> IX)
-                newOps.append(I+stab)
-            else:
-                # This is a Z stabilizer. (Z -> ZZ)
-                newOps.append(stab+stab)
-                
-        # Check our original assumption.  Block ordering is
-        # big endian, so blockorder[0] is the MSBs.
-        if TransCnot.ctrlName != blockorder[0]:
-            # Swap the blocks around.
-            shift = blocklength
-            mask = (1 << shift) - 1
-            newOps = [(stab >> shift) ^ ((stab & mask) << shift) for stab in newOps]
-                
-        return newOps
-    
+           
 class TransMeas(CountableComponent):
+    '''
+    Transversal measurement in either the 'X' or 'Z' basis.
+    '''
     
-    def __init__(self, kGood, code, basis, blockname='0'):
+    def __init__(self, kGood, code, basis, blockname=''):
         n = code.blockLength()
         nickname = 'transMeas' + str(basis) + str(n)
         if Pauli.X == basis:
@@ -198,8 +129,11 @@ class TransMeas(CountableComponent):
         return KeyMasker(subPropagator, mask, blocks=blocks)
         
 class TransRest(CountableComponent):
+    '''
+    Transversal rest.
+    '''
     
-    def __init__(self, kGood, code, blockname='0'):
+    def __init__(self, kGood, code, blockname=''):
         nickname = 'transRest' + str(code.n)
         locs = Locations([locrest(blockname, i) for i in range(code.n)], nickname)
         

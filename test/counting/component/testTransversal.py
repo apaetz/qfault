@@ -5,11 +5,9 @@ Created on May 3, 2011
 '''
 
 from counting.block import Block
-from counting.component.transversal import TransCnot
+from counting.component.transversal import TransCnot, TransMeas
 from counting.key import SyndromeKeyGenerator, MultiBlockSyndromeKeyGenerator
-from qec.error import Pauli
-from qec.qecc import TrivialStablizerCode
-from settings.noise import CountingNoiseModelX
+from qec.error import Pauli, PauliError, xType, zType
 import logging
 import testComponent
 import unittest
@@ -45,10 +43,71 @@ class TestCnot(testComponent.ComponentTestCase):
 				e = {'0': e0, '1': e1}
 				key = generator.getKey(e)
 				propagated = propagator(key)
-				print 'e=', e, 'key=', key, 'propagated=', propagated
+				expected = {'0': e0 * PauliError(zbits=e1[zType]), '1': e1 * PauliError(xbits=e0[xType])}
+				expectedKey = generator.getKey(expected)
+#				print 'e=', e, 'key=', key, 'propagated=', propagated, 'expected=', expected
+				assert propagated == expectedKey
+				
 
 	def _getComponent(self, kGood, code):
 		return TransCnot(kGood, code, code)
+	
+	
+class TestMeas(testComponent.ComponentTestCase):
+	
+	@staticmethod
+	def Filter(e, basis):
+		if Pauli.X == basis:
+			e = PauliError(zbits=e[zType])
+		elif Pauli.Z == basis:
+			e = PauliError(xbits=e[xType])
+			
+		return e
+	
+	def testCount(self):
+		kGood = {Pauli.X: 1, Pauli.Z: 1, Pauli.Y: 1}
+		noise = self.countingNoiseModels
+		code = self.trivialCode
+		generator = SyndromeKeyGenerator(code, None)
+		
+		for basis in (Pauli.Z, Pauli.X):
+			meas = self._getComponent(kGood, code, basis)
+			
+			if basis == Pauli.X:
+				expected = {Pauli.X: [{(0,): 1}, {}],
+					    Pauli.Z: [{(0,): 1}, {(generator.getKey(Pauli.Z),): 1}],
+					    Pauli.Y: [{(0,): 1}, {(generator.getKey(Pauli.Z),): 1}],}
+			else:
+				expected = {Pauli.X: [{(0,): 1}, {(generator.getKey(Pauli.X),): 1}],
+					    Pauli.Z: [{(0,): 1}, {}],
+					    Pauli.Y: [{(0,): 1}, {(generator.getKey(Pauli.X),): 1}],}
+
+			
+			for pauli in (Pauli.X, Pauli.Z, Pauli.Y):
+				result = meas.count(noise, pauli)
+#				print result.counts, expected[pauli]
+				assert result.counts == expected[pauli]
+		
+	def testKeyPropagator(self):
+		
+		for basis in (Pauli.Z, Pauli.X):
+			meas = self._getComponent({}, self.trivialCode, basis)
+			blocks = [Block('0', self.trivialCode)]
+			generator = MultiBlockSyndromeKeyGenerator(blocks)
+			propagator = meas.keyPropagator()
+			
+			for e0 in (Pauli.I, Pauli.X, Pauli.Z, Pauli.Y):
+				e = {'0': e0}
+				key = generator.getKey(e)
+				propagated = propagator(key)
+				# Filter the part of the error that can't be detected by measurement.
+				expected = {'0': self.Filter(e0, basis)}
+				expectedKey = generator.getKey(expected)
+#				print 'e=', e, 'key=', key, 'propagated=', propagated, 'expected=', expected
+				assert propagated == expectedKey
+
+	def _getComponent(self, kGood, code, basis=Pauli.Z):
+		return TransMeas(kGood, code, basis)
 		
 		
 if __name__ == "__main__":

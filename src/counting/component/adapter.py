@@ -1,6 +1,8 @@
 '''
 Created on 2011-11-14
 
+This file contains components that adapt the output from other components in some way.
+
 @author: adam
 '''
 from counting.block import Block
@@ -13,6 +15,8 @@ from qec import qecc
 class IdealDecoder(Filter):
     '''
     An ideal decoder.
+    Input syndrome keys are decoded to syndrome keys for the trivial code.
+    TODO: should the keys be decoded directly to Paulis?
     '''
     
     def __init__(self, code):

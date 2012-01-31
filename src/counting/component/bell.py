@@ -1,10 +1,11 @@
 '''
 Created on 2011-10-25
 
+Components for preparing Bell states and making Bell measurements.
+
 @author: adam
 '''
-from counting.block import Block
-from counting.component.base import Component, ParallelComponent,\
+from counting.component.base import ParallelComponent,\
     SequentialComponent
 from counting.component.transversal import TransCnot, TransMeas
 from qec.error import Pauli
@@ -13,9 +14,9 @@ import logging
 logger = logging.getLogger('component')
 
 class BellPair(SequentialComponent):
-    
-#    ctrlName = '|+>'
-#    targName = '|0>'
+    '''
+    Prepares the encoded Bell state |+>|+>.
+    '''
 
     def __init__(self, kGood, plus, zero, kGoodCnot):
         # Construct a transversal CNOT component from the two input codes.
@@ -30,6 +31,9 @@ class BellPair(SequentialComponent):
     
     
 class BellMeas(SequentialComponent):
+    '''
+    Performs a transversal measurement in the Bell basis.
+    '''
     
     def __init__(self, kGood, code, kGoodMeasX=None, kGoodMeasZ=None, kGoodCnot=None):
         if None == kGoodMeasX: kGoodMeasX = kGood
