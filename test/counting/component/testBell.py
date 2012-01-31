@@ -4,33 +4,14 @@ Created on May 3, 2011
 @author: Adam
 '''
 
-from counting import probability
-from counting.component.base import Prep, Empty, ParallelComponent
 from counting.component.bell import BellPair, BellMeas
-from counting.component.ec import DecodeAdapter, ConcatenatedTEC
-from counting.component.exrec import ExRec
-from counting.component.rectangle import CnotRectangle
-from counting.component.teleport import TeleportED
-from counting.component.transversal import TransCnot
-from counting.countErrors import mapCounts
-from counting.location import Locations
-from qec.error import Pauli, xType, zType
-from qec.qecc import TrivialStablizerCode, StabilizerState
-from settings.noise import NoiseModelXSympy, CountingNoiseModel, \
-	CountingNoiseModelX, CountingNoiseModelZ, NoiseModelZSympy, NoiseModelXZSympy
-from unittest.case import SkipTest
-from util import counterUtils
-import golay
+from qec.error import Pauli
+from settings.noise import CountingNoiseModelX
 import logging
 import testBase
 import testComponent
 import unittest
 logging.basicConfig(level=logging.DEBUG)
-
-
-	
-	
-
 
 		
 class TestBellPair(testComponent.ComponentTestCase):

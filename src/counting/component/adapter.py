@@ -6,7 +6,8 @@ This file contains components that adapt the output from other components in som
 @author: adam
 '''
 from counting.block import Block
-from counting.component.base import Filter
+from counting.component.base import Filter, SequentialComponent,\
+    ParallelComponent
 from counting.key import IdentityManipulator, \
     KeyManipulator, SyndromeKeyDecoder
 from qec import qecc
@@ -41,3 +42,14 @@ class IdealDecoder(Filter):
         def _manipulate(self, key):
             decoded = self.decoder.decode(key[0])
             return (decoded,) + key[1:]
+        
+class DecodeAdapter(SequentialComponent):
+    '''
+    Applies ideal decoders to all output blocks of the given component.
+    '''
+    
+    def __init__(self, component):
+        outBlocks = component.outBlocks()
+        idealDecoders = [IdealDecoder(block.getCode()) for block in outBlocks]
+        decoder = ParallelComponent({}, *idealDecoders)
+        super(DecodeAdapter, self).__init__(component.kGood, (component, decoder))
