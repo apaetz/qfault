@@ -39,7 +39,10 @@ class Locations(object):
 	
 	
 class LocationCount(tuple):
-		'LocationCount(cnot, prepX, prepZ, measX, measZ, rest)' 
+		'''
+		Deprecated
+		LocationCount(cnot, prepX, prepZ, measX, measZ, rest
+		''' 
 
 		__slots__ = () 
 
