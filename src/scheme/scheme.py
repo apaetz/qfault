@@ -8,9 +8,7 @@ from qec.error import Pauli, PauliError
 from settings.noise import NoiseModelXSympy, NoiseModelZSympy, NoiseModelXZSympy
 import logging
 from counting.key import MultiBlockSyndromeKeyGenerator
-from util import iteration, listutils
 import itertools
-from counting.component.adapter import InputAdapter
 
 logger = logging.getLogger('scheme')
 
@@ -97,7 +95,7 @@ class Scheme(object):
         for errors in itertools.combinations_with_replacement(errorList, len(inBlocks)):
             errors = {inBlocks[k].name: errors[k] for k in range(len(errors))}
             syndromes = tuple(code.getSyndrome(e) for e in errors.values())
-            #pr = listutils.mul(self.prInputSyndrome(code.getSyndrome(e)) for e in errors.values())
+            #pr = listutils.mul(self.prSin(code.getSyndrome(e)) for e in errors.values())
             inputs[syndromes] = keyGen.getKey(errors)
             
         return inputs
@@ -107,5 +105,5 @@ class Scheme(object):
     def getExRecs(self):
         raise NotImplementedError
     
-    def prInputSyndrome(self, s):
+    def prSin(self, s):
         raise NotImplementedError
