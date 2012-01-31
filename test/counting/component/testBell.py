@@ -10,7 +10,7 @@ from counting.component.bell import BellPair, BellMeas
 from counting.component.ec import DecodeAdapter, ConcatenatedTEC
 from counting.component.exrec import ExRec
 from counting.component.rectangle import CnotRectangle
-from counting.component.teleport import UncorrectedTeleport, TeleportED
+from counting.component.teleport import TeleportED
 from counting.component.transversal import TransCnot
 from counting.countErrors import mapCounts
 from counting.location import Locations

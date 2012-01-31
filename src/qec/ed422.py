@@ -56,11 +56,11 @@ class ED412Code(CssCode):
         '''
         Constructor
         '''
-        super(ED412Code, self).__init__('[[4,2,2]]' + str(gaugeType), 4, 1, 2)
+        super(ED412Code, self).__init__('[[4,1,2]]' + str(gaugeType), 4, 1, 2)
         self._gaugeType = gaugeType
      
-    def stabilizerGenerators(self, types=(error.xType, error.zType)):
-        return tuple(self._generators[t] for t in types) + (self._gaugeOperators[self._gaugeType],)
+    def stabilizerGenerators(self):#, types=(error.xType, error.zType)):
+        return tuple(self._generators[t] for t in (error.xType, error.zType)) + (self._gaugeOperators[self._gaugeType],)
     
     def logicalOperators(self):
         return (self._normalizers,)
@@ -136,12 +136,12 @@ class ED412Code(CssCode):
 #    def syndromeLength(self, types=(error.xType, error.zType)):
 #        return 2 * len(types)
     
-    def _isLogicalError(self, e, eType):
-        # This code detects weight-one errors.  Weight-three errors are
-        # equivalent to weight-one errors.  Weight-four errors are 
-        # equivalent to weight-zero errors.  Thus the only undetectable
-        # logical errors are weight-two.
-        return 2 == bits.weight(e)
+#    def _isLogicalError(self, e, eType):
+#        # This code detects weight-one errors.  Weight-three errors are
+#        # equivalent to weight-one errors.  Weight-four errors are 
+#        # equivalent to weight-zero errors.  Thus the only undetectable
+#        # logical errors are weight-two.
+#        return 2 == bits.weight(e)
     
 if __name__ == '__main__':
     import doctest

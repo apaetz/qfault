@@ -81,65 +81,65 @@ class ConcatenatedTEC(ParallelComponent):
 #                convolved[key] = listutils.addDicts(convolved.get(key, {}), counts)
 #                
 #        return convolved
-    
-class TECAdapter(ComponentAdapter):
-    
-    def __init__(self, tec):
-        super(TECAdapter, self).__init__(tec)
-        self.tec = tec
-    
-    @fetchable
-    def lookupTable(self, noiseModels, pauli):
-        code = self.tec.inBlocks()[0].getCode()
-        keyMeta = SyndromeKeyGenerator(code, '').keyMeta()
-        nchecks = len(keyMeta.parityChecks())
-        
-        if Pauli.X == pauli:
-            keyMask = ((0 != check[zType]) for check in keyMeta.parityChecks())
-        elif Pauli.Z == pauli:
-            keyMask = ((0 != check[xType]) for check in keyMeta.parityChecks())
-        else:
-            keyMask = (1 for _ in keyMeta.parityChecks())
-            
-        keyMask = bits.listToBits(keyMask)
-        keys = set(key & keyMask for key in xrange(1 << nchecks))
-        
-        countLookup = [{} for _ in range(self.tec.kGood[pauli] + 1)]
-        rejectLookup = [{} for _ in range(self.tec.kGood[pauli] + 1)]
-        for key in keys:
-            inCount = [{(key,): 1}]
-            inResult = CountResult(inCount, [None])
-            outResult = self.tec.count(noiseModels, pauli, inResult)
-            outMeta = outResult.keyMeta
-            outBlocks = outResult.blocks
-            
-            counts = self._processCounts(outResult.counts)
-            for k in range(len(countLookup)):
-                countLookup[k][(key,)] = counts[k]
-                rejectLookup[k][(key,)] = outResult.rejected[k]
-            
-        return countLookup, rejectLookup, outMeta, outBlocks
-        
-    def count(self, noiseModels, pauli):
-        # This must return a count result for which the counts
-        # are indexable by k (the number of faults) and then
-        # an input key.  The value of [k][key] is a dictionary
-        # indexed by (logical) Pauli error.  Finally, the
-        # value [k][key][pauli] is a weighted count of the
-        # ways to produce the logical error 'pauli' given
-        # k failures in the TEC when the input to the TEC
-        # is 'key'.
-        
-        counts, rejected, meta, blocks = self.lookupTable(noiseModels, pauli)
-        return CountResult(counts, blocks, rejectedCounts=rejected)
-        
-    def outBlocks(self):
-        code = QeccNone(1)
-        return tuple(Block(block.name, code) for block in self.tec.outBlocks())
-    
-    def _processCounts(self, counts):
-        return counts
-    
+#    
+#class TECAdapter(ComponentAdapter):
+#    
+#    def __init__(self, tec):
+#        super(TECAdapter, self).__init__(tec)
+#        self.tec = tec
+#    
+#    @fetchable
+#    def lookupTable(self, noiseModels, pauli):
+#        code = self.tec.inBlocks()[0].getCode()
+#        keyMeta = SyndromeKeyGenerator(code, '').keyMeta()
+#        nchecks = len(keyMeta.parityChecks())
+#        
+#        if Pauli.X == pauli:
+#            keyMask = ((0 != check[zType]) for check in keyMeta.parityChecks())
+#        elif Pauli.Z == pauli:
+#            keyMask = ((0 != check[xType]) for check in keyMeta.parityChecks())
+#        else:
+#            keyMask = (1 for _ in keyMeta.parityChecks())
+#            
+#        keyMask = bits.listToBits(keyMask)
+#        keys = set(key & keyMask for key in xrange(1 << nchecks))
+#        
+#        countLookup = [{} for _ in range(self.tec.kGood[pauli] + 1)]
+#        rejectLookup = [{} for _ in range(self.tec.kGood[pauli] + 1)]
+#        for key in keys:
+#            inCount = [{(key,): 1}]
+#            inResult = CountResult(inCount, [None])
+#            outResult = self.tec.count(noiseModels, pauli, inResult)
+#            outMeta = outResult.keyMeta
+#            outBlocks = outResult.blocks
+#            
+#            counts = self._processCounts(outResult.counts)
+#            for k in range(len(countLookup)):
+#                countLookup[k][(key,)] = counts[k]
+#                rejectLookup[k][(key,)] = outResult.rejected[k]
+#            
+#        return countLookup, rejectLookup, outMeta, outBlocks
+#        
+#    def count(self, noiseModels, pauli):
+#        # This must return a count result for which the counts
+#        # are indexable by k (the number of faults) and then
+#        # an input key.  The value of [k][key] is a dictionary
+#        # indexed by (logical) Pauli error.  Finally, the
+#        # value [k][key][pauli] is a weighted count of the
+#        # ways to produce the logical error 'pauli' given
+#        # k failures in the TEC when the input to the TEC
+#        # is 'key'.
+#        
+#        counts, rejected, meta, blocks = self.lookupTable(noiseModels, pauli)
+#        return CountResult(counts, blocks, rejectedCounts=rejected)
+#        
+#    def outBlocks(self):
+#        code = QeccNone(1)
+#        return tuple(Block(block.name, code) for block in self.tec.outBlocks())
+#    
+#    def _processCounts(self, counts):
+#        return counts
+#    
     
 class DecodeAdapter(SequentialComponent):
     
