@@ -40,6 +40,20 @@ class PauliError(object):
 	
 	__slots__ = ['ebits']
 	
+	# TODO: generalize for a variable number of arguments.
+	@staticmethod
+	def Tensor(a, b):
+		'''
+		Returns the tensor product of 'a' and 'b'.
+		>>> str(PauliError.Tensor(Pauli.Z, Pauli.Y)
+		'ZY'
+		>>> str(PauliError.Tensor(Pauli.X), Pauli.I)
+		'XI'
+		'''
+		shift = max(bits.numbits(b[xType]), bits.numbits(b[zType]), 1)
+		return PauliError((a[xType]<<shift) + b[xType],
+						  (a[zType]<<shift) + b[zType])
+	
 	def __init__(self, xbits=0, zbits=0):
 		self.ebits = { xType: xbits, zType: zbits }
 		
@@ -96,6 +110,9 @@ class PauliError(object):
 	def __iadd__(self, other):
 		return self + other
 	
+	# TODO: is there a good reason to overload '+' as the tensor operation.
+	# A more clear alternative would be to define a static method that accepts
+	# two arguments.
 	def __add__(self, other):
 		'''
 		Concatenate with another error.
@@ -105,9 +122,7 @@ class PauliError(object):
 		>>> str(PauliError(1,0) + PauliError(0,0))
 		'XI'
 		'''
-		shift = max(bits.numbits(other[xType]), bits.numbits(other[zType]), 1)
-		return PauliError((self[xType]<<shift) + other[xType],
-						  (self[zType]<<shift) + other[zType])
+		return self.Tensor(self, other)
 		
 	def __pow__(self, exp):
 		'''
@@ -157,7 +172,7 @@ class Pauli(object):
 				  Y: Y
 				 }
 	
-	_bitTable = [I, Z, X, Y]
+	_bitTable = [I, X, Z, Y]
 	
 	@staticmethod
 	def Dual(e):
@@ -175,6 +190,12 @@ class Pauli(object):
 		Returns the Pauli operator corresponding to the given
 		2-bit value.  The MSB represents Pauli.Z, the LSB
 		represents Pauli.X.
+		>>> str(Pauli.FromBits(0))
+		'I'
+		>>> str(Pauli.FromBits(1))
+		'X'
+		>>> str(Pauli.FromBits(2))
+		'Z'
 		>>> str(Pauli.FromBits(3))
 		'Y'
 		'''

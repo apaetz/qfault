@@ -3,7 +3,7 @@ Created on Mar 3, 2010
 
 @author: adam
 '''
-from qec.error import Pauli
+from qec.error import Pauli, PauliError
 import qec.error as error
 from util import bits
 
@@ -146,6 +146,34 @@ class StabilizerCode(Qecc):
         '''
         raise NotImplementedError
     
+    def decodeError(self, e):
+        '''
+        Returns the Pauli error resulting from perfectly decoding a block
+        with error e.  That is, returns the logical error corresponding
+        to the physical error e.
+        :param e: The error, given in descending qubit order. 
+        :type e: :class:`qec.error.PauliError`
+        '''
+       
+        syndrome = self.getSyndrome(e)
+        corrected = e * self.syndromeCorrection(syndrome)
+        
+        decoded = Pauli.I
+        for logicalOp in self.logicalOperators():
+            logicalErr = Pauli.I
+            Xl = logicalOp[error.xType]
+            Zl = logicalOp[error.zType]
+            
+            if not corrected.commutesWith(Xl):
+                logicalErr *= Pauli.Z
+            
+            if not corrected.commutesWith(Zl):
+                logicalErr *= Pauli.X
+                
+            decoded += logicalErr
+                
+        return decoded
+    
 #    def logicalOperator(self, qubit, eType):
 #        '''
 #        Returns the logical operator corresponding to an error of eType,
@@ -221,30 +249,30 @@ class CssCode(StabilizerCode):
     def stabilizerGenerators(self, types=(error.xType, error.zType)):
         raise NotImplementedError
         
-    def getSyndrome(self, e, types=(error.xType, error.zType)):
-        '''
-        Since X and Z stabilizers are distinct for CSS codes, it
-        is possible to return just the 'X-part' or just the 'Z-part'
-        of the syndrome.  To return just the 'X-part', use paulis=[Pauli.X],
-        and similiarly for just the 'Z-part'.
-        '''
-        dualTypes = tuple(error.dualType(t) for t in types)
-        return StabilizerCode.Syndrome(e, self.stabilizerGenerators(dualTypes))
+#    def getSyndrome(self, e, types=(error.xType, error.zType)):
+#        '''
+#        Since X and Z stabilizers are distinct for CSS codes, it
+#        is possible to return just the 'X-part' or just the 'Z-part'
+#        of the syndrome.  To return just the 'X-part', use paulis=[Pauli.X],
+#        and similiarly for just the 'Z-part'.
+#        '''
+#        dualTypes = tuple(error.dualType(t) for t in types)
+#        return StabilizerCode.Syndrome(e, self.stabilizerGenerators(dualTypes))
     
     def syndromeLength(self, types=(error.xType, error.zType)):
         return len(self.stabilizerGenerators(types))
     
-    def decodeError(self, e):
-        bits = self._isLogicalError(e[Pauli.X], Pauli.X) + 2*self._isLogicalError(e[Pauli.Z], Pauli.Z)
-        return Pauli.FromBits(bits)
+#    def decodeError(self, e):
+#        bits = self._isLogicalError(e[error.xType], Pauli.X) + 2*self._isLogicalError(e[error.zType], Pauli.Z)
+#        return Pauli.FromBits(bits)
     
-    def _isLogicalError(self, e):
-        '''
-        Subclass hook.
-        Returns True if the string e represents a logical error
-        of type 'eType', and False otherwise.
-        '''
-        raise NotImplementedError
+#    def _isLogicalError(self, e):
+#        '''
+#        Subclass hook.
+#        Returns True if the string e represents a logical error
+#        of type 'eType', and False otherwise.
+#        '''
+#        raise NotImplementedError
     
 # TODO: create a dummy CSS code for testing.
 

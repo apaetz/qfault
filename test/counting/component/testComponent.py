@@ -12,6 +12,7 @@ from settings.noise import NoiseModelXSympy, NoiseModelZSympy, NoiseModelXZSympy
 	CountingNoiseModelX, CountingNoiseModelZ
 import logging
 import unittest
+from counting.block import Block
 
 
 
@@ -65,8 +66,16 @@ class ComponentTestCase(unittest.TestCase):
 						print 'prBad({0})={1}'.format(gamma, prBad(gamma))
 						#print 'prTot({0})={1}'.format(gamma, prTot(gamma))
 						raise e
-						
-				
+	
+	def testInBlocks(self):
+		blocks = self._getComponent(0, self.trivialCode).inBlocks()
+		assert type(blocks) == tuple
+		assert all(type(block) == Block for block in blocks)					
+
+	def testOutBlocks(self):
+		blocks = self._getComponent(0, self.trivialCode).outBlocks()
+		assert type(blocks) == tuple
+		assert all(type(block) == Block for block in blocks)				
 
 	def _getComponent(self, kGood, code):
 		raise NotImplementedError

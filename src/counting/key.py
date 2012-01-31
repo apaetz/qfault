@@ -528,7 +528,6 @@ class SyndromeKeyDecoder(object):
 
 #        logicalError += PauliError(xbits=decoded[0], zbits=decoded[1])
         
-        decoded = 0
         commutations = [not e.commutesWith(check) for check in self._normalizers]
         commutations = bits.listToBits(commutations)
         decoded = logicalChecks ^ commutations
@@ -537,6 +536,29 @@ class SyndromeKeyDecoder(object):
         logger.debug('key=%s, decoded key=%s', key, decoded)
         return decoded
         
+        
+    def asPauli(self, key):
+        nNorms = len(self._normalizers)
+        logicalChecks = key & ((1 << nNorms) - 1)
+        logicalChecks = bits.bitsToList(logicalChecks, nNorms)
+        normalizerLookup = {norm: logicalChecks[i] for i,norm in enumerate(self._normalizers)}
+        
+        syndrome = key >> nNorms
+        e = self._code.syndromeCorrection(syndrome)
+        
+        for logical in self._code.logicalOperators():
+            Xl = logical[xType]
+            Zl = logical[zType]
+            if normalizerLookup[Xl]:
+                # The error anti-commutes with the logical X operator.
+                e *= Zl
+            
+            if normalizerLookup[Zl]:
+                # The error anti-commutes with the logical Z operator.
+                e *= Xl
+                
+        return e
+            
 
 if __name__ == '__main__':
     pass

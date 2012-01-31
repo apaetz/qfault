@@ -1,6 +1,13 @@
 '''
 Created on 2011-10-25
 
+This file contains base classes for fault-tolerant "components".  A component
+is a part of a rectangle or extended rectangle (exRec) in which combinations of
+errors can be counted.
+
+This file contains both abstract base classes, such as Component, CountableComponent,
+etc., and a few simple concrete classes such as Empty, and Prep.
+
 @author: adam
 '''
 from copy import copy
@@ -8,15 +15,13 @@ from counting import probability, key, countErrors
 from counting.block import Block
 from counting.countErrors import mapCounts, countBlocksBySyndrome
 from counting.countParallel import convolve
-from counting.key import KeySplitter, KeyManipulator, KeyConcatenator, KeyExtender,\
-	SyndromeKeyGenerator, MultiBlockSyndromeKeyGenerator, IdentityManipulator
+from counting.key import KeyManipulator, \
+	SyndromeKeyGenerator, IdentityManipulator
 from counting.location import Locations
 from counting.result import CountResult
 from qec.error import Pauli
-from util.cache import fetchable, memoize
+from util.cache import fetchable
 import logging
-import operator
-from util.polynomial import sympoly1d, SymPolyWrapper
 import hashlib
 
 logger = logging.getLogger('counting.component')
@@ -52,11 +57,10 @@ class Component(object):
 	on that subspace).
 	'''
 	
-	inputName = 'input'
-
 	def __init__(self, kGood, subcomponents=[]):
 		'''
-		Constructor
+		:param dict kGood: Specifies the maximum number of faults to count, for each Pauli type.
+		:param list subcomponents: (optional) A list of sub-components. 
 		'''
 		self.kGood = {pauli: kGood.get(pauli, 0) for pauli in (Pauli.X, Pauli.Z, Pauli.Y)}
 		self._subs = subcomponents
@@ -138,15 +142,8 @@ class Component(object):
 		locs = Locations()
 		for sub in self.subcomponents():
 			locs += sub.locations(pauli)
-		return locs + self.internalLocations(pauli)
-	
-	def internalLocations(self, pauli=Pauli.Y):
-		'''
-		Returns the set of locations contained in the component *excluding* any sub-components.
-		:rtype: :class:`Locations`
-		'''
-		return Locations()
-	
+		return locs
+
 	def inBlocks(self):
 		'''
 		Returns the list of input blocks.
@@ -301,8 +298,6 @@ class CountableComponent(Component):
 	has its own physical locations that must be counted.
 	'''
 	
-	locsName = 'locations'
-	
 	def __init__(self, kGood, locations):
 		# The number of faulty locations cannot exceed the total
 		# number of locations.
@@ -336,14 +331,14 @@ class CountableComponent(Component):
 	@fetchable
 	def _count(self, noiseModels, pauli):
 		# Count the internal locations.
-		locations = self.internalLocations(pauli)
+		locations = self.locations(pauli)
 		blocks = self.outBlocks()
 		counts = countBlocksBySyndrome(locations, blocks, noiseModels[pauli], self.kGood[pauli])
 		
 		cb = CountResult(counts, blocks, name=str(self))
 		return cb
 				
-	def internalLocations(self, pauli=Pauli.Y):
+	def locations(self, pauli=Pauli.Y):
 		return countErrors.pauliFilter(copy(self._locations), pauli)
 
 	def _hashStr(self):
