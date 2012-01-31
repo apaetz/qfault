@@ -6,7 +6,7 @@ Created on 2011-10-27
 from copy import copy
 from counting import key
 from counting.block import Block
-from counting.component.adapter import ComponentAdapter, IdealDecoder
+from counting.component.adapter import IdealDecoder
 from counting.component.base import Component, ParallelComponent, \
     SequentialComponent
 from counting.convolve import convolveDict
@@ -168,31 +168,31 @@ class DecodeAdapter(SequentialComponent):
 #        return self.decodeCounts(counts, decoder)
             
             
-class LECSyndromeAdapter(ComponentAdapter):
-    
-    def __init__(self, lec):
-        super(LECSyndromeAdapter, self).__init__(lec)
-        self.lec = lec
-    
-    def logicalMasker(self, keyMeta):        
-        # Strip off the logical syndrome information.
-        block = self.lec.outBlocks()[0]
-        stabilizers = set(block.getCode().stabilizerGenerators())   
-        parityChecks = keyMeta.parityChecks() 
-        syndromeBits = [(check in stabilizers) for check in parityChecks]
-        syndromeMask = bits.listToBits(syndromeBits)
-        
-        masker = KeyMasker(keyMeta, syndromeMask)
-        
-        return masker
-    
-    def keyPropagator(self, subPropagator=IdentityManipulator()):
-        return self.logicalMasker(self.lec.keyPropagator(subPropagator))
-    
-    def _postCount(self, result, noiseModels, pauli):
-        result = self.lec._postCount(result, noiseModels, pauli)
-        self._log(logging.DEBUG, 'Stripping logical syndrome information.')
-        masker = self.logicalMasker(result.keyMeta)
-        result.counts = mapCounts(result.counts, masker)
-        result.keyMeta = masker.meta()
-        return result
+#class LECSyndromeAdapter(ComponentAdapter):
+#    
+#    def __init__(self, lec):
+#        super(LECSyndromeAdapter, self).__init__(lec)
+#        self.lec = lec
+#    
+#    def logicalMasker(self, keyMeta):        
+#        # Strip off the logical syndrome information.
+#        block = self.lec.outBlocks()[0]
+#        stabilizers = set(block.getCode().stabilizerGenerators())   
+#        parityChecks = keyMeta.parityChecks() 
+#        syndromeBits = [(check in stabilizers) for check in parityChecks]
+#        syndromeMask = bits.listToBits(syndromeBits)
+#        
+#        masker = KeyMasker(keyMeta, syndromeMask)
+#        
+#        return masker
+#    
+#    def keyPropagator(self, subPropagator=IdentityManipulator()):
+#        return self.logicalMasker(self.lec.keyPropagator(subPropagator))
+#    
+#    def _postCount(self, result, noiseModels, pauli):
+#        result = self.lec._postCount(result, noiseModels, pauli)
+#        self._log(logging.DEBUG, 'Stripping logical syndrome information.')
+#        masker = self.logicalMasker(result.keyMeta)
+#        result.counts = mapCounts(result.counts, masker)
+#        result.keyMeta = masker.meta()
+#        return result

@@ -168,6 +168,14 @@ class CountingNoiseModelZ(CountingNoiseModel):
 			return errorListZ[loc['type']]
 		except KeyError:
 			return []
+		
+class CountingNoiseModelXZ(CountingNoiseModel):
+	
+	def errorList(self, loc):
+		try:
+			return errorListXZ[loc['type']]
+		except KeyError:
+			return []
 
 		
 #class UpperBoundNoiseModelSympy(DepolarizingNoiseModelSympy):

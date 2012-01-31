@@ -4,8 +4,7 @@ Created on May 3, 2011
 @author: Adam
 '''
 
-from counting.component.adapter import InputAdapter
-from counting.component.teleport import TeleportED, UncorrectedTeleport,\
+from counting.component.teleport import TeleportED,\
 	TeleportEDFilter, Teleport
 from qec.error import Pauli, PauliError, xType, zType
 from unittest.case import SkipTest
@@ -16,7 +15,7 @@ import unittest
 from counting.key import MultiBlockSyndromeKeyGenerator
 from counting.block import Block
 from qec import ed422
-from counting.result import CountResult
+from counting.result import CountResult, TrivialResult
 import counting
 import qec
 
@@ -31,9 +30,6 @@ class TestTeleport(testComponent.ComponentTestCase):
 	def testCount(self):
 		kGood = {Pauli.X: 1, Pauli.Z: 1}
 		teleport = self._getComponent(kGood, self.trivialCode)
-		
-		expected = {Pauli.X: [{(0, 0, 0): 1}, {(0, 1, 1): 1, (0, 1, 0): 4, (0, 0, 0): 1, (0, 0, 1): 3}],
-				    Pauli.Z: [{(0, 0, 0): 1}, {(2, 0, 2): 1, (2, 0, 0): 5, (0, 0, 0): 1, (0, 0, 2): 2}]}
 		
 		expected = {Pauli.X: [{(0, 0, 0): 1}, {(0, 1, 0): 1, (0, 1, 1): 4, (0, 0, 0): 1, (0, 0, 1): 3}],
 				    Pauli.Z: [{(0, 0, 0): 1}, {(2, 0, 0): 1, (2, 0, 2): 5, (0, 0, 0): 1, (0, 0, 2): 2}]}
@@ -63,75 +59,17 @@ class TestTeleportED(testComponent.ComponentTestCase):
 			expected = [{(0,): 1}, {(0,): 2, eKey[pauli]: 7}, {(0,): 20, eKey[pauli]: 10}]
 			print result.counts
 			assert expected == result.counts
-			
-	@SkipTest
-	def testPostselect(self):
-		'''
-		Check that error-detection and Pauli frame updates work correctly.
-		'''
-		code = ed422.ED412Code()
-		teleportED = self.TeleportED({}, code)
 		
-		blocks = [Block(str(i), code) for i in range(3)]
-		keyInGen = MultiBlockSyndromeKeyGenerator(blocks)
-		keyOutGen = MultiBlockSyndromeKeyGenerator([blocks[2]])
-		logical = code.logicalOperators()[0]
-		
-		# Check X and Z errors separately.
-		# Each possible error on the relevant measurement block is tested
-		# individually.
-		for pauliType in (qec.error.xType, qec.error.zType):
-			dualType = qec.error.dualType(pauliType)
-			measBlockNum = 0
-			if xType == pauliType: measBlockNum = 1
-			
-			for e in range(1<<4):
-				# Construct the Pauli error
-				ebits = {qec.error.xType: 0, qec.error.zType: 0}
-				ebits[pauliType] = e
-				pauliError = PauliError(xbits=ebits[xType], zbits=ebits[zType])
-				
-				syndrome = code.getSyndrome(pauliError)
-				errors = {str(measBlockNum): pauliError, '2': logical[dualType]}
-				keyIn = keyInGen.getKey(errors)
-				
-				# Construct the expected output key (error).  It should be the
-				# same as block 2 of the input, unless a logical correction (Pauli
-				# frame update) is required.
-				if pauliError.commutesWith(logical[dualType]):
-					keyOut = keyOutGen.getKey({'2': logical[dualType]})
-				else:
-					keyOut = keyOutGen.getKey({'2': logical[pauliType] * logical[dualType]})
-				
-				result = CountResult([{keyIn: 42}], blocks)
-				postResult = teleportED._postCount(result, {}, Pauli.X)
-				
-#				print 'keyIn=', keyIn
-#				print 'keyOut=', keyOut
-#				print 'accepted=',postResult.counts
-#				print 'rejected=',postResult.rejected
-				if syndrome:
-					assert [{}] == postResult.counts
-					assert [{counting.key.rejectKey: 42}] == postResult.rejected
-				else:
-					assert [{counting.key.rejectKey: 0}] == postResult.rejected
-					assert [{keyOut: 42}] == postResult.counts
-
-		
-		
-	
-	@SkipTest
 	def testPrAccept(self):
 		kGood = {Pauli.Y: 6}
 		teleportED = self._getComponent(kGood, self.trivialCode)
-		prAccept = teleportED.prAccept(self.depolarizingNoiseModels)
+		prAccept = teleportED.prAccept(self.depolarizingNoiseModels, TrivialResult(teleportED.inBlocks()), None)
 		
 		# With a trivial code, i.e., no code, the acceptance
 		# probability should approach 1 as k increases.
 		print prAccept
 		print prAccept(0), prAccept(0.001)
 		
-	@SkipTest
 	def testPrBad(self):
 		kGood = {Pauli.X: 0}
 		teleportED = self.TeleportED(kGood, self.trivialCode)
@@ -141,23 +79,48 @@ class TestTeleportED(testComponent.ComponentTestCase):
 				
 	def _getComponent(self, kGood, code):
 		return self.TeleportED(kGood, code)		
-	
+#	
 class TestTeleportEDFilter(testComponent.ComponentTestCase):
 	
-	@SkipTest
 	def testCount(self):
 		kGood = {Pauli.X: 2, Pauli.Z: 2}
+		
+		code = ed422.ED412Code()
+		Xl = code.logicalOperators()[0][xType]
+		Zl = code.logicalOperators()[0][zType]
+		
+		teleportED = self._getComponent(kGood, code)
+		
+		# These errors should be undetected, and pass through
+		III = {0: Pauli.I, 1: Pauli.I, 2: Pauli.I}
+		IIX = {0: Pauli.I, 1: Pauli.I, 2: Pauli.X}
+		IXlX = {0: Pauli.I, 1: Xl, 2: Pauli.X}
+		ZlIX = {0: Zl, 1: Pauli.I, 2: Pauli.X}
+		
+		# These errors should be detected, and not pass through.
+		IXI = {0: Pauli.I, 1: Pauli.X, 2: Pauli.I}
+		ZII = {0: Pauli.Z, 1: Pauli.I, 2: Pauli.I}
+		
+		blocks = tuple(Block(i, code, None) for i in range(3))
+		
+		generator = MultiBlockSyndromeKeyGenerator(blocks)
+		counts = {}
+		expected = {}
+		notDetected = set([Pauli.I, Xl, Zl])
+		for i, err in enumerate([III, IIX, IXlX, ZlIX, IXI, ZII]):
+			key = generator.getKey(err)
+			counts[key] = i+1
 			
-		for inSyndrome in (0, 1, 2):
-			teleportED = self._getComponent(kGood, self.trivialCode)
-			
-			for pauli in (Pauli.X, Pauli.Z):
-				inputs = tuple([inSyndrome] * len(teleportED.inBlocks()))
-				inputResult = CountResult([{inputs: 1}], teleportED.inBlocks())
-				result = teleportED.count(self.countingNoiseModels, pauli, inputResult=inputResult)
-				expected = [{(inSyndrome,): 1}, {(inSyndrome,): 9}, {(inSyndrome,): 30}]
-				print result.counts
-				assert expected == result.counts
+			if err[0] in notDetected and err[1] in notDetected:
+				k = (key[2],)
+				expected[k] = expected.get(k, 0) + i+1
+		
+		expected = [expected]
+		
+		inputResult = CountResult([counts], teleportED.inBlocks())
+		result = teleportED.count(self.countingNoiseModels, Pauli.Y, inputResult=inputResult)
+#		print result.counts, expected
+		assert expected == result.counts
 	
 	def _getComponent(self, kGood, code):
 		teleport = TeleportEDFilter(code)

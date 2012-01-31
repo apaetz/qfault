@@ -5,7 +5,6 @@ Created on 2011-10-25
 '''
 from counting import key, probability
 from counting.component.base import Component, SequentialComponent
-from counting.component.ec import DecodeAdapter, LECSyndromeAdapter
 from counting.component.transversal import TransCnot
 from counting.countParallel import convolve
 from counting.result import CountResult
