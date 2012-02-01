@@ -20,6 +20,7 @@ from util import bits
 from util.cache import memoize
 import logging
 import warnings
+from copy import copy
 
 logger = logging.getLogger('component')
        
@@ -222,6 +223,14 @@ class TeleportEDFilter(PostselectionFilter):
         
         
 class EDInputFilter(SequentialComponent):
+    '''
+    This component is similar to the TeleportED component, but it doesn't
+    propagate the input through the teleporation gadget.  Rather, it filters
+    the input by keeping only those errors that *would* have been accepted
+    had they actually been propagated through the teleportation.  This is
+    useful, for example, when counting errors in a Rectangle and then
+    conditioning on acceptance of the trailing EC of the exRec.
+    '''
     
     def __init__(self, ed):
         super(EDInputFilter, self).__init__(ed.kGood, subcomponents=(ed,))
@@ -239,7 +248,7 @@ class EDInputFilter(SequentialComponent):
         copier = KeyExtender(IdentityManipulator(), numBlocks, numBlocks)
         for block in range(numBlocks):
             copier = KeyCopier(copier, block, block+numBlocks)
-        extendedInput = inputResult
+        extendedInput = copy(inputResult)
         extendedInput.counts = mapCounts(inputResult.counts, copier)
         extendedInput.blocks = inputResult.blocks[:numBlocks] + inputResult.blocks
         

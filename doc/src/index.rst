@@ -11,6 +11,9 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
+   Components <reference/components>
+   Schemes <reference/schemes>
+
 Indices and tables
 ==================
 
@@ -18,9 +21,5 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
-.. automodule:: counting.component.base
-    :members:
-    
-.. automodule:: scheme.knill
-    :members:  
+
     
