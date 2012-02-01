@@ -5,7 +5,7 @@ Created on May 3, 2011
 '''
 
 from counting.component.teleport import TeleportED,\
-	TeleportEDFilter, Teleport
+	TeleportEDFilter, Teleport, EDInputFilter
 from qec.error import Pauli, PauliError, xType, zType
 from unittest.case import SkipTest
 import logging
@@ -101,7 +101,7 @@ class TestTeleportEDFilter(testComponent.ComponentTestCase):
 		IXI = {0: Pauli.I, 1: Pauli.X, 2: Pauli.I}
 		ZII = {0: Pauli.Z, 1: Pauli.I, 2: Pauli.I}
 		
-		blocks = tuple(Block(i, code, None) for i in range(3))
+		blocks = tuple(Block(i, code) for i in range(3))
 		
 		generator = MultiBlockSyndromeKeyGenerator(blocks)
 		counts = {}
@@ -125,6 +125,27 @@ class TestTeleportEDFilter(testComponent.ComponentTestCase):
 	def _getComponent(self, kGood, code):
 		teleport = TeleportEDFilter(code)
 		return teleport
+	
+class TestEDInputFilter(testComponent.ComponentTestCase):
+	
+	
+	def testCount(self):
+		kGood = {Pauli.X: 2, Pauli.Z: 2}
+		teleportED = self._getComponent(kGood, self.trivialCode)
+		
+
+		counts = {(2,):1}
+		inputResult = CountResult([counts], teleportED.inBlocks())
+		
+		for pauli in (Pauli.X, Pauli.Z):
+			result = teleportED.count(self.countingNoiseModels, pauli, inputResult)
+			expected = [{(2,): 1}, {(2,): 9}, {(2,): 30}]
+			print result.counts
+			assert expected == result.counts
+	
+	def _getComponent(self, kGood, code):
+		edif = EDInputFilter(TestTeleportED.TeleportED(kGood, code))
+		return edif
 	
 if __name__ == "__main__":
 

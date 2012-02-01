@@ -58,9 +58,11 @@ class memoize(object):
 		return self.memo.has_key(key)
 	
 	def setMemo(self, key, result):
+		logger.debug('setting memo for {0}'.format(key))
 		self.memo[key] = result
 		
 	def getMemo(self, key):
+		logger.debug('getting memo for {0}'.format(key))
 		return copy.copy(self.memo[key])
 	
 	def getKey(self, args):
@@ -225,7 +227,7 @@ class DataManager(object):
 			key = self.constructKey(obj)
 			
 		filename = self.constructFilename(key)
-		logger.debug('Saving {0} to {1}'.format(key, filename))
+#		logger.debug('Saving {0} to {1}'.format(key, filename))
 		outfile = gzip.open(filename, 'wb', 1)
 		outfile.write(json.dumps(obj))
 		outfile.close()
@@ -239,7 +241,7 @@ class DataManager(object):
 			key = self.constructKey(obj)
 			
 		filename = self.constructFilename(key)
-		logger.debug('Saving {0} to {1}'.format(key, filename))
+#		logger.debug('Saving {0} to {1}'.format(key, filename))
 		outfile = gzip.open(filename, 'wb', 1)
 		outfile.write(cPickle.dumps(obj, 2))
 		outfile.close()
@@ -256,18 +258,18 @@ class DataManager(object):
 	
 	def loadjson(self, key):
 		filename = self.constructFilename(key)
-		logger.debug('Loading {0} from {1}'.format(key, filename))
+#		logger.debug('Loading {0} from {1}'.format(key, filename))
 		infile = gzip.open(filename, 'rb')
 		obj = json.loads(infile.read())
 		infile.close()
 		
-		logger.info('Loaded {0} from {1}'.format(key, filename))
+		logger.debug('Loaded {0} from {1}'.format(key, filename))
 		
 		return obj
 	
 	def loadpickle(self, key):
 		filename = self.constructFilename(key)
-		logger.debug('Loading {0} from {1}'.format(key, filename))
+#		logger.debug('Loading {0} from {1}'.format(key, filename))
 		infile = gzip.open(filename, 'rb')
 		obj = cPickle.loads(infile.read())
 		infile.close()
