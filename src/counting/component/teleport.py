@@ -157,7 +157,7 @@ class TeleportED(SequentialComponent):
     def __init__(self, kGood, bellPair, bellMeas):
         inBlock = bellMeas.inBlocks()[0]
         teleport = Teleport(kGood, bellPair, bellMeas)
-        edFilter = TeleportEDFilter(inBlock.getCode())
+        edFilter = TeleportEDFilter(teleport)
         super(TeleportED, self).__init__(kGood, subcomponents=(teleport, edFilter))
         self._outBlock = bellPair.outBlocks()[1]
         
@@ -175,19 +175,31 @@ class TeleportEDFilter(PostselectionFilter):
     Error-detection filter for the output of the Teleport component.
     '''
     
-    def __init__(self, code):
+    def __init__(self, teleport):
         super(TeleportEDFilter, self).__init__()
-        self.code = code
+        self.teleport = teleport
+        
+        # The QECC on the data block and the first ancilla block must match exactly.
+        # This includes any gauge stabilizers.  The reason is that all of the stabilizer
+        # generators are used in error detection, including gauge stabilizers.
+        dataCode, anc1Code, _ = (block.getCode() for block in teleport.outBlocks())
+        if not dataCode == anc1Code:
+            raise Exception("QECC for data block ({0}) and ancilla block ({1}) are not equal.".format(dataCode, anc1Code))
         
     def inBlocks(self):
-        blocks = (Block('X', self.code), Block('Z', self.code), Block('out', self.code))
-        return blocks
+        return self.teleport.outBlocks()
         
     def outBlocks(self):
-        return (Block('out', self.code),)
+        return (self.inBlocks()[2],)
     
     def keyPropagator(self, subPropagator=IdentityManipulator()):
-        accept = self._acceptor(self.code)
+        
+        # Use the QECC of the input block for error detection.
+        # This assumes that the code of the input block and the first
+        # Bell-state ancilla are *exactly* the same, including all
+        # gauge stabilizers.
+        code = self.inBlocks()[0].getCode()
+        accept = self._acceptor(code)
         keyAcceptor = self.KeyAcceptor(subPropagator, accept)
         return keyAcceptor
         
@@ -198,13 +210,11 @@ class TeleportEDFilter(PostselectionFilter):
         syndromeBits = [(check in stabilizers) for check in parityChecks]
         rejectMask = bits.listToBits(syndromeBits)
         
-        warnings.warn('Detection of normalizer generators is not yet implemented')
         # The UncorrectedTeleport component blocks are setup as follows:
         # block 0 - Transversal X-basis measurement
         # block 1 - Transversal Z-basis measurement
         # block 2 - Teleported data
         def accept(key):
-            # TODO also check additional normalizers.
             return not(key[0] & rejectMask) and not(key[1] & rejectMask)
     
         return accept
