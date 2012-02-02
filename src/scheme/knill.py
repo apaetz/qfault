@@ -1,6 +1,8 @@
 '''
 Created on 2011-11-14
 
+Schemes based on Knill's C4/C6 error-detection and teleportation based proposals.
+
 @author: adam
 '''
 from counting import probability
@@ -17,14 +19,13 @@ from qec.qecc import StabilizerState, TrivialStablizerCode
 from scheme import Scheme
 from util.polynomial import SymPolyWrapper, sympoly1d
 import logging
-import itertools
 from counting.key import SyndromeKeyGenerator
 
 logger = logging.getLogger('scheme.knill')
 
 class KnillScheme(Scheme):
     '''
-    classdocs
+    An error-detection scheme based on [AGP 08], which was in turn based on [Knill 04].
     '''
 
 
@@ -33,6 +34,11 @@ class KnillScheme(Scheme):
         Constructor
         '''
 
+        # Use the same gauge type for each code block  Using |+> gauge qubits gives
+        # slightly better Z-error protection.  In principle it is possible to even out
+        # the X and Z error protection by using different gauge types, as suggested
+        # by AGP and Knill.  However, it does not seem to make a significant difference
+        # in the logical error probabilities.
         self.code = ed422.ED412Code(gaugeType=error.xType)
         
         prepZ = Prep(kPrep, ed422.prepare(Pauli.Z, Pauli.X), StabilizerState(self.code, [error.zType]))
@@ -50,10 +56,10 @@ class KnillScheme(Scheme):
     def count(self):
         # TODO: prEgivenAccept should take Pauli types as input, rather than syndrome keys.
         
-        # TODO: this doesn't give all combinations
-        for eA, eB in itertools.combinations_with_replacement([Pauli.I, Pauli.X, Pauli.Z, Pauli.Y], 2):
-            pr = self.prEgivenAccept(eA, eB, self.defaultNoiseModels)
-            print 'Pr[{0}{1}](0.004)={2}'.format(eA,eB,pr(0.004/15))
+        for eA in [Pauli.I, Pauli.X, Pauli.Z, Pauli.Y]:
+            for eB in [Pauli.I, Pauli.X, Pauli.Z, Pauli.Y]:
+                pr = self.prEgivenAccept(eA, eB, self.defaultNoiseModels)
+                print 'Pr[{0}{1}](0.004)={2}'.format(eA,eB,pr(0.004/15))
 
 
     def prEgivenAccept(self, eA, eB, noiseModels):
@@ -72,13 +78,13 @@ class KnillScheme(Scheme):
         rec = Rectangle(self.kExRec, led, cnot)
         
         prTable = {}
-        # TODO: this doesn't give all combinations
-        for inKeyA, inKeyB in itertools.combinations_with_replacement(inputs.values(), 2):
-            logger.info('Counting CNOT 1-Rec for inputs: %s, %s', inKeyA, inKeyB)
-            prS = self.prEgivenS(cnot, e, inKeyA + inKeyB, noiseModels) * \
-                  self.prSin(inKeyA) * self.prSin(inKeyB)
-            
-            prTable[(inKeyA, inKeyB)] = prS
+        for inKeyA in inputs.values():
+            for inKeyB in inputs.values():
+                logger.info('Counting CNOT 1-Rec for inputs: %s, %s', inKeyA, inKeyB)
+                prS = self.prEgivenS(cnot, e, inKeyA + inKeyB, noiseModels) * \
+                      self.prSin(inKeyA) * self.prSin(inKeyB)
+                
+                prTable[(inKeyA, inKeyB)] = prS
                 
         for key, pr in prTable.iteritems():
             print key, pr(0.004/15)

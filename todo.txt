@@ -1,4 +1,7 @@
-- Update scheme code based on re-worked component behavior.
+- All teleportation components use Bell states with logica |+> gauge qubits.  This gives extra Z-error protection only.
+Should balance it out by using |0> gauge qubits on some error detections. 
+- Knill scheme threshold is dominated by the case in which the input error to both blocks is trivial.
+Is there a way to improve the counts for this case?
 - Scheme code is not well thought-out.
 
 - Component IDs require redefinition of _hashStr for components with extra internal data.  Better solution?
