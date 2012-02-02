@@ -92,11 +92,12 @@ class Scheme(object):
         keyGen = MultiBlockSyndromeKeyGenerator(inBlocks)
         
         inputs = {}
-        for errors in itertools.combinations_with_replacement(errorList, len(inBlocks)):
+        for errors in itertools.product(errorList, repeat=len(inBlocks)):
             errors = {inBlocks[k].name: errors[k] for k in range(len(errors))}
             syndromes = tuple(code.getSyndrome(e) for e in errors.values())
             #pr = listutils.mul(self.prSin(code.getSyndrome(e)) for e in errors.values())
             inputs[syndromes] = keyGen.getKey(errors)
+            logger.debug('key({0})={1}'.format(errors, inputs[syndromes]))
             
         return inputs
 
