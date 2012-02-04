@@ -29,9 +29,11 @@ class KnillScheme(Scheme):
     '''
 
 
-    def __init__(self, kPrep, kCnot, kEC, kExRec):
+    def __init__(self, kPrep, kCnot, kEC, kExRec, enableRest=False):
         '''
-        Constructor
+        Rest locations are disabled by default because we're post-selecting on global acceptance,
+        and Pauli frame corrections to teleportation EDs can be made after the gate gadget since
+        we're only considering Clifford gates.
         '''
 
         # Use the same gauge type for each code block  Using |+> gauge qubits gives
@@ -42,12 +44,12 @@ class KnillScheme(Scheme):
         self.code = ed422.ED412Code(gaugeType=error.xType)
         
         prepZ = Prep(kPrep, ed422.prepare(Pauli.Z, Pauli.X), StabilizerState(self.code, [error.zType]))
-        prepX = Prep(kPrep, ed422.prepare(Pauli.X, Pauli.Z), StabilizerState(self.code, [error.xType]))
+        prepX = Prep(kPrep, ed422.prepare(Pauli.X, Pauli.X), StabilizerState(self.code, [error.xType]))
         
         bellPair = BellPair(kEC, prepX, prepZ, kCnot)
         bellMeas = BellMeas(kEC, self.code, kGoodCnot=kCnot, kGoodMeasX=kCnot, kGoodMeasZ=kCnot)
         
-        self.ed = TeleportED(kEC, bellPair, bellMeas)
+        self.ed = TeleportED(kEC, bellPair, bellMeas, enableRest)
         
         self.kExRec = kExRec
         self.kCnot = kCnot
@@ -72,6 +74,7 @@ class KnillScheme(Scheme):
         e = (generator.getKey(eA), generator.getKey(eB))
 
         inputs = self.getInputs(self.ed)
+#        inputs = {0: (0,)}
 
         cnot = TransCnot(self.kCnot, self.code, self.code)
         led = ParallelComponent(self.kExRec, self.ed, self.ed)
@@ -90,6 +93,7 @@ class KnillScheme(Scheme):
             print key, pr(0.004/15)
             
         pr = sum(prTable.values())
+        logger.debug('Pr[E={0}](0.004)={1}'.format(e, pr(0.004/15)))
                 
         # Compute Pr[E=e, ED_R accept, good | Sin=s]      
         prBad = rec.prBad(noiseModels[Pauli.Y], Pauli.Y)
@@ -137,10 +141,11 @@ class KnillScheme(Scheme):
 
         logger.debug('Counting exRec for Pr[E={0} | Sin={1}]'.format(e, s))
         result = exrec.count(noiseModels, Pauli.Y, inputResult=inputResult)
-        logger.debug('Counts before filtering for E={0}: {1}'.format(e, result.counts))
         counts = [{e: count.get(e,0)} for count in result.counts]
-        logger.debug('Counts after filtering for E={0}: {1}'.format(e, counts))
+        logger.debug('Counts for [E={0} | Sin={1}]: {2}'.format(e, s, counts))
         prE = probability.countsToPoly(counts, exrec.locations().getTotals(), noiseModels[Pauli.Y])
+#        logger.debug('Pr[E={0} | Sin={1}] = {2}'.format(e, s, prE))
+        logger.debug('Pr[E={0} | Sin={1}](0.004)={2}'.format(e, s, prE(0.004/15)))
         
         return prE
     
