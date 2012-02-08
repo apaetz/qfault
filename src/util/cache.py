@@ -274,7 +274,7 @@ class DataManager(object):
 		obj = cPickle.loads(infile.read())
 		infile.close()
 		
-		logger.info('Loaded {0} from {1}'.format(key, filename))
+		logger.debug('Loaded {0} from {1}'.format(key, filename))
 		
 		return obj
 	

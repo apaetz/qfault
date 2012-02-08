@@ -154,9 +154,9 @@ class TeleportED(SequentialComponent):
     '''
     
     
-    def __init__(self, kGood, bellPair, bellMeas):
+    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
         inBlock = bellMeas.inBlocks()[0]
-        teleport = Teleport(kGood, bellPair, bellMeas)
+        teleport = Teleport(kGood, bellPair, bellMeas, enableRest)
         edFilter = TeleportEDFilter(teleport)
         super(TeleportED, self).__init__(kGood, subcomponents=(teleport, edFilter))
         self._outBlock = bellPair.outBlocks()[1]

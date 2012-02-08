@@ -5,12 +5,13 @@ Created on May 3, 2011
 '''
 
 from counting.block import Block
-from counting.component.transversal import TransCnot, TransMeas
+from counting.component.transversal import TransCnot, TransMeas, TransRest
 from counting.key import SyndromeKeyGenerator, MultiBlockSyndromeKeyGenerator
 from qec.error import Pauli, PauliError, xType, zType
 import logging
 import testComponent
 import unittest
+from qec.ed422 import ED412Code
 
 	
 	
@@ -109,6 +110,21 @@ class TestMeas(testComponent.ComponentTestCase):
 	def _getComponent(self, kGood, code, basis=Pauli.Z):
 		return TransMeas(kGood, code, basis)
 		
+		
+class TestRest(testComponent.ComponentTestCase):
+	
+	def testED412(self):
+		kGood = {Pauli.Y: 1}
+		noiseModels = self.countingNoiseModels
+		code = ED412Code()
+		rest = self._getComponent(kGood, code)
+		
+		result = rest.count(noiseModels, Pauli.Y)
+		print 'Rest [[4,2,1]]'
+		print result.counts
+	
+	def _getComponent(self, kGood, code):
+		return TransRest(kGood, code)
 		
 if __name__ == "__main__":
 
