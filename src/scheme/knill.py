@@ -173,7 +173,7 @@ if __name__ == '__main__':
     countParallel.setPool(countParallel.DummyPool())
     
     logging.getLogger('counting.threshold').setLevel(logging.DEBUG)
-    logging.getLogger('util.cache').setLevel(logging.DEBUG)
+#    logging.getLogger('util.cache').setLevel(logging.DEBUG)
     logging.getLogger('scheme').setLevel(logging.DEBUG)
     logger.setLevel(logging.DEBUG)
     

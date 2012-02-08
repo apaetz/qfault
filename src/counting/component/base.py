@@ -23,6 +23,7 @@ from qec.error import Pauli
 from util.cache import fetchable
 import logging
 import hashlib
+from util import listutils
 
 logger = logging.getLogger('counting.component')
 
@@ -345,7 +346,69 @@ class CountableComponent(Component):
 		return super(CountableComponent, self)._hashStr() + str(self._locations.list)
 	
 	
-class SequentialComponent(Component):
+class CompositeComponent(Component):
+	
+	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+		'''
+		Counts errors in the component.
+		Returns a CountResult. 
+		
+		:param dict noiseModels: A dictionary, indexed by Pauli error, of noise models.
+		:param pauli: The error type to count.  Use Pauli.Y to count X and Z errors together.
+		'''
+		
+		if None == inputResult:
+			inputs = tuple([0]*len(self.inBlocks()))
+			inputCounts = [{inputs: 1}]
+			inputResult = CountResult(inputCounts, self.inBlocks())
+			
+		kIn = len(inputResult.counts) - 1
+		
+		kGood = self.kGood[pauli]
+		if None == kMax:
+			kMax = kGood + kIn
+		else:
+			kGood = min(kGood, kMax)
+			
+		try:
+			self._log(logging.INFO, 'Counting: ' + str(pauli))
+			
+			# Convolve the input with sub-component counts by counting the
+			# sub-components with a single order of the input counts at a time.
+			# That is, take order-k input counts and treat them as order zero.
+			# Then convolve with the sub-component counts.  Once convolved,
+			# shift the result by k so that the orders of the result are
+			# correct.  Counting in this way allows the sub-components to be
+			# counted up to the correct fault order (no overcounting).
+			
+			# TODO: optimize
+			results = []
+			for k in range(min(kMax, kIn) + 1):
+				counts = [inputResult.counts[k]]
+				result = CountResult(counts, inputResult.blocks)
+				
+				result = self._countInputOrderZero(noiseModels, pauli, result, max(kMax-k, 0))
+					
+				result.counts = [{} for _ in range(k)] + result.counts + [{} for _ in range(kMax+1 - len(result.counts) - k)]
+				results.append(result)
+	
+			resultCounts = [listutils.addDicts(*[r.counts[k] for r in results]) for k in range(kMax+1)]
+			result = CountResult(resultCounts, results[0].blocks)
+			
+			self._log(logging.DEBUG, 'counts=%s', result.counts)		
+		except:
+			self._log(logging.ERROR, 'Error while counting')
+			raise
+
+		return result
+	
+	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
+		'''
+		Count the sub-components with an input that has only order-zero counts.
+		'''
+		raise NotImplementedError
+	
+class SequentialComponent(CompositeComponent):
 	'''
 	A component for which sub-components are ordered sequentially in time.
 	'''
@@ -379,38 +442,66 @@ class SequentialComponent(Component):
 	
 	def outBlocks(self):
 		return self[-1].outBlocks()
-			
-	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
-		'''
-		Counts errors in the component.
-		Returns a CountResult. 
-		
-		:param dict noiseModels: A dictionary, indexed by Pauli error, of noise models.
-		:param pauli: The error type to count.  Use Pauli.Y to count X and Z errors together.
-		'''
-		
-		if None == inputResult:
-			inputs = tuple([0]*len(self.inBlocks()))
-			inputCounts = [{inputs: 1}]
-			inputResult = CountResult(inputCounts, self.inBlocks())
-			
-		k = self.kGood[pauli]
-		if None != kMax:
-			k = min(k, kMax)
-			
-		try:
-			self._log(logging.INFO, 'Counting: ' + str(pauli))
-			
-			result = inputResult
-			for sub in self.subcomponents():
-				result = sub.count(noiseModels, pauli, result, k)
-			
-			self._log(logging.DEBUG, 'counts=%s', result.counts)		
-		except:
-			self._log(logging.ERROR, 'Error while counting')
-			raise
-		
+	
+	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
+		kMaxSub = min(self.kGood[pauli], kMax)
+		result = inputResult
+		for sub in self.subcomponents():
+			result = sub.count(noiseModels, pauli, result, kMaxSub)
 		return result
+			
+#	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+#		'''
+#		Counts errors in the component.
+#		Returns a CountResult. 
+#		
+#		:param dict noiseModels: A dictionary, indexed by Pauli error, of noise models.
+#		:param pauli: The error type to count.  Use Pauli.Y to count X and Z errors together.
+#		'''
+#		
+#		if None == inputResult:
+#			inputs = tuple([0]*len(self.inBlocks()))
+#			inputCounts = [{inputs: 1}]
+#			inputResult = CountResult(inputCounts, self.inBlocks())
+#			
+#		kIn = len(inputResult.counts) - 1
+#		
+#		kGood = self.kGood[pauli]
+#		if None == kMax:
+#			kMax = kGood + kIn
+#		else:
+#			kGood = min(kGood, kMax)
+#			
+#		try:
+#			self._log(logging.INFO, 'Counting: ' + str(pauli))
+#			
+#			# TODO: generalize/abstract/optimize this process.
+#			results = []
+#			for k in range(min(kMax, kIn) + 1):
+#				counts = [inputResult.counts[k]]
+#				result = CountResult(counts, inputResult.blocks)
+#				
+#				for sub in self.subcomponents():
+#					kMaxSub = max(min(kGood, kMax-k), 0)
+#					result = sub.count(noiseModels, pauli, result, kMaxSub)
+#					
+#				result.counts = [{} for _ in range(k)] + result.counts + [{} for _ in range(kMax+1 - len(result.counts) - k)]
+#				results.append(result)
+#	
+#			try:
+#				resultCounts = [listutils.addDicts(*[r.counts[k] for r in results]) for k in range(kMax+1)]
+#				result = CountResult(resultCounts, results[0].blocks)
+#			except Exception:
+#				raise
+#			
+#			self._log(logging.DEBUG, 'counts=%s', result.counts)		
+#		except:
+#			self._log(logging.ERROR, 'Error while counting')
+#			raise
+#		
+#		if 0 == len(result.counts):
+#			print 'foo?'
+#		return result
 	
 	def keyPropagator(self, subPropagator=IdentityManipulator()):
 		propagator = subPropagator
@@ -514,7 +605,7 @@ class PostselectionFilter(Filter):
 		
 		return prAccept# * prSubs
 	
-class ParallelComponent(Component):
+class ParallelComponent(CompositeComponent):
 	'''
 	A component for which sub-components are parallel in time (and sequential in space).
 	
@@ -546,20 +637,12 @@ class ParallelComponent(Component):
 		propagator = self.TupleRotator(-len(self.outBlocks()), propagator)
 
 		return propagator
-		
-	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
-
-		# The idea here is to count each of the sub-components sequentially, but
-		# permuting the input blocks at each step.
-		
-		
-		k = self.kGood[pauli]
-		if None != kMax:
-			k = min(k, kMax)
-		
+	
+	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
+		kMaxSub = min(self.kGood[pauli], kMax)
 		result = inputResult
 		for sub in self:
-			result = sub.count(noiseModels, pauli, result, k)
+			result = sub.count(noiseModels, pauli, result, kMaxSub)
 			
 			# Shift the input blocks for the next component into place.
 			rotator = self.TupleRotator(len(sub.outBlocks()))
@@ -572,6 +655,37 @@ class ParallelComponent(Component):
 		result.counts = mapCounts(result.counts, rotator)
 		result.blocks = rotator(result.blocks)
 		
+		return result
+		
+	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+
+		# The idea here is to count each of the sub-components sequentially, but
+		# permuting the input blocks at each step.
+		
+		
+		k = self.kGood[pauli]
+		if None != kMax:
+			k = min(k, kMax)
+		
+		result = copy(inputResult)
+		for sub in self:
+			result = sub.count(noiseModels, pauli, result, k)
+			if 0 == len(result.counts):
+				print 'foo?'
+			
+			# Shift the input blocks for the next component into place.
+			rotator = self.TupleRotator(len(sub.outBlocks()))
+			result.counts = mapCounts(result.counts, rotator)
+			result.blocks = rotator(result.blocks)
+			
+		# It is possible that the inputResult space is larger than the output space
+		# of the parallel component.
+		rotator = self.TupleRotator(-len(self.outBlocks()))
+		result.counts = mapCounts(result.counts, rotator)
+		result.blocks = rotator(result.blocks)
+		
+		if 0 == len(result.counts):
+			print 'foo?'
 		return result
 	
 #	def __repr__(self):
