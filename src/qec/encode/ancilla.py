@@ -37,9 +37,15 @@ def ancillaZPrep(schedule, roundPermutation=None, name='0', reverseQubitOrder=Tr
 	if reverseQubitOrder:
 		bitLookup = list(reversed(bitLookup))
 	
-	# A qubit that is a target of any CNOT in the prep circuit should
-	# be prepared as |0>.  All other qubits should be prepared as |+>
-	prepAsZ  = set([c[1] for c in flatcnots])
+	# Qubits that are used first as a control are prepared as |+>.
+	# Qubits taht are used first as a target are prepared as |0>.
+	controls = [c[0] for c in flatcnots]
+	targets = [c[1] for c in flatcnots]
+	prepAsZ  = set()
+	for q in range(len(allQubits)):
+		if (q not in controls) or (q in targets and controls.index(q) > targets.index(q)):
+			prepAsZ.add(q)
+
 	prepAsX = allQubits - prepAsZ
 
 	# the initial qubit preparations

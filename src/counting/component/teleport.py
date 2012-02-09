@@ -25,7 +25,7 @@ from copy import copy
 logger = logging.getLogger('component')
        
         
-class Teleport(SequentialComponent):
+class TeleportWithMeas(SequentialComponent):
     '''
     Teleportation component.  The output of this component is three blocks, rather than one.
     The first two blocks contain the residual errors resulting from the Bell measurement.
@@ -63,7 +63,7 @@ class Teleport(SequentialComponent):
             
             subs += (rest,)
         
-        super(Teleport, self).__init__(kGood, subcomponents=subs)
+        super(TeleportWithMeas, self).__init__(kGood, subcomponents=subs)
 
     def inBlocks(self):
         return (self.subcomponents()[1].inBlocks()[0],)
@@ -114,7 +114,7 @@ class Teleport(SequentialComponent):
         '''
         inputResult = TrivialResult(self.inBlocks())
         inputResult = self._extendInput(inputResult)
-        return super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
+        return super(TeleportWithMeas, self).count(noiseModels, pauli, inputResult, kMax)
         
     
 #    def keyPropagator(self, keyMeta):
@@ -144,7 +144,36 @@ class Teleport(SequentialComponent):
             return key
         
         return outputKey
+    
+    
+class Teleport(SequentialComponent):
+    '''
+    Teleportation component.  This is just like TeleportWithMeas, except that the
+    measurement results are removed and only the teleported block remains.
+    '''
+    
+    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
+        teleportWM = TeleportWithMeas(kGood, bellPair, bellMeas, enableRest)
+        super(Teleport, self).__init__(kGood, subcomponents=[teleportWM])
+        
+    def outBlocks(self):
+        return (self[0].outBlocks()[2],)
+    
+    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        result = super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
+        
+        # Now trace out the measurement results
+        tracer = self.KeyTracer()
+        result.counts = mapCounts(result.counts, tracer)
+        result.blocks = result.blocks[2:]
+        
+        return result
+    
             
+    class KeyTracer(KeyManipulator):
+                
+        def _manipulate(self, key):
+            return keyForBlock(key, 2) + key[3:]
     
 class TeleportED(SequentialComponent):
     '''
@@ -156,7 +185,7 @@ class TeleportED(SequentialComponent):
     
     def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
         inBlock = bellMeas.inBlocks()[0]
-        teleport = Teleport(kGood, bellPair, bellMeas, enableRest)
+        teleport = TeleportWithMeas(kGood, bellPair, bellMeas, enableRest)
         edFilter = TeleportEDFilter(teleport)
         super(TeleportED, self).__init__(kGood, subcomponents=(teleport, edFilter))
         self._outBlock = bellPair.outBlocks()[1]
@@ -172,7 +201,7 @@ class TeleportED(SequentialComponent):
     
 class TeleportEDFilter(PostselectionFilter):
     '''
-    Error-detection filter for the output of the Teleport component.
+    Error-detection filter for the output of the TeleportWithMeas component.
     '''
     
     def __init__(self, teleport):

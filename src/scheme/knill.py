@@ -6,11 +6,12 @@ Schemes based on Knill's C4/C6 error-detection and teleportation based proposals
 @author: adam
 '''
 from counting import probability
-from counting.component.adapter import DecodeAdapter
+from counting.component.adapter import DecodeAdapter, SyndromeAdapter
 from counting.component.base import Prep, ParallelComponent
 from counting.component.bell import BellPair, BellMeas
 from counting.component.exrec import ExRec, Rectangle
-from counting.component.teleport import TeleportED, EDInputFilter
+from counting.component.teleport import TeleportED, EDInputFilter, TeleportWithMeas,\
+    Teleport
 from counting.component.transversal import TransCnot
 from counting.result import CountResult
 from qec import ed422, error
@@ -19,7 +20,12 @@ from qec.qecc import StabilizerState, TrivialStablizerCode
 from scheme import Scheme
 from util.polynomial import SymPolyWrapper, sympoly1d
 import logging
-from counting.key import SyndromeKeyGenerator
+from counting.key import SyndromeKeyGenerator, convolveKeyCounts
+from counting.probability import prMinFailures, countsAsProbability
+import itertools
+from counting.countParallel import convolve
+from counting.convolve import convolveDict
+import operator
 
 logger = logging.getLogger('scheme.knill')
 
@@ -49,6 +55,8 @@ class KnillScheme(Scheme):
         bellPair = BellPair(kEC, prepX, prepZ, kCnot)
         bellMeas = BellMeas(kEC, self.code, kGoodCnot=kCnot, kGoodMeasX=kCnot, kGoodMeasZ=kCnot)
         
+        self.bellPair = bellPair
+        self.bellMeas = bellMeas
         self.ed = TeleportED(kEC, bellPair, bellMeas, enableRest)
         
         self.kExRec = kExRec
@@ -85,12 +93,12 @@ class KnillScheme(Scheme):
             for inKeyB in inputs.values():
                 logger.info('Counting CNOT 1-Rec for inputs: %s, %s', inKeyA, inKeyB)
                 prS = self.prEgivenS(cnot, e, inKeyA + inKeyB, noiseModels) * \
-                      self.prSin(inKeyA) * self.prSin(inKeyB)
+                      self.prSin(inKeyA, noiseModels, Pauli.Y) * self.prSin(inKeyB, noiseModels, Pauli.Y)
                 
                 prTable[(inKeyA, inKeyB)] = prS
                 
         for key, pr in prTable.iteritems():
-            print key, pr(0.004/15)
+            print 'Pr[E=({0},{1}), Sin={2}](0.004)={3}'.format(eA,eB, key, pr(0.004/15))
             
         pr = sum(prTable.values())
         logger.debug('Pr[E={0}](0.004)={1}'.format(e, pr(0.004/15)))
@@ -149,37 +157,78 @@ class KnillScheme(Scheme):
         
         return prE
     
-    def prSin(self, s):
+    def prSin(self, s, noiseModels, pauli):
         r'''
         Returns an upper bound on :math:`\Pr[S_\text{in} = s]`, the probability that the input syndrome to 
         (a single block of) the rectangle is equivalent to :math:`s`.
         '''
-        # TODO: count all possible input rectangle combinations and compute an upper bound.
-        if (0,) == s:
-            return 1
+#        # TODO: count all possible input rectangle combinations and compute an upper bound.
+#        if (0,) == s:
+#            return 1
     
         cnot = TransCnot(self.kCnot, self.code, self.code)
     
         # TODO: this is a crude upper bound of Pr[S_in!=0] <= Pr[K != 0]
         # A better bound can be obtained by counting
-        n = 2 * len(self.ed.locations()) + len(cnot.locations())
-        pr = SymPolyWrapper(sympoly1d([n, 0]))
+#        n = 2 * len(self.ed.locations()) + len(cnot.locations())
+#        pr = SymPolyWrapper(sympoly1d([n, 0]))
+        
+        lec = ParallelComponent(self.kExRec, self.ed, self.ed)
+        rec = Rectangle(self.kExRec, lec, cnot)
+        rec = SyndromeAdapter(rec)
+        
+        noise = noiseModels[pauli]
+        
+        # Construct an upper bound on the input distribution of syndromes to the input rectangle.
+        # The bound used here is, Pr[Sin=0] <= 1, Pr[Sin != 0] <= Pr[K >= 1].
+        # We can bound Pr[K >= 1] <= B\gamma where B is a sum of the weights of each location in the
+        # CNOT rectangle.  The input distribution is then constructed by taking the product
+        # (convolution actually) of the counts for one block with itself.
+    
+        B = sum(noise.getWeight(loc, e) for loc in rec.locations(pauli) for e in noise.errorList(loc))
+        nonZeroInputs = self.getInputs(self.ed).values()
+        nonZeroInputs.remove((0,))
+        inCountsA = [{(0,): 1}, {key: B for key in nonZeroInputs}]
+        inCounts = countParallel.convolve(inCountsA, inCountsA, convolveFcn=convolveInCounts)
+        print 'inCounts=', inCounts
+        inResult = CountResult(inCounts, rec.inBlocks())
+        
 
+        # Now count the input rectangle based on the worst case distribution computed above.
+        # For the CNOT, the worst case one-block result is computed by taking the maximum
+        # count value over each of the two blocks.
+        # TODO: need to count all possible input rectangles.        
+        result = rec.count(noiseModels, pauli, inputResult=inResult)
+        sCounts = []
+        for count in result.counts:
+            sA = sum(c for key,c in count.iteritems() if s == (key[0],))
+            sB = sum(c for key,c in count.iteritems() if s == (key[1],))
+            sCounts.append({s: max(sA,sB)})
+        
+        pr = probability.countsToPoly(sCounts, rec.locations(pauli).getTotals(), noiseModels[pauli])
+        pr += rec.prBad(noiseModels[pauli], pauli)
+
+        print 'sCounts=', sCounts
         print 'Pr[s=', s, '](0.004)=', pr(0.004/15)
         return pr
+    
+def convolveInCounts(counts1, counts2):
+    return convolveDict(counts1, counts2, keyOp=operator.add)
     
 if __name__ == '__main__':
     from counting import countParallel
     countParallel.setPool(countParallel.DummyPool())
+#    countParallel.configureMultiProcess(16)
     
     logging.getLogger('counting.threshold').setLevel(logging.DEBUG)
 #    logging.getLogger('util.cache').setLevel(logging.DEBUG)
-    logging.getLogger('scheme').setLevel(logging.DEBUG)
+#    logging.getLogger('scheme').setLevel(logging.DEBUG)
     logger.setLevel(logging.DEBUG)
     
     kPrep = {Pauli.Y: 3}
     kCnot = {Pauli.Y: 3}
     kEC = {Pauli.Y: 4}
     kExRec = {Pauli.Y: 6}
+    
     scheme = KnillScheme(kPrep, kCnot, kEC, kExRec)
     scheme.count()

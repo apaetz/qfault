@@ -1,3 +1,5 @@
+- Pr[Sin=s] bounds are far too generous.  Need to tighten up.
+
 -Order-2 Logical X/Z error counts for TeleportED seem high.  Should check some of the counts by hand.
   - Looks like the order two counts are better now that the kGood bug has been fixed.  Alternating gauge types (see below)
   also help.
