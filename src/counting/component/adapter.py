@@ -9,7 +9,7 @@ from counting.block import Block
 from counting.component.base import Filter, SequentialComponent,\
     ParallelComponent
 from counting.key import IdentityManipulator, \
-    KeyManipulator, SyndromeKeyDecoder
+    KeyManipulator, SyndromeKeyDecoder, SyndromeKeyFilter
 from qec import qecc
 
 
@@ -43,6 +43,19 @@ class IdealDecoder(Filter):
             decoded = self.decoder.decode(key[0])
             return (decoded,) + key[1:]
         
+class SyndromeFilter(Filter):
+    
+    def __init__(self, code):
+        super(SyndromeFilter, self).__init__()
+        self._code = code
+        
+    def inBlocks(self):
+        return (Block('', self._code),)
+    
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        return SyndromeKeyFilter(self._code, subPropagator)
+    
+        
 class DecodeAdapter(SequentialComponent):
     '''
     Applies ideal decoders to all output blocks of the given component.
@@ -53,3 +66,11 @@ class DecodeAdapter(SequentialComponent):
         idealDecoders = [IdealDecoder(block.getCode()) for block in outBlocks]
         decoder = ParallelComponent({}, *idealDecoders)
         super(DecodeAdapter, self).__init__(component.kGood, (component, decoder))
+        
+class SyndromeAdapter(SequentialComponent):
+    
+    def __init__(self, component):
+        outBlocks = component.outBlocks()
+        idealDecoders = [SyndromeFilter(block.getCode()) for block in outBlocks]
+        decoder = ParallelComponent({}, *idealDecoders)
+        super(SyndromeAdapter, self).__init__(component.kGood, (component, decoder))

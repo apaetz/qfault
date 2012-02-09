@@ -23,3 +23,8 @@ class Rectangle(SequentialComponent):
     def __init__(self, kGood, lec, gadget):
         subs = (lec, gadget)
         super(Rectangle, self).__init__(kGood, subcomponents=subs)
+        
+    @fetchable
+    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        return super(Rectangle, self).count(noiseModels, pauli, inputResult, kMax)                    
+    

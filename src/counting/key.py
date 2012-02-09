@@ -257,6 +257,15 @@ class KeyMasker(KeyManipulator):
         mask = self.mask
         newKey = tuple(k & mask for k in key)
         return newKey
+    
+class SyndromeKeyFilter(KeyManipulator):
+        
+    def __init__(self, code, manipulator):
+        super(SyndromeKeyFilter, self).__init__(manipulator)
+        self._nNorms = len(code.normalizerGenerators())
+    
+    def _manipulate(self, key):
+        return ((key[0] >> self._nNorms) << self._nNorms,) + key[1:]
         
 def convolveKeyCounts(counts1, counts2, key1Lengths, key2Lengths):
     
