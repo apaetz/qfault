@@ -10,6 +10,8 @@ import json as json
 import os.path
 import functools
 import copy
+import sys
+import shelve
 
 logger = logging.getLogger('util.cache')
 
@@ -221,20 +223,27 @@ class DataManager(object):
 		
 		if not os.path.exists(self.dataDir):
 			os.mkdir(self.dataDir)
-		
-	def savejson(self, obj, key=None):
-		if None == key:
-			key = self.constructKey(obj)
 			
-		filename = self.constructFilename(key)
-#		logger.debug('Saving {0} to {1}'.format(key, filename))
-		outfile = gzip.open(filename, 'wb', 1)
-		outfile.write(json.dumps(obj))
-		outfile.close()
-		
-		logger.debug('Saved {0} to {1}'.format(key, filename))
-	
-		return key
+		self.lookup = self.initializeLookup()
+			
+	def initializeLookup(self):
+		filename = self.dataDir + 'datafile-lookup.txt'
+		lookup = shelve.open(filename)
+		return lookup
+			
+#	def savejson(self, obj, key=None):
+#		if None == key:
+#			key = self.constructKey(obj)
+#			
+#		filename = self.constructFilename(key)
+##		logger.debug('Saving {0} to {1}'.format(key, filename))
+#		outfile = gzip.open(filename, 'wb', 1)
+#		outfile.write(json.dumps(obj))
+#		outfile.close()
+#		
+#		logger.debug('Saved {0} to {1}'.format(key, filename))
+#	
+#		return key
 	
 	def savepickle(self, obj, key=None):
 		if None == key:
@@ -254,18 +263,26 @@ class DataManager(object):
 		return str(obj)
 	
 	def constructFilename(self, key):
-		return self.dataDir + key + self.fileExt
+		try:
+			lookupVal = self.lookup[key]
+		except KeyError:
+			lookupVal = len(self.lookup)
+			self.lookup[key] = lookupVal
+			# Write the new entry to disk
+			self.lookup.sync() 
+		
+		return self.dataDir + 'datafile.' + str(lookupVal) + self.fileExt
 	
-	def loadjson(self, key):
-		filename = self.constructFilename(key)
-#		logger.debug('Loading {0} from {1}'.format(key, filename))
-		infile = gzip.open(filename, 'rb')
-		obj = json.loads(infile.read())
-		infile.close()
-		
-		logger.debug('Loaded {0} from {1}'.format(key, filename))
-		
-		return obj
+#	def loadjson(self, key):
+#		filename = self.constructFilename(key)
+##		logger.debug('Loading {0} from {1}'.format(key, filename))
+#		infile = gzip.open(filename, 'rb')
+#		obj = json.loads(infile.read())
+#		infile.close()
+#		
+#		logger.debug('Loaded {0} from {1}'.format(key, filename))
+#		
+#		return obj
 	
 	def loadpickle(self, key):
 		filename = self.constructFilename(key)
@@ -281,7 +298,7 @@ class DataManager(object):
 	def exists(self, key):
 		filename = self.constructFilename(key)
 		return os.path.exists(filename)
-
+	
 if __name__ == '__main__':
 	
 	@fetchable
