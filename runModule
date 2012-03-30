@@ -2,4 +2,4 @@
 
 # Disable the sympy cache.  It seems to cause problems when using multiple threads.
 export SYMPY_USE_CACHE=no
-python -O -u -m $*
+python2.6 -O -u -m $*

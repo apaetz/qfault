@@ -19,7 +19,7 @@ def disableSympyCache():
 	'''
 		
 	import os
-	os.putenv('SYMPY_USE_CACHE', 'no')
+	os.environ['SYMPY_USE_CACHE'] = 'no'
 	import sympy
 	if sympy.cache.usecache != 'no':
 		raise Exception('Unable to turn off sympy cache.  Sympy may have been imported already.')
@@ -30,7 +30,7 @@ disableSympyCache()
 import sympy
 from sympy import Symbol
 from sympy.simplify.simplify import powsimp, collect
-from sympy.functions.combinatorial.factorials import Factorial
+from sympy.functions.combinatorial.factorials import factorial as Factorial
 
 
 

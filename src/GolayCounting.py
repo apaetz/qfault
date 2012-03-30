@@ -16,6 +16,53 @@ from golay.ancillaPrep import getOverlapPreps, getSteaneRandomPreps
 logger = logging.getLogger('GolayCounting')
 
 
+def computeLevel2Polynomial(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
+	# TODO: eliminate duplicate code in countAndComputeThresh
+	pair1 = (zeroPrep1, zeroPrep2)
+	pair2 = (zeroPrep3, zeroPrep4)
+	ancillaPairs = (pair1, pair2)
+	
+	GammaX, weightsX, GammaZ, weightsZ, gMax = transformedWeights(ancillaPairs, settings)
+	transformedSettings = getTransformedSettings(settings, GammaX, weightsX, GammaZ, weightsZ, gMax)
+	resultsLevel2X, resultsLevel2Z = countExRecs(ancillaPairs, transformedSettings)
+	
+	# Level two polynomials are given in terms of Gamma.
+	# Convert them to polynomials in gamma.
+	level1Events = {}
+	level2Events = {}
+	for event in weightsX.keys():
+		level1Events[event] = weightsX[event] * GammaX
+		level2Events[event] = Composite(resultsLevel2X[event], GammaX)
+	for event in weightsZ.keys():
+		level1Events[event] = weightsZ[event] * GammaZ
+		level2Events[event] = Composite(resultsLevel2Z[event], GammaZ)
+		
+	level2poly = sum(level2Events)
+	
+	return level2poly
+
+def computeConcatenationLevel(startingNoiseRate, targetNoiseRate, level2poly):
+	level = 1
+	noiseRate = startingNoiseRate
+	
+	while noiseRate >= targetNoiseRate:
+		level += 1
+		noiseRate = level2poly(noiseRate)
+		
+	return level
+
+def plotOverhead(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
+	
+	targetNoiseRate = 1e-5
+	startingNoiseRates = [1e-4]
+	
+	level2poly = computeLevel2Polynomial(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings)
+	
+	levels = [computeConcatenationLevel(startingNoiseRate, targetNoiseRate, level2poly)
+				for startingNoiseRate in startingNoiseRates]
+	
+	print levels
+
 def countAndComputeThresh(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
 		
 	pair1 = (zeroPrep1, zeroPrep2)
@@ -77,4 +124,5 @@ if __name__ == "__main__":
 	logger.info('Settings are: {0}'.format(settings))
 	
 	countAndComputeThresh(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings)
+	plotOverhead(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings)
 	print 'done!'	
