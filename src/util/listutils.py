@@ -105,3 +105,10 @@ if __name__ == "__main__":
 	
 def cycle(seq):
 	pass
+
+def permute(seq, permutation):
+	"""Permutes the input sequence, like Mathematica's Permute by with indices starting at 0.
+	>>> permuteList(['a','b','c','d'], [0, 2, 3, 1])
+	['a', 'd', 'b', 'c']
+	"""
+	return [seq[p] for p in permutation]

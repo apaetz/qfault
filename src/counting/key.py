@@ -181,6 +181,15 @@ class KeySplitter(KeyManipulator):
         
         return keys
     
+class KeyPermuter(KeyManipulator):
+    
+    def __init__(self, manipulator, permutation):
+        super(KeyPermuter, self).__init__(manipulator)
+        self.permutation = permutation
+        
+    def _manipulate(self, key):
+        return tuple(listutils.permute(key[:len(self.permutation)], self.permutation)) + key[len(self.permutation):]
+    
 class KeyConcatenator(KeyManipulator):
     
     def __init__(self, *manipulators):
@@ -194,6 +203,18 @@ class KeyConcatenator(KeyManipulator):
 
     def _manipulate(self, keys):
         return sum(keys, tuple())
+    
+class KeyMerger(KeyManipulator):
+    '''
+    Merges a key with multiple blocks into a key with a single block.
+    '''
+    def __init__(self, manipulator, keyLengths):
+        super(KeyMerger, self).__init__(manipulator)
+        self.keyLengths = keyLengths
+        
+    def _manipulate(self, key):
+        merged = bits.concatenate(key[:len(self.keyLengths)], self.keyLengths, reverse=True)
+        return (merged,) + key[len(self.keyLengths):]
 
 class MultiManipulatorAdapter(object):
     
