@@ -738,25 +738,6 @@ class ParallelComponent(CompositeComponent):
 		def _manipulate(self, tup):
 			return tup[self.rotation:] + tup[:self.rotation]
 		
-class BlockPermutation(Filter):
-	'''
-	Noiselessly permutes the logical blocks according to the given permutation.
-	Permutation is given in one-line notation.  For example, the permutation
-	[0,2,1,3] on (a,b,c,d) yields (a,c,b,d).
-	'''
-	
-	def __init__(self, inBlocks, permutation):
-		self.perm = permutation
-		self._inBlocks = inBlocks
-		super(BlockPermutation, self).__init__()
-		
-	def inBlocks(self):
-		return self._inBlocks
-		
-	def outBlocks(self):
-		return tuple(listutils.permute(self.inBlocks(), self.perm))
-		
-	def keyPropagator(self, subPropagator=IdentityManipulator()):
-		return KeyPermuter(subPropagator, self.perm)
+
 	
 	
