@@ -37,6 +37,9 @@ class Locations(object):
 	def blocknames(self):
 		return counterUtils.allBlocks(self)
 	
+	def blocklengths(self):
+		return counterUtils.blockLengths(self)
+	
 	
 class LocationCount(tuple):
 		'''

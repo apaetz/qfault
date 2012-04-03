@@ -88,7 +88,7 @@ class Scheme(object):
         logger.info('Computing inputs for %s', component)
         
         eRange = range(1 << code.n)
-        errorList = [PauliError(xbits=eX, zbits=eZ) for eX in eRange for eZ in eRange]
+        errorList = [PauliError(code.n, xbits=eX, zbits=eZ) for eX in eRange for eZ in eRange]
         keyGen = MultiBlockSyndromeKeyGenerator(inBlocks)
         
         inputs = {}

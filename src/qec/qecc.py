@@ -48,6 +48,7 @@ class QeccNone(Qecc):
     
     def __init__(self, n):
         super(self.__class__, self).__init__('QeccNone', n, n, 0)
+             
     
 class StabilizerCode(Qecc):
     
@@ -310,6 +311,62 @@ class CssCode(StabilizerCode):
 #
 #    def getCode(self):
 #        return self.code
+
+
+class ConcatenatedCode(StabilizerCode):
+    
+    def __init__(self, top, bottom):
+        assert(1 == bottom.k)  # Only support one-qubit concatenation for now.
+        
+        n = top.n * bottom.n
+        k = top.k
+        d = top.d * bottom.d
+        name = str(top) + "^" + str(bottom)
+        super(ConcatenatedCode, self).__init__(name, n, k, d)
+        
+        self._bottom = bottom
+        self._top = top
+
+    def stabilizerGenerators(self):
+        gensBottom = self._bottom.stabilizerGenerators()
+        gensTop = self._top.stabilizerGenerators()
+        Id = Pauli.I << self.n-1
+        
+        generators = []
+        for botgen in gensBottom:
+            generators += [Id * (botgen << self._bottom.n * i) for i in range(self._top.n)]
+        
+        for topgen in gensTop:
+            gen = self._expandTopOperator(topgen)
+            generators.append(gen)
+        
+        return generators
+    
+    def _expandTopOperator(self, operator):
+        nBot = self._bottom.n
+        logBottom = self._bottom.logicalOperators()
+        pauliList = operator.asList()
+        
+        op = PauliError(0)
+        for pauli in pauliList:
+            subOp = PauliError(nBot)
+            for etype in pauli.types():
+                subOp ^= logBottom[0][etype]
+            op += subOp
+
+        return op
+
+    def normalizerGenerators(self):
+        return tuple(self._expandTopOperator(norm) for norm in self._top.normalizerGenerators())
+
+
+    def logicalOperators(self):
+        logicals = []
+        for qubitOps in self._top.logicalOperators():
+            logicals.append({etype: self._expandTopOperator(op) for etype, op in qubitOps.iteritems()})
+
+        return logicals
+
 
         
 class BellState(CssCode):

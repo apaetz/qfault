@@ -21,7 +21,7 @@ class TestAdapter(testComponent.ComponentTestCase):
         
         for eX in xrange(1 << code.n):
             for eZ in xrange(1 << code.n):
-                pauli = PauliError(eX, eZ)
+                pauli = PauliError(code.n, eX, eZ)
                 key = (generator.getKey(pauli),)
                 decoded = keyDecoder.asPauli(propagator(key)[0])
                 if (decoded != code.decodeError(pauli)):

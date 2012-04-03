@@ -88,20 +88,21 @@ def countErrors(k, locations, noise, keyGenerator=DefaultErrorKeyGenerator):
 	
 	"""
 	
-	blocknames = locations.blocknames()
+	blocklengths = locations.blocklengths()
 	
 	if 0 == k:
 		# Only possible error with 0 failures is the trivial one
-		error = {name: Pauli.I for name in blocknames}
+		error = {name: Pauli.I for name in blocklengths}
 		return {keyGenerator.getKey(error): 1}
 		
-	extraArgs = [keyGenerator, blocknames, noise]
+	extraArgs = [keyGenerator, blocklengths, noise]
 	return countErrorsParallel(k, locations, countLocationSets, extraArgs)
 
 
-def countLocationSets(lSets, keyGenerator, blocknames, noise):
+def countLocationSets(lSets, keyGenerator, blocklengths, noise):
 
 	counts = {}
+	blocknames = blocklengths.keys()
 	
 	for ls in lSets:
 		# The set of possible errors can be different for each location.
@@ -112,8 +113,8 @@ def countLocationSets(lSets, keyGenerator, blocknames, noise):
 			# ls is the set of locations under consideration.
 			# eIndexes is a list of indexes, one for each location, that represent error types.
 			
-			X = [0 for _ in blocknames]
-			Z = [0 for _ in blocknames]
+			X = [0 for _ in blocklengths]
+			Z = [0 for _ in blocklengths]
 			totalWeight = 1
 			
 			for j in range(k):
@@ -141,7 +142,7 @@ def countLocationSets(lSets, keyGenerator, blocknames, noise):
 				if e[zType] & 2:
 					Z = [Z[i] ^ l['Z2']['Z'][name] for i,name in enumerate(blocknames)]
 
-			blockErrors = {name: PauliError(X[i], Z[i]) for i,name in enumerate(blocknames)}
+			blockErrors = {name: PauliError(blocklengths[name], X[i], Z[i]) for i,name in enumerate(blocknames)}
 			errorKey = keyGenerator.getKey(blockErrors)
 			#print 'blockErrors=', blockErrors, 'key=', errorKey
 			counts[errorKey] = counts.get(errorKey, 0) + totalWeight
