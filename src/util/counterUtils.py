@@ -276,6 +276,19 @@ def allBlocks(locations):
 			blocks.add(loc['block2'])
 	return blocks
 
+def blockLengths(locations):
+	"""Returns a dictionary containing length of each block used by locations in the input list."""
+	blocks = {}
+	for loc in locations:
+		blockname = loc['block1']
+		bit = loc['bit1']
+		blocks[blockname] = max(blocks.get(blockname, 0), bit+1)
+		if 'block2' in loc: 
+			blockname = loc['block2']
+			bit = loc['bit2']
+			blocks[blockname] = max(blocks.get(blockname, 0), bit+1)
+	return blocks
+
 
 propagateNoOpTypes = set(['rest', 'prepX', 'prepZ', 'measX', 'measZ'])
 

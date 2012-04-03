@@ -3,7 +3,7 @@ Created on Jan 20, 2010
 
 @author: adam
 '''
-from util import bits
+from util import bits, listutils, iteration
 
 _strLookup = ('I', 'Z', 'X', 'Y')
 
@@ -34,39 +34,48 @@ class PauliError(object):
 	allows the tensor product to be read-off directly
 	from left to right.
 	
-	>>> str(PauliError(0b110, 0b011))
+	>>> str(PauliError(3,0b110, 0b011))
 	'XYZ'
 	'''
 	
-	__slots__ = ['ebits']
+	__slots__ = ['ebits', 'length']
 	
 	# TODO: generalize for a variable number of arguments.
 	@staticmethod
 	def Tensor(a, b):
 		'''
 		Returns the tensor product of 'a' and 'b'.
-		>>> str(PauliError.Tensor(Pauli.Z, Pauli.Y)
+		>>> str(PauliError.Tensor(Pauli.Z, Pauli.Y))
 		'ZY'
-		>>> str(PauliError.Tensor(Pauli.X), Pauli.I)
+		>>> str(PauliError.Tensor(Pauli.X, Pauli.I))
 		'XI'
 		'''
-		shift = max(bits.numbits(b[xType]), bits.numbits(b[zType]), 1)
-		return PauliError((a[xType]<<shift) + b[xType],
+		shift = b.length
+		return PauliError(a.length + b.length, 
+						  (a[xType]<<shift) + b[xType],
 						  (a[zType]<<shift) + b[zType])
 	
-	def __init__(self, xbits=0, zbits=0):
+	def __init__(self, length, xbits=0, zbits=0):
 		self.ebits = { xType: xbits, zType: zbits }
+		self.length = length
 		
 	def types(self):
 		return [etype for etype in [xType, zType] if self[etype]]
+	
+	def asList(self):
+		'''Returns the error as a list of single-qubit Pauli errors.'''
+		xlist = bits.bitsToList(self[xType], self.length)
+		zlist = bits.bitsToList(self[zType], self.length)
+		
+		return [PauliError(1, xbits=xlist[i], zbits=zlist[i]) for i in range(self.length)]
 	
 	def commutesWith(self, other):
 		'''
 		Returns True if the commutator with 'other' is zero, and False otherwise.
 		
-		>>> YY = PauliError(0b11,0b11)
-		>>> YZ = PauliError(0b10,0b11)
-		>>> XY = PauliError(0b11,0b01)
+		>>> YY = PauliError(2, 0b11,0b11)
+		>>> YZ = PauliError(2, 0b10,0b11)
+		>>> XY = PauliError(2, 0b11,0b01)
 		>>> YY.commutesWith(XY)
 		False
 		>>> YZ.commutesWith(XY)
@@ -76,7 +85,7 @@ class PauliError(object):
 		
 	def __getitem__(self, pauli):
 		'''
-		>>> PauliError(0b10, 0b01)[xType]
+		>>> PauliError(2, 0b10, 0b01)[xType]
 		2
 		'''
 		return self.ebits[pauli]
@@ -92,10 +101,11 @@ class PauliError(object):
 	
 	def __xor__(self, other):
 		'''
-		>>> str(PauliError(0b11, 0b01) ^ PauliError(0b01, 0b11))
+		>>> str(PauliError(2, 0b11, 0b01) ^ PauliError(2, 0b01, 0b11))
 		'YI'
 		'''
-		return PauliError(self[xType] ^ other[xType], 
+		return PauliError(self.length,
+						  self[xType] ^ other[xType], 
 						  self[zType] ^ other[zType])
 
 	def __ixor__(self, other):
@@ -117,9 +127,9 @@ class PauliError(object):
 		'''
 		Concatenate with another error.
 		This is equivalent of taking the tensor product.
-		>>> str(PauliError(0,1) + PauliError(1,1))
+		>>> str(PauliError(1,0,1) + PauliError(1,1,1))
 		'ZY'
-		>>> str(PauliError(1,0) + PauliError(0,0))
+		>>> str(PauliError(1,1,0) + PauliError(1,0,0))
 		'XI'
 		'''
 		return self.Tensor(self, other)
@@ -127,29 +137,27 @@ class PauliError(object):
 	def __pow__(self, exp):
 		'''
 		Returns the tensor product of the error with itself 'exp' times.
-		>>> str(PauliError(xbits=1) ** 3)
+		>>> str(PauliError(1,xbits=1) ** 3)
 		'XXX'
 		'''
 		return sum([self]*(exp-1), self)
 		
 	def __rshift__(self, i):
-		return PauliError(xbits=self[xType] >> i, zbits=self[zType] >> i)
+		return PauliError(self.length - i, xbits=self[xType] >> i, zbits=self[zType] >> i)
 
 	def __lshift__(self, i):
-		return PauliError(xbits=self[xType] << i, zbits=self[zType] << i)
+		return PauliError(self.length + i, xbits=self[xType] << i, zbits=self[zType] << i)
 
 		
 	def __str__(self):
 		X = self[xType]
 		Z = self[zType]
 		s = []
-		while (X > 0) or (Z > 0):
+		for _ in range(self.length):
 			s += _strLookup[2*(X&1) + int(Z&1)]
 			X >>= 1
 			Z >>= 1
 			
-		if 0 == len(s):
-			s = ['I']
 		return ''.join(reversed(s))
 	
 	def __repr__(self):
@@ -160,10 +168,10 @@ class Pauli(object):
 	'''
 	'''
 
-	I = PauliError()
-	X = PauliError(1,0)
-	Z = PauliError(0,1)
-	Y = PauliError(1,1)
+	I = PauliError(1)
+	X = PauliError(1,1,0)
+	Z = PauliError(1,0,1)
+	Y = PauliError(1,1,1)
 	
 	_dualTable = {
 				  I: I,

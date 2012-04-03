@@ -44,7 +44,7 @@ class TestCnot(testComponent.ComponentTestCase):
 				e = {'0': e0, '1': e1}
 				key = generator.getKey(e)
 				propagated = propagator(key)
-				expected = {'0': e0 * PauliError(zbits=e1[zType]), '1': e1 * PauliError(xbits=e0[xType])}
+				expected = {'0': e0 * PauliError(1,zbits=e1[zType]), '1': e1 * PauliError(1,xbits=e0[xType])}
 				expectedKey = generator.getKey(expected)
 #				print 'e=', e, 'key=', key, 'propagated=', propagated, 'expected=', expected
 				assert propagated == expectedKey
@@ -57,7 +57,7 @@ class TestCnot(testComponent.ComponentTestCase):
 class TestMeas(testComponent.ComponentTestCase):
 	
 	@staticmethod
-	def Filter(e, basis):
+	def Filter(e, length, basis):
 		if Pauli.X == basis:
 			e = PauliError(zbits=e[zType])
 		elif Pauli.Z == basis:
@@ -102,7 +102,7 @@ class TestMeas(testComponent.ComponentTestCase):
 				key = generator.getKey(e)
 				propagated = propagator(key)
 				# Filter the part of the error that can't be detected by measurement.
-				expected = {'0': self.Filter(e0, basis)}
+				expected = {'0': self.Filter(e0, 1, basis)}
 				expectedKey = generator.getKey(expected)
 #				print 'e=', e, 'key=', key, 'propagated=', propagated, 'expected=', expected
 				assert propagated == expectedKey
