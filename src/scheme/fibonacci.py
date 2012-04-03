@@ -5,9 +5,11 @@ Created on 2012-04-02
 '''
 
 from counting.block import Block
-from counting.component.base import ParallelComponent, SequentialComponent, Prep,\
-    ConcatenationFilter, BlockPermutation
+from counting.component import transversal
+from counting.component.base import ParallelComponent, SequentialComponent, Prep, \
+    ConcatenationFilter
 from counting.component.bell import BellPair, BellMeas
+from counting.component.block import BlockDiscard, BlockPermutation
 from counting.component.teleport import Teleport
 from counting.countErrors import error, mapCounts
 from counting.key import IdentityManipulator, KeyMerger, SyndromeKeyGenerator
@@ -38,9 +40,11 @@ class FibonacciScheme(Scheme):
         self.bpt = BellPairTeleport(kBPT, bellPair, teleport)
         self.bp2 = BellPair(kBPT, PrepLevel2(kBPT, self.bpt, Pauli.X), PrepLevel2(kBPT, self.bpt, Pauli.Z), kBPT)
         self.bpt2 = BellPairTeleport(kBPT, self.bp2, teleport)
+        self.sbt = SubblockTeleport(kBPT, bellPair, [0,1,2,3])
         
     def count(self):
-        return self.bpt2.count(self.defaultNoiseModels, Pauli.Y)
+#        return self.bpt2.count(self.defaultNoiseModels, Pauli.Y)
+        return self.sbt.count(self.defaultNoiseModels, Pauli.Y)
     
     
 class BellPairTeleport(SequentialComponent):
@@ -65,31 +69,21 @@ class PrepLevel2(SequentialComponent):
         subs.append(ConcatenationFilter(code, code))
             
         super(SequentialComponent, self).__init__(kGood, subcomponents=subs)
-
-#    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
-#        result = super(PrepLevel2, self).count(noiseModels, pauli, inputResult, kMax)
-#        result = self.propagateCounts(result)
-#        return result
-#
-#    def outBlocks(self):
-#        '''
-#        Output a single level-2 block rather than four level-1 blocks.
-#        '''
-#        subblocks = super(PrepLevel2, self).outBlocks()
-#        code = subblocks[0].getCode()
-#        catCode = ConcatenatedCode(code, code)
-#        return tuple([Block('2-Prep', catCode)])
-#
-#
-#    def keyPropagator(self, subPropagator=IdentityManipulator()):
-#        '''
-#        Convert the four level-1 blocks into a single level-2 block.
-#        '''
-#        subPropagator = super(PrepLevel2, self).keyPropagator(subPropagator)
-#        subblocks = super(PrepLevel2, self).outBlocks()
-#        keyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in subblocks]
-#
-#        return KeyMerger(subPropagator, keyLengths)
+        
+class SubblockTeleport(SequentialComponent):
+    
+    def __init__(self, kGood, bellPair, permutation):
+        code = bellPair.outBlocks()[0].getCode()
+        
+        twinBP = ParallelComponent(kGood, bellPair, bellPair)
+        perm = BlockPermutation(twinBP.outBlocks(), permutation)
+        discard2 = BlockDiscard(perm.outBlocks(), 2)
+        cnot = transversal.TransCnot(kGood, code, code)
+        discard1 = BlockDiscard(cnot.outBlocks(), 1)
+        bm = BellMeas(kGood, code, kGood, kGood, kGood)
+        teleport = Teleport(kGood, bellPair, bm)
+        
+        super(SubblockTeleport, self).__init__(kGood, subcomponents=[twinBP, perm, discard2, cnot, discard1, teleport])
 
     
         
@@ -102,7 +96,7 @@ if __name__ == '__main__':
     from counting import countParallel
     countParallel.setPool(countParallel.DummyPool())
     
-    kBPT = {Pauli.Y: 2}
+    kBPT = {Pauli.Y: 1}
     scheme = FibonacciScheme(kBPT)
     
     count = scheme.count()
