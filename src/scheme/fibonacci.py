@@ -4,14 +4,16 @@ Created on 2012-04-02
 @author: adam
 '''
 
-from counting.component.base import ParallelComponent, \
-    SequentialComponent, Prep
+from counting.block import Block
+from counting.component.base import ParallelComponent, SequentialComponent, Prep,\
+    ConcatenationFilter, BlockPermutation
 from counting.component.bell import BellPair, BellMeas
 from counting.component.teleport import Teleport
-from counting.countErrors import error
+from counting.countErrors import error, mapCounts
+from counting.key import IdentityManipulator, KeyMerger, SyndromeKeyGenerator
 from qec import ed422
 from qec.error import Pauli
-from qec.qecc import StabilizerState
+from qec.qecc import StabilizerState, ConcatenatedCode
 from scheme import Scheme
 
 class FibonacciScheme(Scheme):
@@ -34,9 +36,11 @@ class FibonacciScheme(Scheme):
         teleport = Teleport(kBPT, bellPair, bellMeas)
         
         self.bpt = BellPairTeleport(kBPT, bellPair, teleport)
+        self.bp2 = BellPair(kBPT, PrepLevel2(kBPT, self.bpt, Pauli.X), PrepLevel2(kBPT, self.bpt, Pauli.Z), kBPT)
+        self.bpt2 = BellPairTeleport(kBPT, self.bp2, teleport)
         
     def count(self):
-        return self.bpt.count(self.defaultNoiseModels, Pauli.Y)
+        return self.bpt2.count(self.defaultNoiseModels, Pauli.Y)
     
     
 class BellPairTeleport(SequentialComponent):
@@ -45,8 +49,56 @@ class BellPairTeleport(SequentialComponent):
         parallelTeleport = ParallelComponent(kGood, teleport, teleport)
         super(SequentialComponent, self).__init__(kGood, subcomponents=[bellPair, parallelTeleport])
         
+
+class PrepLevel2(SequentialComponent):
+    
+    def __init__(self, kGood, bellPair, eigenstate=Pauli.Z):
+        twinBP = ParallelComponent(kGood, bellPair, bellPair)
+        subs = [twinBP]
+        
+        if (Pauli.Z == eigenstate):
+            # |0> is prepared by permuting the second and third logical blocks.
+            perm = BlockPermutation(twinBP.outBlocks(), [0,2,1,3])
+            subs.append(perm)
+            
+        code = subs[-1].outBlocks()[0].getCode()
+        subs.append(ConcatenationFilter(code, code))
+            
+        super(SequentialComponent, self).__init__(kGood, subcomponents=subs)
+
+#    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+#        result = super(PrepLevel2, self).count(noiseModels, pauli, inputResult, kMax)
+#        result = self.propagateCounts(result)
+#        return result
+#
+#    def outBlocks(self):
+#        '''
+#        Output a single level-2 block rather than four level-1 blocks.
+#        '''
+#        subblocks = super(PrepLevel2, self).outBlocks()
+#        code = subblocks[0].getCode()
+#        catCode = ConcatenatedCode(code, code)
+#        return tuple([Block('2-Prep', catCode)])
+#
+#
+#    def keyPropagator(self, subPropagator=IdentityManipulator()):
+#        '''
+#        Convert the four level-1 blocks into a single level-2 block.
+#        '''
+#        subPropagator = super(PrepLevel2, self).keyPropagator(subPropagator)
+#        subblocks = super(PrepLevel2, self).outBlocks()
+#        keyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in subblocks]
+#
+#        return KeyMerger(subPropagator, keyLengths)
+
+    
+        
         
 if __name__ == '__main__':
+    import util.cache
+    util.cache.enableFetch(False)
+#    util.cache.enableMemo(False)
+    
     from counting import countParallel
     countParallel.setPool(countParallel.DummyPool())
     
@@ -55,3 +107,4 @@ if __name__ == '__main__':
     
     count = scheme.count()
     print count.counts
+    print count.blocks

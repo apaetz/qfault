@@ -167,6 +167,7 @@ def concatenate(seq, lengths, reverse=False):
     bits = 0
     for i in indices:
         bits = (bits << lengths[i]) + seq[i]
+    
     return bits
 
 def lsbMask(n):

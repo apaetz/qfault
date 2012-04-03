@@ -15,15 +15,16 @@ from counting import probability, key, countErrors
 from counting.block import Block
 from counting.countErrors import mapCounts, countBlocksBySyndrome
 from counting.countParallel import convolve
-from counting.key import KeyManipulator, \
-	SyndromeKeyGenerator, IdentityManipulator
+from counting.key import KeyManipulator, SyndromeKeyGenerator, \
+	IdentityManipulator, KeyMerger, KeyPermuter
 from counting.location import Locations
 from counting.result import CountResult
 from qec.error import Pauli
-from util.cache import fetchable
-import logging
-import hashlib
+from qec.qecc import ConcatenatedCode
 from util import listutils
+from util.cache import fetchable
+import hashlib
+import logging
 
 logger = logging.getLogger('counting.component')
 
@@ -605,6 +606,39 @@ class PostselectionFilter(Filter):
 		
 		return prAccept# * prSubs
 	
+	
+class ConcatenationFilter(Filter):
+	
+	def __init__(self, topCode, bottomCode):
+		super(ConcatenationFilter, self).__init__()
+		self.top = topCode
+		self.bottom = bottomCode
+	
+	def inBlocks(self):
+		return tuple([Block('Subblock', self.bottom)]*self.top.n)
+	
+	def outBlocks(self):
+		return (Block('Cat', self.top), )
+
+#	def outBlocks(self):
+#		'''
+#		Output a single level-2 block rather than four level-1 blocks.
+#		'''
+#		subblocks = super(BellPairLevel2, self).outBlocks()
+#		code = subblocks[0].getCode()
+#		catCode = ConcatenatedCode(code, code)
+#		return tuple([Block('2-Prep', catCode)])
+
+
+	def keyPropagator(self, subPropagator=IdentityManipulator()):
+		'''
+		Convert the four level-1 blocks into a single level-2 block.
+		'''
+		subblockLength = len(SyndromeKeyGenerator(self.bottom, None).parityChecks())
+		keyLengths = [subblockLength] * self.top.n
+
+		return KeyMerger(subPropagator, keyLengths)
+	
 class ParallelComponent(CompositeComponent):
 	'''
 	A component for which sub-components are parallel in time (and sequential in space).
@@ -703,4 +737,26 @@ class ParallelComponent(CompositeComponent):
 			
 		def _manipulate(self, tup):
 			return tup[self.rotation:] + tup[:self.rotation]
+		
+class BlockPermutation(Filter):
+	'''
+	Noiselessly permutes the logical blocks according to the given permutation.
+	Permutation is given in one-line notation.  For example, the permutation
+	[0,2,1,3] on (a,b,c,d) yields (a,c,b,d).
+	'''
+	
+	def __init__(self, inBlocks, permutation):
+		self.perm = permutation
+		self._inBlocks = inBlocks
+		super(BlockPermutation, self).__init__()
+		
+	def inBlocks(self):
+		return self._inBlocks
+		
+	def outBlocks(self):
+		return tuple(listutils.permute(self.inBlocks(), self.perm))
+		
+	def keyPropagator(self, subPropagator=IdentityManipulator()):
+		return KeyPermuter(subPropagator, self.perm)
+	
 	
