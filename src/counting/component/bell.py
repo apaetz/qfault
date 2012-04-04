@@ -6,10 +6,14 @@ Components for preparing Bell states and making Bell measurements.
 @author: adam
 '''
 from counting.component.base import ParallelComponent,\
-    SequentialComponent
+    SequentialComponent, Filter
 from counting.component.transversal import TransCnot, TransMeas
-from qec.error import Pauli
+from qec.error import Pauli, xType, zType
 import logging
+from counting.key import SyndromeKeyGenerator, MultiBlockSyndromeKeyGenerator,\
+    KeyManipulator, IdentityManipulator
+from counting.block import Block
+import counting
 
 logger = logging.getLogger('component')
 
@@ -25,10 +29,46 @@ class BellPair(SequentialComponent):
         cnot = TransCnot(kGoodCnot, ctrlCode, targCode)
         
         prep = ParallelComponent(kGood, plus, zero)
+        bf = BellFilter(cnot.outBlocks()[0].getCode())
 
         # Order is important here.  The preps must be in front of the CNOT.
-        super(BellPair, self).__init__(kGood, subcomponents=(prep, cnot))
+        super(BellPair, self).__init__(kGood, subcomponents=(prep, cnot, bf))
+        
+        
+class BellFilter(Filter):
     
+    def __init__(self, code):
+        super(BellFilter, self).__init__()
+        
+        self.code = code
+        logicals = code.logicalOperators()[0]
+        blocks = self.inBlocks()
+        generator = MultiBlockSyndromeKeyGenerator(blocks)
+        xx = {blocks[0].name: logicals[xType], blocks[1].name: logicals[xType]}
+        zz = {blocks[0].name: logicals[zType], blocks[1].name: logicals[zType]}
+        xxKey = generator.getKey(xx)
+        zzKey = generator.getKey(zz)
+        
+        self.keys = (xxKey, zzKey)
+        self.trivialKey = generator.getKey({str(blocks[0]): Pauli.I, str(blocks[1]): Pauli.I})
+        
+    def inBlocks(self):
+        return (Block("A", self.code), Block("B", self.code))
+        
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        return self.LogicalPropagator(subPropagator, self.keys, self.trivialKey)
+        
+    class LogicalPropagator(KeyManipulator):
+        
+        def __init__(self, manipulator, logicalKeys, trivialKey):
+            self.logicalKeys = logicalKeys
+            self.trivialKey = trivialKey
+            super(BellFilter.LogicalPropagator, self).__init__(manipulator)
+            
+        def _manipulate(self, key):
+            if key in self.logicalKeys:
+                return self.trivialKey
+            return key
     
 class BellMeas(SequentialComponent):
     '''

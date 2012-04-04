@@ -70,6 +70,16 @@ def mapCounts(counts, keymap):
 		
 	return newCounts
 
+def maxCount(*countss):
+	lengths = [len(counts) for counts in countss]
+	countsMax = [{} for _ in range(max(lengths))]
+	for counts in countss:
+		for k in range(len(counts)):
+			for key, val in counts[k].iteritems():
+				countsMax[k][key] = max(countsMax[k].get(key, val), val)
+				
+	return countsMax
+
 
 
 #@fetchable
@@ -158,6 +168,4 @@ def pauliFilter(locations, pauli):
 		locations = locations.filterAgainst('prep' + str(pauli))
 		
 	return locations
-
-
 

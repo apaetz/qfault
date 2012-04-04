@@ -237,8 +237,8 @@ class StabilizerState(StabilizerCode, Codeword):
     def normalizerGenerators(self):
         return tuple([])
     
-#    def logicalStabilizers(self):
-#        return self.lStabs
+    def logicalOperators(self):
+        return self.code.logicalOperators()
         
     def getCode(self):
         return self.code
