@@ -555,6 +555,7 @@ class Filter(Component):
 		super(Filter, self).__init__({})
 		
 	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+		self._log(logging.INFO, "Applying filter.")
 		return self.propagateCounts(inputResult)
 
 	def keyPropagator(self, subPropagator=IdentityManipulator()):

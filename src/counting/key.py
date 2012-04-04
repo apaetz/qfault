@@ -240,7 +240,7 @@ class KeyCopier(KeyManipulator):
             
         self._toBlock = toBlock
         self._fromBlock = fromBlock
-    
+            
     def _manipulateMask(self, key):
         newKey = list(key)
         newKey[self._toBlock] ^= key[self._fromBlock] & self._mask

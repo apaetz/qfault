@@ -10,13 +10,14 @@ from counting.component.base import ParallelComponent, SequentialComponent, Prep
     ConcatenationFilter
 from counting.component.bell import BellPair, BellMeas
 from counting.component.block import BlockDiscard, BlockPermutation
-from counting.component.teleport import Teleport
-from counting.countErrors import error, mapCounts
+from counting.component.teleport import Teleport, TeleportED
+from counting.countErrors import error, mapCounts, maxCount
 from counting.key import IdentityManipulator, KeyMerger, SyndromeKeyGenerator
 from qec import ed422
 from qec.error import Pauli
 from qec.qecc import StabilizerState, ConcatenatedCode
 from scheme import Scheme
+from counting.component.adapter import IdealDecoder
 
 class FibonacciScheme(Scheme):
     '''
@@ -35,18 +36,32 @@ class FibonacciScheme(Scheme):
         
         bellPair = BellPair(kBPT, prepX, prepZ, kBPT)
         bellMeas = BellMeas(kBPT, self.code, kGoodCnot=kBPT, kGoodMeasX=kBPT, kGoodMeasZ=kBPT)
-        teleport = Teleport(kBPT, bellPair, bellMeas)
+        teleport = TeleportED(kBPT, bellPair, bellMeas)
         
+        self.bp = bellPair
         self.bpt = BellPairTeleport(kBPT, bellPair, teleport)
         self.bp2 = BellPair(kBPT, PrepLevel2(kBPT, self.bpt, Pauli.X), PrepLevel2(kBPT, self.bpt, Pauli.Z), kBPT)
         self.bpt2 = BellPairTeleport(kBPT, self.bp2, teleport)
-        self.sbt = SubblockTeleport(kBPT, bellPair, [0,1,2,3])
+        
+        permutations = ([0,2,1,3], [0,3,1,2], [1,2,0,3], [1,3,0,2])
+    
+        self.sbtList = [SubblockTeleport(kBPT, self.bpt, perm) for perm in permutations]
         
     def count(self):
 #        return self.bpt2.count(self.defaultNoiseModels, Pauli.Y)
-        return self.sbt.count(self.defaultNoiseModels, Pauli.Y)
-    
-    
+
+#        results = [sbt.count(self.defaultNoiseModels, Pauli.Y) for sbt in self.sbtList]
+#        countss = [result.counts for result in results]
+#        print countss
+#        countsMax = maxCount(*countss)
+#        print countsMax
+#        
+#        return countsMax
+#    
+        bptDecode = BPTLevelOneSingleBlock(self.bpt.kGood, self.bpt)
+        result = bptDecode.count(self.defaultNoiseModels, Pauli.Y)
+        print result.counts
+        
 class BellPairTeleport(SequentialComponent):
     
     def __init__(self, kGood, bellPair, teleport):
@@ -83,10 +98,16 @@ class SubblockTeleport(SequentialComponent):
         bm = BellMeas(kGood, code, kGood, kGood, kGood)
         teleport = Teleport(kGood, bellPair, bm)
         
-        super(SubblockTeleport, self).__init__(kGood, subcomponents=[twinBP, perm, discard2, cnot, discard1, teleport])
-
-    
+        super(SubblockTeleport, self).__init__(kGood, subcomponents=[twinBP, perm, discard2, cnot, discard1, teleport])    
         
+        
+class BPTLevelOneSingleBlock(SequentialComponent):
+    
+    def __init__(self, kGood, bpt):
+        discard = BlockDiscard(bpt.outBlocks(), 1)
+        decode = IdealDecoder(discard.outBlocks()[0].getCode())
+        
+        super(BPTLevelOneSingleBlock, self).__init__(kGood, subcomponents=[bpt, discard, decode])
         
 if __name__ == '__main__':
     import util.cache
@@ -96,9 +117,9 @@ if __name__ == '__main__':
     from counting import countParallel
     countParallel.setPool(countParallel.DummyPool())
     
-    kBPT = {Pauli.Y: 1}
+    kBPT = {Pauli.Y: 2}
     scheme = FibonacciScheme(kBPT)
     
     count = scheme.count()
-    print count.counts
-    print count.blocks
+#    print count.counts
+#    print count.blocks

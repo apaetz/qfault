@@ -69,11 +69,13 @@ class TeleportWithMeas(SequentialComponent):
         return (self.subcomponents()[1].inBlocks()[0],)
     
     def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        self._log(logging.INFO, "Counting {0}".format(pauli))
+        
         # First, extend the input to all three blocks.
         extendedInput = self._extendInput(inputResult)
         
-        # Now propagate the input through the sub-components.
-        for sub in self:
+        # Now propagate the input through the Bell measurement and transversal rest.
+        for sub in self.subcomponents()[1:]:
             extendedInput = sub.propagateCounts(extendedInput)
         
         # Now count normally.
@@ -160,6 +162,9 @@ class Teleport(SequentialComponent):
         return (self[0].outBlocks()[2],)
     
     def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        
+        nblocks = len(inputResult.counts[0].keys()[0])
+        
         result = super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
         
         # Now trace out the measurement results
@@ -184,15 +189,15 @@ class TeleportED(SequentialComponent):
     
     
     def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
-        inBlock = bellMeas.inBlocks()[0]
+#        inBlock = bellMeas.inBlocks()[0]
         teleport = TeleportWithMeas(kGood, bellPair, bellMeas, enableRest)
         edFilter = TeleportEDFilter(teleport)
         super(TeleportED, self).__init__(kGood, subcomponents=(teleport, edFilter))
-        self._outBlock = bellPair.outBlocks()[1]
+#        self._outBlock = bellPair.outBlocks()[1]
         
         # Delegate to subcomponents
-        self.inBlocks = teleport.inBlocks
-        self.outBlocks = edFilter.outBlocks
+#        self.inBlocks = teleport.inBlocks
+#        self.outBlocks = edFilter.outBlocks
         
     def prAccept(self, noiseModels, inputResult, kMax):
         inputResult = self[0].count(noiseModels, Pauli.Y, inputResult, kMax)
@@ -244,7 +249,10 @@ class TeleportEDFilter(PostselectionFilter):
         # block 1 - Transversal Z-basis measurement
         # block 2 - Teleported data
         def accept(key):
-            return not(key[0] & rejectMask) and not(key[1] & rejectMask)
+            try:
+                return not(key[0] & rejectMask) and not(key[1] & rejectMask)
+            except:
+                pass
     
         return accept
         

@@ -17,6 +17,7 @@ import logging
 from counting.countErrors import mapCounts
 from util.counterUtils import locrest
 from counting.block import Block
+from copy import copy
 
 logger = logging.getLogger('component')
 
@@ -45,7 +46,7 @@ class TransCnot(CountableComponent):
         return tuple(Block(name, self.codes[name]) for name in self.blockorder)
     
     def outBlocks(self):
-        outCodes = self.codes
+        outCodes = copy(self.codes)
         # Input codes may actually be codewords.  But the output may be
         # entangled, so the output codes are just the underlying code.
         for block, code in outCodes.iteritems():
@@ -83,7 +84,7 @@ class TransCnot(CountableComponent):
         fromTargMask = bits.listToBits((0 == check[zType]) for check in parityChecks)
         
         ctrlNum = self.blockorder.index(self.ctrlName)
-        targNum = not ctrlNum
+        targNum = ctrlNum ^ 1
         
         ctrlCopier = KeyCopier(subPropagator, ctrlNum, targNum, mask=fromCtrlMask)
         targCopier = KeyCopier(ctrlCopier, targNum, ctrlNum, mask=fromTargMask)

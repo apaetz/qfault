@@ -29,7 +29,7 @@ class TestBellPair(testComponent.ComponentTestCase):
 		
 		bp = self.BellPair(kGood, code)
 		result = bp.count(noise, Pauli.X)
-		expected = [{(0, 0): 1}, {(0, 1): 2, (1, 0): 1, (1, 1): 1}]
+		expected = [{(0, 0): 1}, {(0, 1): 2, (1, 0): 1, (0, 0): 1}]
 		assert result.counts == expected
 		
 	def _getComponent(self, kGood, code):
