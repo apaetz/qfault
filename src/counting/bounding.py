@@ -88,7 +88,7 @@ def computeUBScalingFactor(Y, refY):
 	
 	
 
-def computeWeights(polys, xMin, xMax, numPoints=1000):
+def computeWeights(polys, xMin, xMax, numPoints=10000):
 	'''
 	Returns a reference polynomial P, and a set of weights {alpha_i}
 	such that alpha_i*P >= polys[i] over the interval [xMin,xMax].
