@@ -87,6 +87,9 @@ class DummyResult(object):
 		
 	def get(self):
 		return self._result
+	
+	def ready(self):
+		return True
 
 
 def enableFetchableMultiprocess():

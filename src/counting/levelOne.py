@@ -86,7 +86,7 @@ def transformedWeights(ancillaPairs, settings):
 #	settingsStr = str(settings).replace(' ', '').replace('.', '')
 	_, gMax = noise['X'].noiseRange()
 	gMax = min(gMax, pseudothresh)
-	gMin = gMax/10
+	gMin = gMax/100
 #	filename = 'plot-all-' + settingsStr
 #	plotPolyList(results.values(), gMin, gMax, filename, labelList=results.keys(), numPoints=10)
 #	
@@ -152,6 +152,7 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	gMin, gMax = noiseXZ.noiseRange()
 	cnotLoc = loccnot('A', 0, 'A', 1)
 	cnotWeight = sum(noiseXZ.getWeight(cnotLoc, e) for e in range(noiseXZ.numErrors(cnotLoc)))
+	print "cnotWeight=", cnotWeight, "noiseXZ=", noiseXZ.__class__, "numErrors=", noiseXZ.numErrors(cnotLoc) 
 	pMin = cnotWeight * gMin
 	pMax = cnotWeight * gMax
 	
