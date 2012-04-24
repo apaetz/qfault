@@ -58,8 +58,62 @@ def computeConcatenationLevel(gamma, targetNoiseRate, level1Events, epsilon):
 	return k, delta
 
 
+def PrRejectK(k, epsilon, pr_reject1, pr_reject2):
+	'''
+	Returns an upper bound on Pr[reject]^(k), the probability of rejecting
+	a a level-k ancilla.
+	'''
+	if k == 1:
+		return pr_reject1
+	if k == 2:
+		return pr_reject2
+
+	return epsilon**(4*(k-2) - 3) * pr_reject2
+
+def VerificationMultiplicityK(k, delta, pr_reject_k):
+	'''
+	Returns the number of level-k ancilla verifications required in order to
+	achieve a success probability of at least delta. 
+	'''
+	if 0 == pr_reject_k:
+		return 1
+	return math.log(delta / (4*k)) / math.log(pr_reject_k)
+#	return math.ceil(math.log(delta / k) / math.log(pr_reject_k))
+
+def VerificationMultiplicities(k, delta, epsilon, pr_reject1, pr_reject2):
+	'''
+	Returns a list of integers representing the number of ancilla preparations
+	required at each concatenation level in order to acheive an overall
+	success rate of at least delta in the level-k verification.
+	'''
+	
+	A_prep = 118
+	A_ECX = 4 * A_prep + 9*23
+	
+	multiplicities = [0] * k
+	for i in range(k):
+		m = VerificationMultiplicityK(k-i, delta/(k-i), PrRejectK(k-i, epsilon, pr_reject1, pr_reject2))
+		multiplicities[k-i-1] = m
+		delta = (delta - delta/(4*(k-i))) / (16* m * A_ECX)
+		
+	return multiplicities
+
+
+def RectangleGateOverhead(k, verification_multiplicities):
+	
+	if 0 == k:
+		return 1
+	
+	# First, count the number of level-(k-1) rectangles
+	A_prep = 118
+	A_ECX = verification_multiplicities[k-1] * (4 * A_prep + 9*23) + 2*23
+	A_rec = 4 * A_ECX + 23
+	
+	return A_rec * RectangleGateOverhead(k-1, verification_multiplicities)
+	
+
 def computeAncillaVerifications(k, K, A, prReject1, prReject2, deltaTarg, epsilon):
-	num = math.log(deltaTarg / (K * (4*A)**(K-k)))
+	num = math.log(deltaTarg / (4*K * A**(K-k)))
 	if k > 2:
 		den = math.log(epsilon**(4*(k-2) - 3)) + math.log(prReject2)
 	if k == 2:
@@ -70,17 +124,29 @@ def computeAncillaVerifications(k, K, A, prReject1, prReject2, deltaTarg, epsilo
 	return num / den
 
 def computeGateOverhead(Mk_list, Aprep):
-	Averify = 4 * Aprep + 23*3
-	Ak = 1
-	for m in Mk_list:
-		Ak *= (9*23 + Averify * m)
-		
+	
+	# TODO: write-up and double-check these equations.
+	Averify = 4 * Aprep
+	
+	Ak = sum((6 * 23**k) * m for k,m in enumerate(Mk_list))
+	Ak += Mk_list[0] * Averify
+	
+	Ak += (4*2 + 1) * 23**(len(Mk_list))
+			
 	return Ak
 
 def plotOverhead(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
 	
 	targetNoiseRates = [1e-12, 1e-10, 1e-9, 1e-6]
-	startingNoiseRates = [1e-6, 5e-6, 1e-5, 2e-5, 4e-5, 8e-5, 1e-4, 2e-4, 4e-4, 6e-4, 8e-4, 9e-4, 1e-3, 1.1e-3, 1.2e-3]
+	startingNoiseRates = [1e-6, 5e-6, 1e-5, 2e-5, 4e-5, 1e-4, 2e-4, 4e-4, 6e-4, 8e-4, 9e-4, 1e-3, 1.1e-3, 1.2e-3]
+	
+#	print [RectangleGateOverhead(k, [1]*k) for k in range(1,4)]
+#	return
+	
+	GammaX, _, GammaZ, _, _ = transformedWeights(((zeroPrep1, zeroPrep2), (zeroPrep3, zeroPrep4)), 
+												settings)
+	
+	logger.info("X offset={0}, Z offset={1}".format(GammaX(0), GammaZ(0)))
 	
 	level1Events, level2Events, _, prAccept1, prAccept2 = \
 		levelOneTwoBounds(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings)
@@ -98,25 +164,40 @@ def plotOverhead(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
 			level, delta = computeConcatenationLevel(gamma, t, level1Events, epsilon)
 			logger.info('Concatentation level for p={0} is {1}'.format(p, level))
 			
-			prReject1 = sum(1 - pr(gamma) for pr in prAccept1)
-			prReject2 = sum(1 - pr(gamma) for pr in prAccept2)
-			Mk_list = [computeAncillaVerifications(k, 
-												   level, 
-												   A,
-												   prReject1,
-												   prReject2, 
-												   delta, 
-												   epsilon) for k in range(1,level+1)]
-			
-			gateOverhead = computeGateOverhead(Mk_list, Aprep)
+			pr_reject1 = sum(1 - pr(gamma) for pr in prAccept1)
+			pr_reject2 = sum(1 - pr(gamma) for pr in prAccept2)
+#			Mk_list = [computeAncillaVerifications(k, 
+#												   level, 
+#												   A,
+#												   prReject1,
+#												   prReject2, 
+#												   delta, 
+#												   epsilon) for k in range(1,level+1)]
+#			
+#			gateOverhead = computeGateOverhead(Mk_list, Aprep)
+
+			multiplicities = VerificationMultiplicities(level, delta, epsilon, pr_reject1, pr_reject2)
+			logger.info('Verification multiplicities={0}'.format(multiplicities))
+			gateOverhead = RectangleGateOverhead(level, multiplicities)
 			logger.info('Gate overhead for t={2} p={0} is {1}'.format(p, gateOverhead, t))
 			overhead_results_t.append(gateOverhead)
 			
 		overhead_results.append(overhead_results_t)
 		
+	
+	# Add text to indicate concatenation level	
+	def concatentation_level_text(plt):
+		plt.text(2e-6, 2e4, "1")
+		plt.text(2e-6, 2e8, "2")
+		plt.text(2e-6, 2e12, "3")
+		
+	custom = concatentation_level_text
+		
 	labels = [str(t) for t in targetNoiseRates]
-	plotList(startingNoiseRates, overhead_results, filename='gate-overhead-Golay', labelList=labels, xLabel='p', yLabel='gate overhead',
-			 xscale='log', yscale='log')
+	plotList(startingNoiseRates, overhead_results, filename='gate-overhead-Golay', labelList=labels, xLabel=r'$p$', 
+			 yLabel='physical gates per logical gate',
+			 xscale='log', yscale='log', legendLoc='upper left', xlim=(startingNoiseRates[0], startingNoiseRates[-1]), ylim=(10e1, 10e22),
+			 custom_command=custom)
 	
 def levelOneTwoBounds(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
 		

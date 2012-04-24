@@ -275,27 +275,97 @@ def ConcatenationLevel(e, e_targ):
     
     return j, e_eff
 
-def LevelJOverhead(j, J, e, e_targ):
+def BPMultiplicity(j, e, e_targ):
+    if 1 == p_accept(j,e):
+        return 1
+    
+#    return math.ceil(math.log(e_targ / j) / math.log(1 - p_accept(j, e)))
+    return math.log(e_targ / j) / math.log(1 - p_accept(j, e))
+
+def BPMultiplicities(j, e, e_targ):
+    
+    multiplicities = [0] * j
+    for i in range(j):
+        m = BPMultiplicity(j-i, e, e_targ/(j-i))
+        multiplicities[j-i-1] = m
+        e_targ = (e_targ - e_targ/(j-i)) / (m + BP_j(j-i-1))
+        
+    return multiplicities
+
+def BPGateOverhead(j, multiplicities):
+    
+    if 0 == j:
+        return A_BP(j)
+    
+    # First, compute the number of transversal gates
+    # There are 5 transversal CNOTs and 4 transversal measurements
+    A_trans = A_BP(j)
+    
+    A = A_trans + BP_j(j) * BPGateOverhead(j-1, multiplicities)
+
+    return multiplicities[j-1] * A
+
+#def LevelJOverhead(j, J, e, e_targ):
+#    '''
+#    Returns M_j, the number of j-BPs required.
+#    '''
+#    
+#    # TODO: not sure if this is really the correct overhead
+#    # calculation.    
+#    # Compute the total number of j-BPs required in a 
+#    # J-BP.
+#    B = 1
+#    for i in range(j,J):
+#        B *= BP_j(i)
+#        
+#    if j < J:
+#        M_j_plusone = LevelJOverhead(j+1, J, e, e_targ)
+#    else:
+#        M_j_plusone = 1
+#
+#    print 'B({0}, {1})={2}'.format(j, J, B)
+#    
+#    num = math.log(e_targ / (2 * J * B * M_j_plusone))
+#    den = math.log(1 - p_accept(j, e))
+#    
+#    return math.ceil(num / den)
+
+def BP_j(j):
     '''
-    Returns M_j, the number of j-BPs required.
+    Returns the number of j-BPs required to implement a (j+1)-BP.
     '''
+    if j < 2:
+        # No sub-block teleportations for j <= 2.
+        return 12
+    else:
+        return 12 + 2*4
     
-    # The number of level-j locations in a j-BP.
-    A = 72
+def A_BP(j):
+    '''
+    Returns the number of gates required to implement a j-BP, not
+    including input (and subblock teleportation) (j-1)-BPs.
+    '''
+    if 0 == j:
+        return 3
     
-    num = math.log(e_targ / (J * (2*A)**(J-j)))
-    den = math.log(1 - p_accept(j, e))
+    trans_count = 9
+    if 2 >= j:
+        # Levels 1 and 2 have rests instead of subblock teleportations
+        trans_count = 9 + 2
     
-    return num / den
+    return trans_count * 4**j
 
 def ComputeOverhead(e, e_targ):
     J, e_eff = ConcatenationLevel(e, e_targ)
-    Mj_list = [LevelJOverhead(j, J, e, e_targ - e_eff) for j in range(1,J+1)]
+#    Mj_list = [LevelJOverhead(j, J, e, e_targ - e_eff) for j in range(1,J+1)]
+#    
+#    A_J = sum(A_BP(j) * m for j, m in enumerate(Mj_list))
+
+
+    multiplicities = BPMultiplicities(J, e, (e_targ - e_eff)/2)
     
-    A_BP = 72
-    A_J = 1
-    for m in Mj_list:
-        A_J *= (7*23 + A_BP * m)
+    # The J-Rec has two J-BPs, four transversal measurements and three transversal CNOTs
+    A_J = 2 * BPGateOverhead(J, multiplicities) + 7 * 4**J
         
     return A_J
 
@@ -329,13 +399,25 @@ def PlotOverhead(epsilons, e_targs):
     for e_targ in e_targs:
         overhead.append([ComputeOverhead(8/15. * e, e_targ) for e in epsilons])
         
-    plotList(epsilons, overhead, filename='fibonacci-gate-overhead', labelList=[str(et) for et in e_targs], xLabel=r'$\epsilon$', yLabel='gate overhead', 
-             legendLoc='upper left', xscale='log', yscale='log')
+    # Add text to indicate concatenation level    
+    def concatentation_level_text(plt):
+        plt.text(7e-6, 1e3, "2")
+        plt.text(2.8e-5, 9e4, "3")
+        plt.text(1.4e-4, 1e7, "4")
+        plt.text(4e-4, 3e9, "5")
+        plt.text(6e-4, 5e11, "6")
+        
+    custom = concatentation_level_text
+        
+    plotList(epsilons, overhead, filename='fibonacci-gate-overhead', labelList=[str(et) for et in e_targs], xLabel=r'$p$', 
+#             yLabel='physical locations per logical location', 
+             legendLoc='upper left', xscale='log', yscale='log', xlim=(epsilons[0], epsilons[-1]), ylim=(10e1, 10e22),
+             custom_command=custom)
 
 if __name__ == '__main__':
    
     logging.basicConfig()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     
     epsilons = []
     e = 1e-4
@@ -346,7 +428,15 @@ if __name__ == '__main__':
 #    epsilons = (1e-4,)
     j_max = 5
     
-    epsilons = [5e-6, 1e-5, 2e-5, 4e-5, 8e-5, 1e-4, 2e-4, 4e-4, 6e-4, 8e-4, 9e-4, 1e-3, 1.1e-3, 1.2e-3]
+    epsilons = [1e-6, 5e-6, 1e-5, 2e-5, 4e-5, 1e-4, 2e-4, 4e-4, 6e-4, 8e-4, 9e-4, 1e-3, 1.1e-3, 1.2e-3]
     e_targs = [1e-12, 1e-10, 1e-9, 1e-6]
     PlotOverhead(epsilons, e_targs)
     
+    print [A_BP(j) for j in range(1,5)]
+    
+    print [BP_j(j) for j in range(1,5)]
+    
+    print [A_BP(j) + BP_j(j)*A_BP(j-1) for j in range(1,5)]
+    print [BPGateOverhead(j, [1]*5) for j in range(1,5)]
+    
+    print [(e,ConcatenationLevel(8/15. * e, 1e-6)) for e in epsilons]
