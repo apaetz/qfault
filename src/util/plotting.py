@@ -157,7 +157,9 @@ def plotPolyList(polyList, xMin, xMax,
 
 	plotShow(filename)
 	
-def plotList(X, yList, yErrList=None, filename=None, labelList=None, xLabel='', yLabel='', legendLoc='upper right'):
+def plotList(X, yList, yErrList=None, filename=None, labelList=None, xLabel='', yLabel='', legendLoc='upper right',
+			 xscale='linear', yscale='linear', xlim=None, ylim=None,
+			 custom_command=None):
 	
 	#fontProps.set_size('small')
 	plt.hold(False)
@@ -186,7 +188,18 @@ def plotList(X, yList, yErrList=None, filename=None, labelList=None, xLabel='', 
 	# Place legend at the right side of the axes viewport
 	#plt.figlegend(handles, labelList, loc='upper right')
 	plt.legend(loc=legendLoc)
-
+	
+	plt.xscale(xscale)
+	plt.yscale(yscale)
+	
+	if None != xlim:
+		plt.xlim(xlim)
+	if None != ylim:
+		plt.ylim(ylim)
+		
+	if None != custom_command:
+		custom_command(plt)
+		
 #	yaxis = plt.gca().yaxis
 #	interval = yaxis.get_view_interval()
 #	print 'interval=', interval
@@ -198,6 +211,7 @@ def plotList(X, yList, yErrList=None, filename=None, labelList=None, xLabel='', 
 		plt.savefig(filename)
 	
 	plt.hold(False)
+
 
 
 def plot(poly, xMin, xMax, numPoints=100, label=None):

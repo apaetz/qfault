@@ -36,6 +36,10 @@ class BellPair(SequentialComponent):
         
         
 class BellFilter(Filter):
+    '''
+    Logical XX and ZZ errors act trivially on Bell pairs.  This component
+    maps logical XX and ZZ syndrome counts to trivial syndrome counts.
+    '''
     
     def __init__(self, code):
         super(BellFilter, self).__init__()
@@ -73,6 +77,8 @@ class BellFilter(Filter):
 class BellMeas(SequentialComponent):
     '''
     Performs a transversal measurement in the Bell basis.
+    Output block 0 is the result of X-basis measurement.
+    Output block 1 is the result of Z-basis measurement.
     '''
     
     def __init__(self, kGood, code, kGoodMeasX=None, kGoodMeasZ=None, kGoodCnot=None):
