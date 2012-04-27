@@ -5,7 +5,7 @@ Created on Mar 3, 2010
 '''
 from qec.error import Pauli, PauliError
 import qec.error as error
-from util import bits
+from util import bits, listutils
 
 class Qecc(object):
     '''
@@ -37,6 +37,12 @@ class Qecc(object):
         :type e: :class:`qec.error.PauliError`
         '''
         return e
+    
+    def detectError(self, e):
+        '''
+        Returns True if the Pauli error e is detectable and False otherwise.
+        '''
+        return False
            
     def blockLength(self):
         return self.n
@@ -174,6 +180,15 @@ class StabilizerCode(Qecc):
             decoded += logicalErr
                 
         return decoded
+    
+    def detectSyndrome(self, s):
+        '''
+        Returns True if the syndrome s represents a detectable error, and returns False otherwise.
+        '''
+        return 0 != s
+    
+    def detectError(self, e):
+        return self.detectSyndrome(self.getSyndrome(e))
     
 #    def logicalOperator(self, qubit, eType):
 #        '''
@@ -326,21 +341,50 @@ class ConcatenatedCode(StabilizerCode):
         
         self._bottom = bottom
         self._top = top
+        
+    def top(self):
+        return self._top
+    
+    def bottom(self):
+        return self._bottom
+    
+    def stabilizerGeneratorsBottom(self, qubit):
+        Id = Pauli.I << self.n-1
+        generators = [Id * (gen << self._bottom.n * qubit) for gen in self._bottom.stabilizerGenerators()]
+        return tuple(generators)
+    
+    def stabilizerGeneratorsTop(self):
+        return tuple(self._expandTopOperator(gen) for gen in self._top.stabilizerGenerators())
 
     def stabilizerGenerators(self):
-        gensBottom = self._bottom.stabilizerGenerators()
-        gensTop = self._top.stabilizerGenerators()
-        Id = Pauli.I << self.n-1
-        
-        generators = []
-        for botgen in gensBottom:
-            generators += [Id * (botgen << self._bottom.n * i) for i in range(self._top.n)]
-        
-        for topgen in gensTop:
-            gen = self._expandTopOperator(topgen)
-            generators.append(gen)
-        
+        '''
+        Returns the stabilizer generators.  The bottom code generators are given first, ordered by
+        ascending qubit number.  The top code stabilizers are given last.
+        '''
+        generators = ()
+        for q in range(self._top.n):
+            generators += self.stabilizerGeneratorsBottom(q)
+                            
+        generators += self.stabilizerGeneratorsTop()
         return generators
+    
+    def bottomSyndromes(self, s):
+        '''
+        Returns a tuple of bottom code syndromes in ascending qubit order.
+        '''
+        # Get rid of the top code syndrome
+        s >>= (self._top.n - self._top.k)
+        
+        l = self._bottom.n - self._bottom.k
+        mask = bits.lsbMask(l)
+        return tuple((s >> (l*q)) & mask for q in range(self._top.n))
+    
+    def topSyndrome(self, s):
+        '''
+        Returns the top code syndrome.
+        '''
+        return s & bits.lsbMask(self._top.n - self._top.k)
+
     
     def _expandTopOperator(self, operator):
         nBot = self._bottom.n
@@ -367,8 +411,16 @@ class ConcatenatedCode(StabilizerCode):
 
         return logicals
 
-
+    def detectSyndrome(self, s):
+        bLen = (self._bottom.n - self._bottom.k)
+        tLen = (self._top.n - self._top.k)
+        l = bLen * self._top.n + tLen
+        sbits = bits.bitsToList(s, l)
         
+        syndromes = listutils.chop(sbits, ([bLen] * self._top.n) + [tLen])
+        
+        
+    
 class BellState(CssCode):
     
     def __init__(self, code, plusState, zeroState):

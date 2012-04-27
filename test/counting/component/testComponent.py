@@ -75,6 +75,19 @@ class ComponentTestCase(unittest.TestCase):
 						print 'prTot({0})={1}'.format(gamma, prTot(gamma))
 						raise e
 	
+	def testBlockExtension(self):
+		
+		kGood = {Pauli.Y: 1}
+		component = self._getComponent(kGood, self.trivialCode)
+				
+		blocks = component.inBlocks() + (Block('dummy', self.trivialCode),)
+		inputResult = TrivialResult(blocks)
+		result = component.count(self.depolarizingNoiseModels, Pauli.Y, inputResult=inputResult)
+		
+		expNumBlocks = len(component.outBlocks()) + 1
+		assert len(result.blocks) == expNumBlocks
+				
+	
 	def testInBlocks(self):
 		blocks = self._getComponent({}, self.trivialCode).inBlocks()
 		assert type(blocks) == tuple

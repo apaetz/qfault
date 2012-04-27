@@ -22,9 +22,10 @@ from counting.result import CountResult
 from qec.error import Pauli
 from qec.qecc import ConcatenatedCode
 from util import listutils
-from util.cache import fetchable
+from util.cache import fetchable, memoize
 import hashlib
 import logging
+from util.polynomial import SymPolyWrapper, sympoly1d
 
 logger = logging.getLogger('counting.component')
 
@@ -74,6 +75,21 @@ class Component(object):
 # Public methods
 #################
 
+	@staticmethod
+	def ValidateResult(result, expNumBlocks=None):
+		nblocks = len(result.blocks)
+		
+		logger.debug("nblocks={0}, expected={1}".format(nblocks, expNumBlocks))
+		if None != expNumBlocks and nblocks != expNumBlocks:
+			logger.error('nblocks={0}, expNumBlocks={1}'.format(nblocks, expNumBlocks))
+			return False
+		for count in result.counts:
+			if any(nblocks - len(key) for key in count.keys()):
+				logger.error('nblocks={0}, key lengths={1}'.format(nblocks, [len(key) for key in count.keys()]))
+				return False
+			
+		return True
+
 	#@fetchable
 	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
 		'''
@@ -96,7 +112,10 @@ class Component(object):
 			k = min(k, kMax)
 			
 		try:
-			self._log(logging.INFO, 'Counting: ' + str(pauli))
+			self._log(logging.INFO, 'Counting: ' + str(pauli) + ' ' + str(k))
+			
+			if not self.ValidateResult(inputResult):
+				raise RuntimeError('Invalid input result')
 			
 			result = inputResult
 			for sub in self.subcomponents():
@@ -106,6 +125,10 @@ class Component(object):
 		except:
 			self._log(logging.ERROR, 'Error while counting')
 			raise
+
+#		expNumBlocks = len(self.outBlocks()) - len(self.inBlocks()) + len(inputResult.blocks)
+#		if not self.ValidateResult(result, expNumBlocks):
+#			raise RuntimeError('Invalid output result')
 		
 		return result
 	
@@ -122,16 +145,16 @@ class Component(object):
 		prSubs = [sub.prBad(noise, pauli, kMax=self.kGood[pauli]) for sub in self.subcomponents()]
 		return sum(prSubs) + prSelf
 	
-#	def prAccept(self, noiseModels, kMax=None):
-#		'''
-#		Returns a polynomial representing a lower bound on the probability that the component
-#		accepts.  (This is just 1 for components without postselection.)
-#		
-#		:param dict noiseModels: A dictionary of noise models, indexed by Pauli error type.
-#		:param kMax: (optional) The maximum number of faults to consider. (i.e., Pr[accept, K <= kMax])
-#		'''
-#		prSubs = [sub.prAccept(noiseModels, kMax=self.kGood) for sub in self.subcomponents().values()]
-#		return reduce(operator.mul, prSubs, SymPolyWrapper(sympoly1d([1])))
+	def prAccept(self, noiseModels, input_result=None, kMax=None):
+		'''
+		Returns a polynomial representing a lower bound on the probability that the component
+		accepts.  (This is just 1 for components without postselection.)
+		
+		:param dict noiseModels: A dictionary of noise models, indexed by Pauli error type.
+		:param input_result: (optional) Input to the component.
+		:param kMax: (optional) The maximum number of faults to consider. (i.e., Pr[accept, K <= kMax])
+		'''
+		return SymPolyWrapper(sympoly1d([1]))
 		
 	def locations(self, pauli=Pauli.Y):
 		'''
@@ -349,6 +372,7 @@ class CountableComponent(Component):
 	
 class CompositeComponent(Component):
 	
+	@fetchable
 	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
 		'''
 		Counts errors in the component.
@@ -365,6 +389,8 @@ class CompositeComponent(Component):
 			
 		kIn = len(inputResult.counts) - 1
 		
+		nblocksIn = len(inputResult.blocks)
+		
 		kGood = self.kGood[pauli]
 		if None == kMax:
 			kMax = kGood + kIn
@@ -372,7 +398,10 @@ class CompositeComponent(Component):
 			kGood = min(kGood, kMax)
 			
 		try:
-			self._log(logging.INFO, 'Counting: ' + str(pauli))
+			self._log(logging.INFO, 'Counting: ' + str(pauli) + ' ' + str(kMax))
+			
+#			if not self.ValidateResult(inputResult):
+#				raise RuntimeError('Invalid input result')
 			
 			# Convolve the input with sub-component counts by counting the
 			# sub-components with a single order of the input counts at a time.
@@ -401,6 +430,12 @@ class CompositeComponent(Component):
 			self._log(logging.ERROR, 'Error while counting')
 			raise
 
+		self._log(logging.DEBUG, "result={0}".format(result))
+		
+#		expNumBlocks = len(self.outBlocks()) - len(self.inBlocks()) + nblocksIn
+#		self._log(logging.INFO, "expected={0}".format(expNumBlocks))
+#		if not self.ValidateResult(result, expNumBlocks):
+#			raise RuntimeError('Invalid output result')
 		return result
 	
 	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
@@ -444,11 +479,30 @@ class SequentialComponent(CompositeComponent):
 	def outBlocks(self):
 		return self[-1].outBlocks()
 	
+	@memoize
+	def prAccept(self, noiseModels, inputResult=None, kMax=None):
+		pr_accept = super(SequentialComponent, self).prAccept(noiseModels)
+		for sub in self:
+			pr_sub = sub.prAccept(noiseModels, inputResult, kMax)
+			self._log(logging.DEBUG, '{0} Pr[accept]={1}'.format(sub, pr_sub))
+			pr_accept *= pr_sub
+			inputResult = sub.count(noiseModels, Pauli.Y, inputResult, kMax)
+		return pr_accept
+	
 	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
 		kMaxSub = min(self.kGood[pauli], kMax)
 		result = inputResult
 		for sub in self.subcomponents():
+			subNBlocksIn = len(result.blocks)
+			subExpNumBlocks = len(sub.outBlocks()) - len(sub.inBlocks()) + subNBlocksIn 
+				
 			result = sub.count(noiseModels, pauli, result, kMaxSub)
+			self._log(logging.DEBUG, "sub {0} result={1}".format(sub, result))
+			
+			if not self.ValidateResult(result, subExpNumBlocks):
+				raise RuntimeError('Invalid output result for sub {0}'.format(sub))
+
+			
 		return result
 			
 #	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
@@ -554,9 +608,11 @@ class Filter(Component):
 	def __init__(self):
 		super(Filter, self).__init__({})
 		
-	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
-		self._log(logging.INFO, "Applying filter.")
-		return self.propagateCounts(inputResult)
+	def count(self, noiseModels=None, pauli=None, inputResult=None, kMax=None):
+		self._log(logging.INFO, "Filtering")
+		result = self.propagateCounts(inputResult)
+		self._log(logging.DEBUG, "Filter result: {0}".format(result))
+		return result
 
 	def keyPropagator(self, subPropagator=IdentityManipulator()):
 		'''
@@ -619,7 +675,7 @@ class ConcatenationFilter(Filter):
 		return tuple([Block('Subblock', self.bottom)]*self.top.n)
 	
 	def outBlocks(self):
-		return (Block('Cat', self.top), )
+		return (Block('Cat', ConcatenatedCode(self.top, self.bottom)), )
 
 #	def outBlocks(self):
 #		'''
@@ -673,38 +729,49 @@ class ParallelComponent(CompositeComponent):
 
 		return propagator
 	
-	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
-		kMaxSub = min(self.kGood[pauli], kMax)
-		result = inputResult
-		for sub in self:
-			result = sub.count(noiseModels, pauli, result, kMaxSub)
-			
-			# Shift the input blocks for the next component into place.
-			rotator = self.TupleRotator(len(sub.outBlocks()))
-			result.counts = mapCounts(result.counts, rotator)
-			result.blocks = rotator(result.blocks)
-			
-		# It is possible that the inputResult space is larger than the output space
-		# of the parallel component.
-		rotator = self.TupleRotator(-len(self.outBlocks()))
-		result.counts = mapCounts(result.counts, rotator)
-		result.blocks = rotator(result.blocks)
+#	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
+#		kMaxSub = min(self.kGood[pauli], kMax)
+#		result = inputResult
+#		for sub in self:
+#			result = sub.count(noiseModels, pauli, result, kMaxSub)
+#			self._log(logging.INFO, "sub {0} result={1}".format(sub, result))
+#			
+#			# Shift the input blocks for the next component into place.
+#			rotator = self.TupleRotator(len(sub.outBlocks()))
+#			result.counts = mapCounts(result.counts, rotator)
+#			result.blocks = rotator(result.blocks)
+#			
+#		# It is possible that the inputResult space is larger than the output space
+#		# of the parallel component.
+#		rotator = self.TupleRotator(-len(self.outBlocks()))
+#		result.counts = mapCounts(result.counts, rotator)
+#		result.blocks = rotator(result.blocks)
+#		
+#		return result
 		
-		return result
-		
+	@fetchable
 	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
 
 		# The idea here is to count each of the sub-components sequentially, but
 		# permuting the input blocks at each step.
 		
-		
 		k = self.kGood[pauli]
 		if None != kMax:
 			k = min(k, kMax)
+			
+		if None == inputResult:
+			inputs = tuple([0]*len(self.inBlocks()))
+			inputCounts = [{inputs: 1}]
+			inputResult = CountResult(inputCounts, self.inBlocks())
 		
 		result = copy(inputResult)
+		
+		if not self.ValidateResult(inputResult):
+			raise RuntimeError('Invalid input result')
+		
 		for sub in self:
 			result = sub.count(noiseModels, pauli, result, k)
+			self._log(logging.DEBUG, "sub {0} result={1}".format(sub, result))
 			if 0 == len(result.counts):
 				print 'foo?'
 			
@@ -721,7 +788,25 @@ class ParallelComponent(CompositeComponent):
 		
 		if 0 == len(result.counts):
 			print 'foo?'
+			
+#		expNumBlocks = len(self.outBlocks()) - len(self.inBlocks()) + len(inputResult.blocks)
+#		if not self.ValidateResult(result, expNumBlocks):
+#			raise RuntimeError('Invalid output result')
 		return result
+	
+	def prAccept(self, noiseModels, inputResult=None, kMax=None):
+		pr_accept = super(ParallelComponent, self).prAccept(noiseModels)
+		
+		for sub in self:
+			pr_accept *= sub.prAccept(noiseModels, inputResult, kMax)
+			inputResult = sub.count(noiseModels, Pauli.Y, inputResult, kMax)
+			
+			# Shift the input blocks for the next component into place.
+			rotator = self.TupleRotator(len(sub.outBlocks()))
+			inputResult.counts = mapCounts(inputResult.counts, rotator)
+			inputResult.blocks = rotator(inputResult.blocks)
+			
+		return pr_accept
 	
 #	def __repr__(self):
 #		subStr = ''.join(sub.__class__.__name__ for sub in self)

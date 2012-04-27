@@ -628,14 +628,24 @@ def likelyhoodPrefactorPoly(locTotals, noise, bound):
 	return prefactor
 	
 
-def countsToPoly(counts, locTotals, noise, bound=Bound.UpperBound):
+def countsToPoly(counts, loc_totals, noise, bound=Bound.UpperBound):
 	'''
 	Convert weighed error likelyhood counts into a polynomial in gamma (= p/15).
 	'''
+	coeffs = [sum(countsK.values()) for countsK in counts]
+	return ConstructPolynomial(coeffs, loc_totals, noise, bound)
+
+def ConstructPolynomial(coeffs, loc_totals, noise, bound=Bound.UpperBound):
+	'''
+	Returns a polynomial for the given coefficients and component location
+	totals.
+	'''
+	prefactor = likelyhoodPrefactorPoly(loc_totals, noise, bound)
+	likelyhood = noise.likelyhood(bound)
+	coeff_sum = sum(coeffs[k] * (likelyhood ** k) for k in range(len(coeffs)))
 	
-	prefactor = likelyhoodPrefactorPoly(locTotals, noise, bound)
-	countPr =  countsAsProbability(counts, noise.likelyhood(bound))
-	return prefactor * countPr
+	return prefactor * coeff_sum
+
 
 	
 

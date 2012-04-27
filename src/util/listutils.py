@@ -98,17 +98,42 @@ def uniqify(seq):
 		seen[item] = 1 
 		result.append(item) 
 	return result
-
-if __name__ == "__main__":
-	import doctest
-	doctest.testmod()
 	
 def cycle(seq):
 	pass
 
 def permute(seq, permutation):
 	"""Permutes the input sequence, like Mathematica's Permute by with indices starting at 0.
-	>>> permuteList(['a','b','c','d'], [0, 2, 3, 1])
-	['a', 'd', 'b', 'c']
+	>>> permute(['a','b','c','d'], [0, 2, 3, 1])
+	['a', 'c', 'd', 'b']
 	"""
 	return [seq[p] for p in permutation]
+
+def chop(seq, lengths):
+	'''
+	Slice the sequence into smaller sequences of the given lengths.
+	>>> chop(['a','b','c','d','e'], [1,2,2])
+	[['a'], ['b', 'c'], ['d', 'e']]
+	'''
+	
+	slices = []
+	index = 0
+	for l in lengths:
+		slices.append(seq[index:index+l])
+		index += l
+	
+	return slices
+
+def remove_subsequence(seq, remove_indices):
+	'''
+	Returns a sequence in which the given subsequence has been removed.
+	>>> remove_subsequence(['a', 'b', 'c', 'd'], [1,3])
+	['a', 'c']
+	'''
+	return [seq[i] for i in range(len(seq)) if i not in set(remove_indices)]
+	
+
+
+if __name__ == "__main__":
+	import doctest
+	doctest.testmod()

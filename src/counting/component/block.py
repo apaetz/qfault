@@ -6,6 +6,8 @@ Created on 2012-04-03
 from counting.component.base import Filter
 from counting.key import IdentityManipulator, KeyPermuter, KeyRemover
 from util import listutils
+from counting import countErrors
+from counting.result import CountResult
 
 class BlockPermutation(Filter):
     '''
@@ -16,11 +18,11 @@ class BlockPermutation(Filter):
     
     def __init__(self, inBlocks, permutation):
         self.perm = permutation
-        self._inBlocks = inBlocks
+        self._in_blocks = inBlocks
         super(BlockPermutation, self).__init__()
         
     def inBlocks(self):
-        return self._inBlocks
+        return self._in_blocks
         
     def outBlocks(self):
         return tuple(listutils.permute(self.inBlocks(), self.perm))
@@ -31,20 +33,49 @@ class BlockPermutation(Filter):
     
 class BlockDiscard(Filter):
     '''
-    Traces out the last N blocks.
+    Traces out the given blocks.
     '''
     
-    def __init__(self, inBlocks, n):
+    def __init__(self, in_blocks, blocks_to_remove):
         super(BlockDiscard, self).__init__()
-        self._inBlocks = inBlocks
-        self.n = n
+        self._in_blocks = in_blocks
+        self._blocks_to_remove = blocks_to_remove
         
     def inBlocks(self):
-        return self._inBlocks
+        return self._in_blocks
     
     def outBlocks(self):
-        return tuple(self.inBlocks()[:-self.n])
+        return tuple(listutils.remove_subsequence(self.inBlocks(), self._blocks_to_remove))
         
     def keyPropagator(self, subPropagator=IdentityManipulator()):
-        l = len(self.inBlocks())
-        return KeyRemover(subPropagator, l-self.n, l)
+        return KeyRemover(subPropagator, self._blocks_to_remove)
+    
+    
+class BlockCombine(Filter):
+    '''
+    Combines the input blocks into a single block.  The maximum count for each
+    syndrome and fault order is chosen for output.
+    '''
+    
+    def __init__(self, in_blocks):
+        super(BlockCombine, self).__init__()
+        self._in_blocks = in_blocks
+        
+    def inBlocks(self):
+        return self._in_blocks
+    
+    def outBlocks(self):
+        return self.inBlocks()[:1]
+    
+    def propagateCounts(self, inputResult):
+        # Separate each of the input blocks
+        inblock_indices = set(range(len(self.inBlocks())))
+        block_counts = []
+        for i, block in enumerate(self.inBlocks()):
+            discard = BlockDiscard((block,), inblock_indices - set([i]))
+            block_counts.append(discard.count(inputResult=inputResult).counts)
+        
+        # Take the maximum count for each fault order k and each syndrome.
+        counts = countErrors.maxCount(*block_counts)
+        
+        return CountResult(counts, self.outBlocks() + inputResult.blocks[len(block_counts):])

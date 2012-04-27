@@ -43,6 +43,29 @@ class IdealDecoder(Filter):
             decoded = self.decoder.decode(key[0])
             return (decoded,) + key[1:]
         
+class FlaggingDecoder(IdealDecoder):
+    '''
+    An ideal decoder that also flags detectable errors.  The syndrome key
+    for each count is transformed into a (flag, error) tuple.
+    '''
+    
+    def __init__(self, code, decode_as_pauli=False):
+        self._code = code
+        self._decode_as_pauli = decode_as_pauli
+    
+    class KeyDecoder(KeyManipulator):
+        
+        def __init__(self, code, manipulator):
+            super(FlaggingDecoder.KeyDecoder, self).__init__(manipulator)
+            self._code = code
+            self.decoder = SyndromeKeyDecoder(code)
+    
+        def _manipulate(self, key):
+            syndrome = self.decoder.syndrome(key[0])
+            flag = self._code.detectSyndrome(syndrome)
+            decoded = self.decoder.decode(key[0])
+            return ((flag, decoded),) + key[1:]
+        
 class SyndromeFilter(Filter):
     
     def __init__(self, code):

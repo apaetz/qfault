@@ -155,13 +155,13 @@ class KeyExtender(KeyManipulator):
     
 class KeyRemover(KeyManipulator):
     
-    def __init__(self, manipulator, start, end):
+    def __init__(self, manipulator, remove_indices):
         super(KeyRemover, self).__init__(manipulator)
-        self.start = start
-        self.endplus1 = end + 1
+        self._remove_indices = set(remove_indices)
         
     def _manipulate(self, key):
-        return key[:self.start] + key[self.endplus1:]
+        key = listutils.remove_subsequence(key, self._remove_indices)
+        return tuple(key)
     
 class KeySplitter(KeyManipulator):
     
@@ -243,7 +243,10 @@ class KeyCopier(KeyManipulator):
             
     def _manipulateMask(self, key):
         newKey = list(key)
-        newKey[self._toBlock] ^= key[self._fromBlock] & self._mask
+        try:
+            newKey[self._toBlock] ^= key[self._fromBlock] & self._mask
+        except:
+            pass
         return tuple(newKey)
     
     def _manipulateNoMask(self, key):
@@ -416,6 +419,9 @@ class SyndromeKeyDecoder(object):
     def __init__(self, code):
         self._code = code
         self._normalizers = code.normalizerGenerators()
+        
+    def syndrome(self, key):
+        return key >> len(self._normalizers)
         
     def decode(self, key):
 #        logicalError = Pauli.I

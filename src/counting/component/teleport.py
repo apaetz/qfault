@@ -21,6 +21,7 @@ from util.cache import memoize
 import logging
 import warnings
 from copy import copy
+from counting.component.block import BlockDiscard
 
 logger = logging.getLogger('component')
        
@@ -72,25 +73,38 @@ class TeleportWithMeas(SequentialComponent):
         self._log(logging.INFO, "Counting {0}".format(pauli))
         
         # First, extend the input to all three blocks.
-        extendedInput = self._extendInput(inputResult)
+        # TODO: there are two input extension functions.  This is because there seems to be a problem
+        # when trying to propagate the input through the Bell Pair (which is only necessary when using
+        # a concatenated code at level-two or higher).
+        extendedInput = self._extendInputA(inputResult)
+        
+        self._log(logging.DEBUG, "extended input before input propagation: {0}".format(extendedInput))
         
         # Now propagate the input through the Bell measurement and transversal rest.
         for sub in self.subcomponents()[1:]:
             extendedInput = sub.propagateCounts(extendedInput)
-        
+  
+        self._log(logging.DEBUG, "extended input after input propagation: {0}".format(extendedInput))
+          
         # Now count normally.
         result = self._countInternal(noiseModels, pauli, kMax)
+        
+        self._log(logging.DEBUG, "internal result: {0}".format(result))
+  
         
         # TODO: this pattern of memoizing some internal result and then convolving is
         # likely to be present in other components.  Should generalize this behavior.
         # TODO: more robust way of getting key lengths?
         keyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in result.blocks]
         inKeyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in extendedInput.blocks]
+        self._log(logging.DEBUG, "keyLengths={0}, inKeyLengths={1}".format(keyLengths, inKeyLengths))
         result.counts = convolve(extendedInput.counts, 
                                 result.counts, 
                                 kMax=kMax, 
                                 convolveFcn=key.convolveKeyCounts, 
                                 extraArgs=[inKeyLengths, keyLengths])
+        
+        self._log(logging.DEBUG, "result before corrections: {0}".format(result))
         
         # Finally, make the logical corrections necessary for teleportation.
         inBlock = self.inBlocks()[0]
@@ -99,13 +113,30 @@ class TeleportWithMeas(SequentialComponent):
         result.counts = mapCounts(result.counts, corrector)
         result.blocks = extendedInput.blocks
         
+        self._log(logging.DEBUG, "result after corrections: {0}".format(result))
+        
         return result
     
-    def _extendInput(self, inputResult):
+    def _extendInputA(self, inputResult):
+        bp = self[0]
+        nBP = len(bp.inBlocks())
+        nIn = len(self.inBlocks())
+        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(2, 1))
         extender = KeyExtender(IdentityManipulator(), 2, 1)
         extendedInput = inputResult
         extendedInput.counts = mapCounts(inputResult.counts, extender)
-        extendedInput.blocks = inputResult.blocks[:1]*3 + inputResult.blocks[1:]
+        extendedInput.blocks = inputResult.blocks[:1]*(3) + inputResult.blocks[1:]
+        return extendedInput
+
+    def _extendInputB(self, inputResult):
+        bp = self[0]
+        nBP = len(bp.inBlocks())
+        nIn = len(self.inBlocks())
+        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(nBP - nIn, nIn))
+        extender = KeyExtender(IdentityManipulator(), nBP - nIn, nIn)
+        extendedInput = inputResult
+        extendedInput.counts = mapCounts(inputResult.counts, extender)
+        extendedInput.blocks = inputResult.blocks[:1]*(nBP) + inputResult.blocks[1:]
         return extendedInput
 
     
@@ -115,7 +146,7 @@ class TeleportWithMeas(SequentialComponent):
         Counts the internal components with the trivial input.
         '''
         inputResult = TrivialResult(self.inBlocks())
-        inputResult = self._extendInput(inputResult)
+        inputResult = self._extendInputB(inputResult)
         return super(TeleportWithMeas, self).count(noiseModels, pauli, inputResult, kMax)
         
     
@@ -150,35 +181,40 @@ class TeleportWithMeas(SequentialComponent):
     
 class Teleport(SequentialComponent):
     '''
-    Teleportation component.  This is just like TeleportWithMeas, except that the
-    measurement results are removed and only the teleported block remains.
+    Teleportation component.  This is just like TeleportWithMeas, except that by default
+    the measurement results are removed and only the teleported block remains.  The
+    actual output block may be selected by setting `block_to_keep`.  See TeleportWithMeas
+    for output block numbers.
     '''
     
-    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
+    def __init__(self, kGood, bellPair, bellMeas, enableRest=True, output_block=2):
         teleportWM = TeleportWithMeas(kGood, bellPair, bellMeas, enableRest)
-        super(Teleport, self).__init__(kGood, subcomponents=[teleportWM])
+        remove_blocks = set(range(3))
+        remove_blocks.remove(output_block)
+        discard = BlockDiscard(teleportWM.outBlocks(), remove_blocks)
+        super(Teleport, self).__init__(kGood, subcomponents=[teleportWM, discard])
         
-    def outBlocks(self):
-        return (self[0].outBlocks()[2],)
-    
-    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
-        
-        nblocks = len(inputResult.counts[0].keys()[0])
-        
-        result = super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
-        
-        # Now trace out the measurement results
-        tracer = self.KeyTracer()
-        result.counts = mapCounts(result.counts, tracer)
-        result.blocks = result.blocks[2:]
-        
-        return result
-    
-            
-    class KeyTracer(KeyManipulator):
-                
-        def _manipulate(self, key):
-            return keyForBlock(key, 2) + key[3:]
+#    def outBlocks(self):
+#        return (self[0].outBlocks()[2],)
+#    
+#    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+#        
+#        nblocks = len(inputResult.counts[0].keys()[0])
+#        
+#        result = super(Teleport, self).count(noiseModels, pauli, inputResult, kMax)
+#        
+#        # Now trace out the measurement results
+#        tracer = self.KeyTracer()
+#        result.counts = mapCounts(result.counts, tracer)
+#        result.blocks = result.blocks[2:]
+#        
+#        return result
+#    
+#            
+#    class KeyTracer(KeyManipulator):
+#                
+#        def _manipulate(self, key):
+#            return keyForBlock(key, 2) + key[3:]
     
 class TeleportED(SequentialComponent):
     '''
@@ -188,10 +224,10 @@ class TeleportED(SequentialComponent):
     '''
     
     
-    def __init__(self, kGood, bellPair, bellMeas, enableRest=True):
+    def __init__(self, kGood, bellPair, bellMeas, enableRest=True, acceptFunction=None):
 #        inBlock = bellMeas.inBlocks()[0]
         teleport = TeleportWithMeas(kGood, bellPair, bellMeas, enableRest)
-        edFilter = TeleportEDFilter(teleport)
+        edFilter = TeleportEDFilter(teleport, acceptFunction)
         super(TeleportED, self).__init__(kGood, subcomponents=(teleport, edFilter))
 #        self._outBlock = bellPair.outBlocks()[1]
         
@@ -209,7 +245,7 @@ class TeleportEDFilter(PostselectionFilter):
     Error-detection filter for the output of the TeleportWithMeas component.
     '''
     
-    def __init__(self, teleport):
+    def __init__(self, teleport, acceptFunction=None):
         super(TeleportEDFilter, self).__init__()
         self.teleport = teleport
         
@@ -220,6 +256,11 @@ class TeleportEDFilter(PostselectionFilter):
         if not dataCode == anc1Code:
             raise Exception("QECC for data block ({0}) and ancilla block ({1}) are not equal.".format(dataCode, anc1Code))
         
+        if None == acceptFunction:
+            acceptFunction = self._defaultAcceptFunction()
+            
+        self.accept = self._keyAcceptor(acceptFunction, dataCode)
+                 
     def inBlocks(self):
         return self.teleport.outBlocks()
         
@@ -232,27 +273,53 @@ class TeleportEDFilter(PostselectionFilter):
         # This assumes that the code of the input block and the first
         # Bell-state ancilla are *exactly* the same, including all
         # gauge stabilizers.
-        code = self.inBlocks()[0].getCode()
-        accept = self._acceptor(code)
-        keyAcceptor = self.KeyAcceptor(subPropagator, accept)
+#        code = self.inBlocks()[0].getCode()
+#        accept = self._acceptor(code)
+        keyAcceptor = self.KeyAcceptor(subPropagator, self.accept)
         return keyAcceptor
-        
-    def _acceptor(self, code):
+    
+    def _keyAcceptor(self, acceptFunction, code):
         stabilizers = set(code.stabilizerGenerators())
         # TODO: more robust way to get parity checks?
         parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
         syndromeBits = [(check in stabilizers) for check in parityChecks]
-        rejectMask = bits.listToBits(syndromeBits)
+        l = len(syndromeBits)
+        syndromeIndices = [l-i for i in range(l) if syndromeBits[i]]
+        syndromeIndices.reverse()
+#        rejectMask = bits.listToBits(syndromeBits)
+        
+        # Expect all syndrome bits to be grouped together after the logical
+        # operator bits.
+        if len(syndromeIndices) == 0:
+            mask = shift = 0
+        else:
+            firstBit = min(syndromeIndices)
+            lastBit = max(syndromeIndices)
+            if syndromeIndices != range(firstBit, lastBit+1):
+                raise RuntimeError("Syndrome bits are not contiguous")
+        
+            shift = firstBit
+            mask = bits.lsbMask(lastBit - firstBit)
         
         # The UncorrectedTeleport component blocks are setup as follows:
         # block 0 - Transversal X-basis measurement
         # block 1 - Transversal Z-basis measurement
         # block 2 - Teleported data
+        
         def accept(key):
             try:
-                return not(key[0] & rejectMask) and not(key[1] & rejectMask)
+                s0 = (key[0] >> shift) & mask
+                s1 = (key[1] >> shift) & mask
             except:
-                pass
+                print key
+            return acceptFunction(s0) and acceptFunction(s1)
+        
+        return accept
+        
+    def _defaultAcceptFunction(self):
+        def accept(syndrome):
+            return not syndrome
+
     
         return accept
         

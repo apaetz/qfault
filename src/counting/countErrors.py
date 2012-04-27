@@ -71,6 +71,13 @@ def mapCounts(counts, keymap):
 	return newCounts
 
 def maxCount(*countss):
+	'''
+	Converts the list of counts into a single set of counts that
+	maximizes all other counts.  More precisely, the returned counts
+	counts_max have the property:
+	counts_max[k][key] >= countss[i][k][key]
+	for every i, k and key.
+	'''
 	lengths = [len(counts) for counts in countss]
 	countsMax = [{} for _ in range(max(lengths))]
 	for counts in countss:
