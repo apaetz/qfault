@@ -8,22 +8,24 @@ from counting.block import Block
 from counting.component import transversal
 from counting.component.adapter import IdealDecoder, FlaggingDecoder
 from counting.component.base import ParallelComponent, SequentialComponent, Prep, \
-    ConcatenationFilter, Component
+    ConcatenationFilter, Component, Filter
 from counting.component.bell import BellPair, BellMeas
 from counting.component.block import BlockDiscard, BlockPermutation,\
     BlockCombine
 from counting.component.teleport import Teleport, TeleportED, TeleportWithMeas
 from counting.countErrors import error, mapCounts, maxCount
-from counting.key import IdentityManipulator, KeyMerger, SyndromeKeyGenerator
+from counting.key import IdentityManipulator, KeyMerger, SyndromeKeyGenerator,\
+    KeyManipulator
 from qec import ed422
 from qec.error import Pauli, PauliError, xType, zType, dualType
 from qec.qecc import StabilizerState, ConcatenatedCode
 from scheme import Scheme
-from util import bits
+from util import bits, listutils
 import logging
 from util.cache import memoize, fetchable
 from util.plotting import plotList
-from settings.noise import NoiseModelXSympy, NoiseModelZSympy, NoiseModelXZSympy
+from settings.noise import NoiseModelXSympy, NoiseModelZSympy, NoiseModelXZSympy,\
+    CountingNoiseModelXZ
 from counting import probability, countErrors
 import counting
 from counting.result import CountResult
@@ -294,9 +296,9 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
                               Pauli.Y: NoiseModelXZSympy(),
                              }
         
-        self._code = ed422.ED412Code(gaugeType=error.xType)
+        self._code = ed422.ED412Code()
         
-        self._kGood = {Pauli.Y: 2}
+        self._kGood = {Pauli.Y: 3}
         
         super(FibonacciSchemeSyndrome, self).__init__(epsilon_scale=8/15.)
 
@@ -422,12 +424,21 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
         if 1 == j:
             p = self.BP1().prAccept(self._noise_models)(e/15.)
             logger.debug('p({0}|{1})={2}'.format(j,j-1,p))
+        elif 2 == j:
+            # This gives us p(j) *without* conditioning on acceptance of (j-1)-BPs.
+            # i.e. we have p(2|1) p(1)**3
+            p = self._SubblockTeleportComponent(xType, j).prAccept(self._noise_models)(e/15.)
+            
+            # There are three 1-BPs in the sub-block teleportation.  Divide to
+            # get the correct conditional probability.  
+            p /= self.PrAccept(1, e)**3
+            
+            logger.debug('p({0}|{1})={2}'.format(j,j-1,p))
         else:
             p = super(FibonacciSchemeSyndrome, self).PrAccept(j, e)
             
         return p
     
-    @memoize
     def _SubblockTeleportComponent(self, m, j):
         k_good = {key: val + (j-1) for key, val in self._kGood.iteritems()}
         bp1j = BP1LevelJ(k_good, self.BP1(), j-1)
@@ -446,6 +457,15 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
         return sbt
     
     @memoize
+    def _SubblockTeleportCountDecode(self, m, j):
+        sbt = self._SubblockTeleportComponent(m, j)
+        return self.DecodeLevel1Result(sbt.count(self._noise_models, Pauli.Y), sbt.locations())
+    
+    @memoize
+    def _SubblockTeleportPrBad(self, m, j):
+        sbt = self._SubblockTeleportComponent(m, j)
+        return sbt.prBad(self._noise_models[Pauli.Y], Pauli.Y)
+    
     def _BlockTeleportComponent(self, m, j):
         k_good = {key: val + (j-1) for key, val in self._kGood.iteritems()}
         bp1j = BP1LevelJ(k_good, self.BP1(), j-1)           
@@ -457,6 +477,16 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
         
         bt = BlockTeleport(k_good, ParallelComponent(self._kGood, bp1j, bp1j), m, block_to_meas)
         return bt
+
+    @memoize
+    def _BlockTeleportCountDecode(self, m, j):
+        bt = self._BlockTeleportComponent(m, j)
+        return self.DecodeLevel1Result(bt.count(self._noise_models, Pauli.Y), bt.locations())
+    
+    @memoize
+    def _BlockTeleportPrBad(self, m, j):
+        bt = self._BlockTeleportComponent(m, j)
+        return bt.prBad(self._noise_models[Pauli.Y], Pauli.Y)
 
     @memoize
     def _CnotExRecPoly(self, m, j, r):
@@ -489,11 +519,9 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
             # The sub-block teleportation subcircuit requires three input (j-1)-BPs so
             # normalization is the fourth power of p(j-1).
             norm = self.PrAccept(j-1, e)**3
-            
-            sbt = self._SubblockTeleportComponent(m, j)        
-            f, sf, sf_bar = self.DecodeLevel1Result(sbt.count(self._noise_models, Pauli.Y), sbt.locations())
-
-            pbad = sbt.prBad(self._noise_models[Pauli.Y], Pauli.Y)(e/15.)
+                    
+            f, sf, sf_bar = self._SubblockTeleportCountDecode(m, j)
+            pbad = self._SubblockTeleportPrBad(m, j)(e/15.)
             
             f, sf, sf_bar = [x(e/15.) / norm + pbad for x in (f, sf, sf_bar)]
         
@@ -529,9 +557,9 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
             # normalization is the fourth power of p(j-1).
             norm = self.PrAccept(j-1, e)**4
             
-            bt = self._BlockTeleportComponent(m, j)
-            f, bf, bf_bar = self.DecodeLevel1Result(bt.count(self._noise_models, Pauli.Y), bt.locations())
-            pbad = bt.prBad(self._noise_models[Pauli.Y], Pauli.Y)(e/15.)
+
+            f, bf, bf_bar = self._BlockTeleportCountDecode(m, j)
+            pbad = self._BlockTeleportPrBad(m, j)(e/15.)
             
             f, bf, bf_bar = [x(e/15.) / norm + pbad for x in (f, bf, bf_bar)]
  
@@ -562,22 +590,29 @@ class SubblockTeleport(SequentialComponent):
         
         super(SubblockTeleport, self).__init__(kGood, subcomponents=[bell_pair, cnot, discard, teleport])
         
+    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        r = super(SubblockTeleport, self).count(noiseModels, pauli, inputResult, kMax)
+        return r
+        
 class BlockTeleport(SequentialComponent):
     
     def __init__(self, kGood, bell_pair, meas_basis, block_to_meas):
         code = bell_pair.outBlocks()[0].getCode()
-        cnot = transversal.TransCnot(kGood, code, code)
-        bp_cnot = SequentialComponent(kGood, [bell_pair, cnot])
-        bp_cnot_parallel = ParallelComponent(kGood, bp_cnot, bp_cnot)
+        cnot = transversal.TransCnot({p: 1 for p in kGood.keys()}, code, code)
+        
+        bpc = SequentialComponent(kGood, subcomponents=[bell_pair, cnot])
+        
+        discard1 = BlockDiscard(cnot.outBlocks(), [0])
         if 1 == block_to_meas:
-            remove_blocks1 = [0,2]
-            remove_blocks2 = [1]
+            discard2 = BlockDiscard(cnot.outBlocks(), [1])
         else:
-            remove_blocks1 = [0,3]
-            remove_blocks2 = [0]
+            discard2 = BlockDiscard(cnot.outBlocks(), [0])
+
+        bp_cnot1 = SequentialComponent(kGood, [bpc, discard1])
+        bp_cnot2 = SequentialComponent(kGood, [bpc, discard2])
+        bp_cnot_parallel = ParallelComponent(kGood, bp_cnot1, bp_cnot2)
             
-        discard1 = BlockDiscard(bp_cnot_parallel.outBlocks(), remove_blocks1)
-        discard2 = BlockDiscard(cnot.outBlocks(), remove_blocks2)
+        discard3 = BlockDiscard(cnot.outBlocks(), [block_to_meas - 1])
         
         if xType == meas_basis:
             m = Pauli.X
@@ -585,7 +620,11 @@ class BlockTeleport(SequentialComponent):
             m = Pauli.Z
         meas = transversal.TransMeas(kGood, code, m)
         
-        super(BlockTeleport, self).__init__(kGood, subcomponents=[bp_cnot_parallel, discard1, cnot, discard2, meas])
+        super(BlockTeleport, self).__init__(kGood, subcomponents=[bp_cnot_parallel, cnot, discard3, meas])
+        
+    def count(self, noiseModels, pauli, inputResult=None, kMax=None):
+        r = super(BlockTeleport, self).count(noiseModels, pauli, inputResult, kMax)
+        return r
         
         
 class CnotGadget(SequentialComponent):
@@ -631,18 +670,22 @@ class BP1Max(SequentialComponent):
     
     def __init__(self, kGood):
         
-        code = ed422.ED412Code(gaugeType=error.xType)
+        code = ed422.ED412Code(gaugeType=None)
         
-        prepZ = Prep(kBPT, ed422.prepare(Pauli.Z, Pauli.X), StabilizerState(code, [error.zType]))
-        prepX = Prep(kBPT, ed422.prepare(Pauli.X, Pauli.Z), StabilizerState(code, [error.xType]))
+        prepZ = Prep(kGood, ed422.prepare(Pauli.Z, Pauli.X), code)
+        prepX = Prep(kGood, ed422.prepare(Pauli.X, Pauli.Z), code)
         
-        bp = BellPair(kBPT, prepX, prepZ, kBPT)
+        bp = BellPair(kGood, prepX, prepZ, kGood)
         
         bell_meas = BellMeas(kGood, code, kGoodCnot=kGood, kGoodMeasX=kGood, kGoodMeasZ=kGood)
-        teleport = TeleportED(kBPT, bp, bell_meas)
+        teleport = TeleportED(kGood, bp, bell_meas)
         parallel_teleport = ParallelComponent(kGood, teleport, teleport)
         combine = BlockCombine(parallel_teleport.outBlocks())
         
+        # Temp: remove this!
+#        discard = BlockDiscard(bp.outBlocks(), [1])
+#        super(BP1Max, self).__init__(kGood, subcomponents=[bp, discard])
+#        super(BP1Max, self).__init__(kGood, subcomponents=[prepZ])
         super(BP1Max, self).__init__(kGood, subcomponents=[bp, parallel_teleport, combine])
         
 #    def outBlocks(self):
@@ -663,25 +706,61 @@ class BP1Max(SequentialComponent):
 #        counts = countErrors.maxCount(counts1, counts2)
 #        
 #        return CountResult(counts, self.outBlocks() + result.blocks[2:])
+
+class GaugeFilter(Filter):
+    
+    def __init__(self, old_code, new_code):
+        self._new_code = new_code
+        self._old_code = old_code
+        self._parity_checks = SyndromeKeyGenerator(self._old_code, '').parityChecks()
+        self._gauge_operators = []
+        for ops in new_code.gaugeOperators():
+            self._gauge_operators += list(ops.values())
+        
+        super(GaugeFilter, self).__init__()
+    
+    def inBlocks(self):
+        return (Block('', self._old_code),)
+    
+    def outBlocks(self):
+        return (Block('', self._new_code),)
+    
+    def propagateCounts(self, inputResult):
+        result = super(GaugeFilter, self).propagateCounts(inputResult)
+        result.blocks[0].code = self._new_code
+        return result
+    
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        return self.GaugelessPropagator(subPropagator, self._parity_checks, self._gauge_operators)
+        
+    class GaugelessPropagator(KeyManipulator):
+        
+        def __init__(self, manipulator, parity_checks, gauge_operators):
+            super(GaugeFilter.GaugelessPropagator, self).__init__()
+            gauge_operators = set(gauge_operators)
+            self._gauge_bits = [i for i in range(len(parity_checks)) if parity_checks[i] in gauge_operators]
+            self._n = len(parity_checks)
+            
+        def _manipulate(self, key):
+            key_bit_list = listutils.remove_subsequence(bits.bitsToList(key[0], self._n), self._gauge_bits)
+            return (bits.listToBits(key_bit_list),) + key[1:]
         
 class BP1LevelJ(SequentialComponent):
     
     def __init__(self, kGood, bp1, j):
-        if 1 == j:
-            sub = bp1
-        else:
-            if 2 == j:
-                bp = ParallelComponent(kGood, bp1, bp1)
-            else:
-                bp1j = BP1LevelJ(kGood, bp1, j-1)
-                bp = ParallelComponent(kGood, bp1j, bp1j)
-                
+        if 2 == j:
+            # Level-2 sub-block teleportation is just level-1 teleportation with postselection.
+            # So we can count it precisely.
+            bp = ParallelComponent(kGood, bp1, bp1)    
             block_to_teleport = j % 2
-            
             sub = SubblockTeleport(kGood, bp, block_to_teleport=block_to_teleport, postselect=True)
+        else:
+            # For j=1, this is obviously correct.  For j > 2, the sub-block teleportation outputs
+            # the bottom half of a level-(j-1) BP.  But logical corrections are based on level-(j-1)
+            # (which is greater than one), so there is nothing else to do here.
+            sub = bp1                
             
         super(BP1LevelJ, self).__init__(kGood, subcomponents=[sub])
-        
         
         
 def PlotPaccept(fibonacci, epsilons, j_max):
@@ -696,6 +775,15 @@ def PlotPaccept(fibonacci, epsilons, j_max):
 
     plotList(epsilons, paccept, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'$p(j|j-1)$', legendLoc='lower left', filename='fibonacci-paccept',
              xscale='log')
+
+def PlotEpsilonCSS(fibonacci, epsilons, j_max):
+    e_css = []
+    for j in range(1,j_max+1):
+        e_css.append([fibonacci.EpsilonCSS(j, e) for e in epsilons])
+        
+    plotList(epsilons, e_css, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'$\epsilon_{css}$', legendLoc='lower left', filename='fibonacci-e_css',
+             xscale='log', yscale='log')
+        
         
 if __name__ == '__main__':
     import util.cache
@@ -706,6 +794,7 @@ if __name__ == '__main__':
     countParallel.setPool(countParallel.DummyPool())
     
 #    logging.getLogger('counting.component').setLevel(logging.WARNING)
+#    logging.getLogger('counting.component').setLevel(logging.DEBUG)
     
     logger.setLevel(logging.DEBUG)
     
@@ -721,10 +810,16 @@ if __name__ == '__main__':
 
 #    e = Epsilon(xType, 2, 2, 2, 0.001)
 #    print e
+
+#    counting_nm = {Pauli.Y: CountingNoiseModelXZ()}
+#    bp1 = BP1Max({Pauli.Y: 1})
+#    result = bp1.count(counting_nm, Pauli.Y)
+#    print result.counts
+#    raise
     
-    epsilons = [1e-4, 2e-4, 4e-4, 6e-4, 7e-4]#, 8e-4, 9e-4, 1e-3]#, 1.1e-3, 1.2e-3]
+    epsilons = [1e-4, 2e-4, 4e-4, 6e-4, 7e-4, 8e-4, 9e-4, 1e-3, 2e-3, 3e-3, 4e-3]#, 1.1e-3, 1.2e-3]
 #    epsilons = (1e-3,)
-    j_max = 3
+    j_max = 2
     
     fib_ap09 = FibonacciSchemeAP09(epsilon_scale=8/15., disable_sbt=[])
     fib_syndrome = FibonacciSchemeSyndrome()
@@ -740,7 +835,7 @@ if __name__ == '__main__':
     
 #    print fib_syndrome.PrAccept(1, 1e-3)
     PlotPaccept(fib_syndrome, epsilons, j_max)
-#    print fib_syndrome.Epsilon(xType, 1, 2, 2, 1e-3)
+    PlotEpsilonCSS(fib_syndrome, epsilons, j_max)
     
 #    p_syndrome = []
 #    p_ap09 = []

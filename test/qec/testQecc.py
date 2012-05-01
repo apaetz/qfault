@@ -12,7 +12,7 @@ class TestConcatenatedCode(unittest.TestCase):
 
 
     def test412(self):
-        code = qec.ed422.ED412Code()
+        code = qec.ed422.ED412Code(gaugeType=error.xType)
         cat = ConcatenatedCode(code, code)
         
         print cat.stabilizerGenerators()

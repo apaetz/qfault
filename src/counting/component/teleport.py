@@ -21,7 +21,7 @@ from util.cache import memoize
 import logging
 import warnings
 from copy import copy
-from counting.component.block import BlockDiscard
+from counting.component.block import BlockDiscard, BlockInsert
 
 logger = logging.getLogger('component')
        
@@ -45,6 +45,11 @@ class TeleportWithMeas(SequentialComponent):
         emptyMeasX = Empty(measXBlock.getCode(), measXBlock.name)
         emptyMeasZ = Empty(measZBlock.getCode(), measZBlock.name)
         emptyOut = Empty(outBlock.getCode(), outBlock.name)
+        
+        
+#        # Extend the input
+#        extender = BlockPrepend(bellMeas.inBlocks()[:1], bellPair.inBlocks())
+#        self._extender = extender
         
         # Extend the Bell measurement and the Bell pair so that they
         # contain the same number of blocks, some of which are empty.
@@ -70,21 +75,22 @@ class TeleportWithMeas(SequentialComponent):
         return (self.subcomponents()[1].inBlocks()[0],)
     
     def count(self, noiseModels, pauli, inputResult=None, kMax=None):
-        self._log(logging.INFO, "Counting {0}".format(pauli))
-        
         # First, extend the input to all three blocks.
         # TODO: there are two input extension functions.  This is because there seems to be a problem
         # when trying to propagate the input through the Bell Pair (which is only necessary when using
         # a concatenated code at level-two or higher).
-        extendedInput = self._extendInputA(inputResult)
-        
-        self._log(logging.DEBUG, "extended input before input propagation: {0}".format(extendedInput))
-        
+
+        extender = BlockInsert(self.inBlocks(), 1, self[0].outBlocks()[1:])
+        extendedInput = extender.count(inputResult=inputResult)
+#        
+#        self._log(logging.DEBUG, "extended input before input propagation: {0}".format(extendedInput))
+#        
+#        
         # Now propagate the input through the Bell measurement and transversal rest.
         for sub in self.subcomponents()[1:]:
             extendedInput = sub.propagateCounts(extendedInput)
-  
-        self._log(logging.DEBUG, "extended input after input propagation: {0}".format(extendedInput))
+#  
+#        self._log(logging.DEBUG, "extended input after input propagation: {0}".format(extendedInput))
           
         # Now count normally.
         result = self._countInternal(noiseModels, pauli, kMax)
@@ -117,27 +123,32 @@ class TeleportWithMeas(SequentialComponent):
         
         return result
     
-    def _extendInputA(self, inputResult):
-        bp = self[0]
-        nBP = len(bp.inBlocks())
-        nIn = len(self.inBlocks())
-        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(2, 1))
-        extender = KeyExtender(IdentityManipulator(), 2, 1)
-        extendedInput = inputResult
-        extendedInput.counts = mapCounts(inputResult.counts, extender)
-        extendedInput.blocks = inputResult.blocks[:1]*(3) + inputResult.blocks[1:]
-        return extendedInput
-
-    def _extendInputB(self, inputResult):
-        bp = self[0]
-        nBP = len(bp.inBlocks())
-        nIn = len(self.inBlocks())
-        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(nBP - nIn, nIn))
-        extender = KeyExtender(IdentityManipulator(), nBP - nIn, nIn)
-        extendedInput = inputResult
-        extendedInput.counts = mapCounts(inputResult.counts, extender)
-        extendedInput.blocks = inputResult.blocks[:1]*(nBP) + inputResult.blocks[1:]
-        return extendedInput
+    def prAccept(self, noiseModels, inputResult=None, kMax=None):
+        # The Bell-pair preparation may be non-deterministic, but we don't
+        # expect the Bell measurement to be non-deterministic.
+        return self[0].prAccept(noiseModels)
+    
+#    def _extendInputA(self, inputResult):
+#        bp = self[0]
+#        nBP = len(bp.inBlocks())
+#        nIn = len(self.inBlocks())
+#        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(2, 1))
+#        extender = KeyExtender(IdentityManipulator(), 2, 1)
+#        extendedInput = inputResult
+#        extendedInput.counts = mapCounts(inputResult.counts, extender)
+#        extendedInput.blocks = inputResult.blocks[:1]*(3) + inputResult.blocks[1:]
+#        return extendedInput
+#
+#    def _extendInputB(self, inputResult):
+#        bp = self[0]
+#        nBP = len(bp.inBlocks())
+#        nIn = len(self.inBlocks())
+#        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(nBP - nIn, nIn))
+#        extender = KeyExtender(IdentityManipulator(), nBP - nIn, nIn)
+#        extendedInput = inputResult
+#        extendedInput.counts = mapCounts(inputResult.counts, extender)
+#        extendedInput.blocks = inputResult.blocks[:1]*(nBP) + inputResult.blocks[1:]
+#        return extendedInput
 
     
     @memoize
@@ -145,8 +156,9 @@ class TeleportWithMeas(SequentialComponent):
         '''
         Counts the internal components with the trivial input.
         '''
-        inputResult = TrivialResult(self.inBlocks())
-        inputResult = self._extendInputB(inputResult)
+        extender = BlockInsert(self.inBlocks(), 1, self[0].inBlocks()[1:])
+        inputResult = extender.count(inputResult=TrivialResult(self.inBlocks()))
+#        inputResult = self._extendInputB(inputResult)
         return super(TeleportWithMeas, self).count(noiseModels, pauli, inputResult, kMax)
         
     
@@ -281,10 +293,11 @@ class TeleportEDFilter(PostselectionFilter):
     def _keyAcceptor(self, acceptFunction, code):
         stabilizers = set(code.stabilizerGenerators())
         # TODO: more robust way to get parity checks?
+        # TODO: clean up all of this.
         parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
         syndromeBits = [(check in stabilizers) for check in parityChecks]
         l = len(syndromeBits)
-        syndromeIndices = [l-i for i in range(l) if syndromeBits[i]]
+        syndromeIndices = [l-i-1 for i in range(l) if syndromeBits[i]]
         syndromeIndices.reverse()
 #        rejectMask = bits.listToBits(syndromeBits)
         
@@ -299,7 +312,7 @@ class TeleportEDFilter(PostselectionFilter):
                 raise RuntimeError("Syndrome bits are not contiguous")
         
             shift = firstBit
-            mask = bits.lsbMask(lastBit - firstBit)
+            mask = bits.lsbMask(lastBit - firstBit + 1)
         
         # The UncorrectedTeleport component blocks are setup as follows:
         # block 0 - Transversal X-basis measurement
@@ -371,7 +384,7 @@ class EDInputFilter(SequentialComponent):
         # Now remove the output block of the teleportation.  We only want to keep the original
         # input.
         numBlocks = len(teleport.outBlocks())
-        remover = KeyRemover(IdentityManipulator(), 0, numBlocks-1)
+        remover = KeyRemover(IdentityManipulator(), [1,2])
         result.counts = mapCounts(result.counts, remover)
         result.blocks = result.blocks[numBlocks:]
         

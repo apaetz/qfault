@@ -48,22 +48,28 @@ class ED412Code(CssCode):
                     error.zType: Pauli.Z+Pauli.I+Pauli.Z+Pauli.I}
     
     _gaugeOperators = {error.xType: Pauli.X+Pauli.I+Pauli.X+Pauli.I, 
-                       error.zType: Pauli.Z+Pauli.Z+Pauli.I+Pauli.I}
+                       error.zType: Pauli.Z+Pauli.Z+Pauli.I+Pauli.I,}
 
 
     
-    def __init__(self, gaugeType=error.xType):
+    def __init__(self, gaugeType=None):
         '''
         Constructor
         '''
         super(ED412Code, self).__init__('[[4,1,2]]' + str(gaugeType), 4, 1, 2)
         self._gaugeType = gaugeType
      
-    def stabilizerGenerators(self):#, types=(error.xType, error.zType)):
-        return tuple(self._generators[t] for t in (error.xType, error.zType)) + (self._gaugeOperators[self._gaugeType],)
+    def stabilizerGenerators(self):
+        gens = tuple(self._generators[t] for t in (error.xType, error.zType))
+        if None != self._gaugeType:
+            gens += (self._gaugeOperators[self._gaugeType],)
+        return gens
     
     def logicalOperators(self):
         return (self._normalizers,)
+    
+    def gaugeOperators(self):
+        return (self._gaugeOperators,)
     
     def syndromeCorrection(self, s):
         corr = self._syndromeCorrectionTable(self._gaugeType)[s]
@@ -83,6 +89,15 @@ class ED412Code(CssCode):
         # Operators given in descending qubit order.
         zCorr = (Pauli.I ** 3) + Pauli.X
         xCorr = (Pauli.I ** 3) + Pauli.Z
+        
+        if None == gaugeType:
+            # Syndrome bits are ordered from MSB to LSB as:
+            # XXXX, ZZZZ, gauge
+            return [Pauli.I ** 4,      # Commutes with both stabilizers 
+                    zCorr,             # anti-commutes with ZZZZ
+                    xCorr,             # anti-commutes with XXXX
+                    xCorr * zCorr,
+                    ]
         
         # A non-zero gauge syndrome is corrected by applying the dual
         # gauge operator.

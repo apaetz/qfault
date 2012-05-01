@@ -116,7 +116,7 @@ class TestRest(testComponent.ComponentTestCase):
 	def testED412(self):
 		kGood = {Pauli.Y: 1}
 		noiseModels = self.countingNoiseModels
-		code = ED412Code()
+		code = ED412Code(gaugeType=error.xType)
 		rest = self._getComponent(kGood, code)
 		
 		result = rest.count(noiseModels, Pauli.Y)

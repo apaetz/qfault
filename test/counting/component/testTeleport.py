@@ -112,7 +112,7 @@ class TestTeleportED(testComponent.ComponentTestCase):
 		print result.counts
 		print [sum(count.values()) for count in result.counts]
 		
-		decoder412 = SyndromeKeyDecoder(ed422.ED412Code())
+		decoder412 = SyndromeKeyDecoder(ed422.ED412Code(gaugeType=error.xType))
 		decoderTrivial = SyndromeKeyDecoder(self.trivialCode)
 		decodedCounts = []
 		for count in result.counts:
@@ -128,7 +128,7 @@ class TestTeleportED(testComponent.ComponentTestCase):
 		print result.counts
 		print [sum(count.values()) for count in result.counts]
 		
-		decoder412 = SyndromeKeyDecoder(ed422.ED412Code())
+		decoder412 = SyndromeKeyDecoder(ed422.ED412Code(gaugeType=error.xType))
 		decoderTrivial = SyndromeKeyDecoder(self.trivialCode)
 		decodedCounts = []
 		for count in result.counts:
@@ -176,7 +176,7 @@ class TestTeleport(testComponent.ComponentTestCase):
 		print result.counts
 		print [sum(count.values()) for count in result.counts]
 		
-		decoder412 = SyndromeKeyDecoder(ed422.ED412Code())
+		decoder412 = SyndromeKeyDecoder(ed422.ED412Code(gaugeType=error.xType))
 		decoderTrivial = SyndromeKeyDecoder(self.trivialCode)
 		decodedCounts = []
 		for count in result.counts:
