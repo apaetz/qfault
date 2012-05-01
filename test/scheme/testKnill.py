@@ -30,7 +30,7 @@ class TestKnill(unittest.TestCase):
                           StabilizerState(ed422.ED412Code(gaugeType=error.xType), [error.xType]))
         
         bellPair = BellPair(kGood, prepX, prepZ, kGood)
-        bellMeas = BellMeas(kGood, ed422.ED412Code(), kGood, kGood, kGood)
+        bellMeas = BellMeas(kGood, ed422.ED412Code(gaugeType=error.xType), kGood, kGood, kGood)
         
         teleportED = TeleportED(kGood, bellPair, bellMeas)
         
@@ -47,7 +47,7 @@ class TestKnill(unittest.TestCase):
                   }
         
         pauli = Pauli.X
-        code = ed422.ED412Code()
+        code = ed422.ED412Code(gaugeType=error.xType)
     
         id = base.Empty(code)
         

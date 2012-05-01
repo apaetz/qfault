@@ -4,7 +4,8 @@ Created on 2012-04-03
 @author: adam
 '''
 from counting.component.base import Filter
-from counting.key import IdentityManipulator, KeyPermuter, KeyRemover
+from counting.key import IdentityManipulator, KeyPermuter, KeyRemover,\
+    KeyExtender
 from util import listutils
 from counting import countErrors
 from counting.result import CountResult
@@ -49,6 +50,27 @@ class BlockDiscard(Filter):
         
     def keyPropagator(self, subPropagator=IdentityManipulator()):
         return KeyRemover(subPropagator, self._blocks_to_remove)
+    
+class BlockInsert(Filter):
+    '''
+    Prepends the given blocks to the existing blocks.
+    '''
+    
+    def __init__(self, in_blocks, insert_before, blocks_to_insert):
+        super(BlockInsert, self).__init__()
+        self._in_blocks = in_blocks
+        self._out_blocks = in_blocks[:insert_before] + blocks_to_insert + in_blocks[insert_before:]
+        self._num_new_blocks = len(blocks_to_insert)
+        self._insert_before = insert_before
+        
+    def inBlocks(self):
+        return self._in_blocks
+
+    def outBlocks(self):
+        return self._out_blocks
+    
+    def keyPropagator(self, subPropagator=IdentityManipulator()):
+        return KeyExtender(subPropagator, self._num_new_blocks, self._insert_before)
     
     
 class BlockCombine(Filter):

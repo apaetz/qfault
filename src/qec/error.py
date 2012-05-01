@@ -59,6 +59,9 @@ class PauliError(object):
 		self.ebits = { xType: xbits, zType: zbits }
 		self.length = length
 		
+	def weight(self):
+		return bits.weight(self[xType] | self[zType], self.length)
+		
 	def types(self):
 		return [etype for etype in [xType, zType] if self[etype]]
 	

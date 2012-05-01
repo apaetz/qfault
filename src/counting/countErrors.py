@@ -161,7 +161,7 @@ def countLocationSets(lSets, keyGenerator, blocklengths, noise):
 
 			blockErrors = {name: PauliError(blocklengths[name], X[i], Z[i]) for i,name in enumerate(blocknames)}
 			errorKey = keyGenerator.getKey(blockErrors)
-			#print 'blockErrors=', blockErrors, 'key=', errorKey
+#			print 'blockErrors=', blockErrors, 'key=', errorKey, 'weight=', totalWeight
 			counts[errorKey] = counts.get(errorKey, 0) + totalWeight
 
 	return counts

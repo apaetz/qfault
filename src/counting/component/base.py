@@ -69,6 +69,8 @@ class Component(object):
 		self._subs = subcomponents
 		
 		self._id = hashlib.md5(self._hashStr())
+		
+		self._log(logging.DEBUG, 'kGood={0}'.format(kGood))
 	
 		
 #################
@@ -112,7 +114,7 @@ class Component(object):
 			k = min(k, kMax)
 			
 		try:
-			self._log(logging.INFO, 'Counting: ' + str(pauli) + ' ' + str(k))
+			self._log(logging.INFO, 'Counting: ' + str(pauli) + ' k=' + str(k))
 			
 			if not self.ValidateResult(inputResult):
 				raise RuntimeError('Invalid input result')
@@ -387,18 +389,13 @@ class CompositeComponent(Component):
 			inputCounts = [{inputs: 1}]
 			inputResult = CountResult(inputCounts, self.inBlocks())
 			
-		kIn = len(inputResult.counts) - 1
-		
-		nblocksIn = len(inputResult.blocks)
-		
-		kGood = self.kGood[pauli]
-		if None == kMax:
-			kMax = kGood + kIn
-		else:
-			kGood = min(kGood, kMax)
+		k_in = len(inputResult.counts) - 1
+		k_lim = self.kGood[pauli] + k_in
+		if None != kMax:
+			k_lim = min(k_lim, kMax)
 			
 		try:
-			self._log(logging.INFO, 'Counting: ' + str(pauli) + ' ' + str(kMax))
+			self._log(logging.INFO, 'Counting: ' + str(pauli) + ' k=' + str(kMax))
 			
 #			if not self.ValidateResult(inputResult):
 #				raise RuntimeError('Invalid input result')
@@ -413,16 +410,16 @@ class CompositeComponent(Component):
 			
 			# TODO: optimize
 			results = []
-			for k in range(min(kMax, kIn) + 1):
+			for k in range(min(k_lim, k_in) + 1):
 				counts = [inputResult.counts[k]]
 				result = CountResult(counts, inputResult.blocks)
 				
-				result = self._countInputOrderZero(noiseModels, pauli, result, max(kMax-k, 0))
+				result = self._countInputOrderZero(noiseModels, pauli, result, max(k_lim-k, 0))
 					
-				result.counts = [{} for _ in range(k)] + result.counts + [{} for _ in range(kMax+1 - len(result.counts) - k)]
+				result.counts = [{} for _ in range(k)] + result.counts + [{} for _ in range(k_lim+1 - len(result.counts) - k)]
 				results.append(result)
 	
-			resultCounts = [listutils.addDicts(*[r.counts[k] for r in results]) for k in range(kMax+1)]
+			resultCounts = [listutils.addDicts(*[r.counts[k] for r in results]) for k in range(k_lim+1)]
 			result = CountResult(resultCounts, results[0].blocks)
 			
 			self._log(logging.DEBUG, 'counts=%s', result.counts)		
@@ -479,14 +476,26 @@ class SequentialComponent(CompositeComponent):
 	def outBlocks(self):
 		return self[-1].outBlocks()
 	
-	@memoize
+	@fetchable
 	def prAccept(self, noiseModels, inputResult=None, kMax=None):
 		pr_accept = super(SequentialComponent, self).prAccept(noiseModels)
+		
+		if None == inputResult:
+			inputs = tuple([0]*len(self.inBlocks()))
+			inputCounts = [{inputs: 1}]
+			inputResult = CountResult(inputCounts, self.inBlocks())
+			
+			
+		k_lim = self.kGood[Pauli.Y] + len(inputResult.counts) - 1
+		if None != kMax:
+			k_lim = min(k_lim, kMax)
+			
+		result = inputResult
 		for sub in self:
-			pr_sub = sub.prAccept(noiseModels, inputResult, kMax)
+			pr_sub = sub.prAccept(noiseModels, result, k_lim)
 			self._log(logging.DEBUG, '{0} Pr[accept]={1}'.format(sub, pr_sub))
 			pr_accept *= pr_sub
-			inputResult = sub.count(noiseModels, Pauli.Y, inputResult, kMax)
+			result = sub.count(noiseModels, Pauli.Y, result, k_lim)
 		return pr_accept
 	
 	def _countInputOrderZero(self, noiseModels, pauli, inputResult, kMax):
@@ -754,15 +763,15 @@ class ParallelComponent(CompositeComponent):
 
 		# The idea here is to count each of the sub-components sequentially, but
 		# permuting the input blocks at each step.
-		
-		k = self.kGood[pauli]
-		if None != kMax:
-			k = min(k, kMax)
 			
 		if None == inputResult:
 			inputs = tuple([0]*len(self.inBlocks()))
 			inputCounts = [{inputs: 1}]
 			inputResult = CountResult(inputCounts, self.inBlocks())
+			
+		k = self.kGood[pauli] + len(inputResult.counts) - 1
+		if None != kMax:
+			k = min(k, kMax)
 		
 		result = copy(inputResult)
 		
@@ -794,17 +803,28 @@ class ParallelComponent(CompositeComponent):
 #			raise RuntimeError('Invalid output result')
 		return result
 	
+	@fetchable
 	def prAccept(self, noiseModels, inputResult=None, kMax=None):
 		pr_accept = super(ParallelComponent, self).prAccept(noiseModels)
 		
+		if None == inputResult:
+			inputs = tuple([0]*len(self.inBlocks()))
+			inputCounts = [{inputs: 1}]
+			inputResult = CountResult(inputCounts, self.inBlocks())
+			
+		k_lim = self.kGood[Pauli.Y] + len(inputResult.counts) - 1
+		if None != kMax:
+			k_lim = min(k_lim, kMax)
+		
+		result = inputResult
 		for sub in self:
-			pr_accept *= sub.prAccept(noiseModels, inputResult, kMax)
-			inputResult = sub.count(noiseModels, Pauli.Y, inputResult, kMax)
+			pr_accept *= sub.prAccept(noiseModels, result, k_lim)
+			result = sub.count(noiseModels, Pauli.Y, result, k_lim)
 			
 			# Shift the input blocks for the next component into place.
 			rotator = self.TupleRotator(len(sub.outBlocks()))
-			inputResult.counts = mapCounts(inputResult.counts, rotator)
-			inputResult.blocks = rotator(inputResult.blocks)
+			result.counts = mapCounts(result.counts, rotator)
+			result.blocks = rotator(result.blocks)
 			
 		return pr_accept
 	
