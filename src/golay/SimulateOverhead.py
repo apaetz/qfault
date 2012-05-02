@@ -390,12 +390,13 @@ if __name__ == '__main__':
 	samplesNRSteane4 = simSteane4Prep(pMin, pMax, pStep, iters, noRests=True)
 	samplesNRSteane12 = simSteane12Prep(pMin, pMax, pStep, iters, noRests=True)
 	samplesNRSteane12_alt = simSteane12AltPrep(pMin, pMax, pStep, iters, noRests=True)
-	samplesSteane12_alt2 = simSteane12Alt2Prep(pMin, pMax, pStep, iters, noRests=True)
+	samplesNRSteane12_alt2 = simSteane12Alt2Prep(pMin, pMax, pStep, iters, noRests=True)
 	
 	labels = ['Overlap-4', 'Steane-4', 'Steane-12', 'Steane-12 (alt)', 'Steane-12 (alt2)']
 	
 	X, yList, yErrList = qubitOverhead(samplesOverlap, samplesSteane4, samplesSteane12, samplesSteane12_alt, samplesSteane12_alt2)
-	plotList(X, yList[:3], yErrList[:3], filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
+	plotList(X, yList[:3], yErrList[:3], filename='plotQubitOverheadCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left',
+			xlim=[0,8000])
 
 	X, yList, yErrList = qubitOverhead(samplesNROverlap, samplesNRSteane4, samplesNRSteane12, samplesNRSteane12_alt, samplesSteane12_alt2)
 	plotList(X, yList, yErrList, filename='plotQubitOverheadNRCompare', labelList=labels, xLabel='p', yLabel='Qubits', legendLoc='upper left')
