@@ -46,14 +46,14 @@ class memoize(object):
 		key = self.getKey(args)
 		return self._fetch(key, args)
 	
-	def _fetch(self, key, args):
+	def _fetch(self, key, args, kwargs):
 		if not memoEnabled:
-			return self.func(*args)	
+			return self.func(*args, **kwargs)	
 
 		try:
 			return self.getMemo(key)
 		except KeyError:
-			self.setMemo(key, self.func(*args))
+			self.setMemo(key, self.func(*args, **kwargs))
 		return self.getMemo(key)
 	
 	def hasMemo(self, key):
@@ -67,20 +67,20 @@ class memoize(object):
 		logger.debug('getting memo for {0}'.format(key))
 		return copy.copy(self.memo[key])
 	
-	def getKey(self, args):
-		key = [0] * len(args)
-		for i, arg in enumerate(args):
+	def getKey(self, args, kwargs):
+		key = [0] * (len(args) + len(kwargs))
+		for i, arg in enumerate(args + tuple(kwargs.values())):
 			try:
 				key[i] = arg.__hash__()
 			except TypeError:
 				key[i] = str(arg)
 		
-		return tuple(key)
+		return tuple(key) + tuple(kwargs)
 	
 	def _methodCall(self, obj, *args, **kwargs):
 		funcName = ''.join([repr(obj), '.', self.func.func_name])
-		key = self.getKey(tuple([funcName]) + args)
-		return self._fetch(key, tuple([obj]) + args)
+		key = self.getKey(tuple([funcName]) + args, kwargs)
+		return self._fetch(key, tuple([obj]) + args, kwargs)
 	
 	def __get__(self, obj, objtype):
 		'''
