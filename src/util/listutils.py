@@ -6,31 +6,21 @@ Created on 2011-04-28
 '''
 import operator
 
-def imax(list):
+def imax(seq):
 	'''
 	Returns the index of the largest element in the list.
+	>>> imax([1,2,3,5,4])
+	3
 	'''
-	maxIndex = 0
-	max = list[0]
-	for i, val in enumerate(list):
-		if val > max:
-			maxIndex = i
-			max = val
-			
-	return maxIndex
+	return seq.index(max(seq))
 
-def imin(list):
+def imin(seq):
 	'''
 	Returns the index of the smallest element in the list.
+	>>> imin([5,4,1,2,3])
+	2
 	'''
-	minIndex = 0
-	min = list[0]
-	for i, val in enumerate(list):
-		if val < max:
-			minIndex = i
-			min = val
-			
-	return minIndex
+	return seq.index(min(seq))
 
 def addLists(*lists):
 	'''
