@@ -67,7 +67,7 @@ def checkZRCM():
 
     for _ in xrange(1000):
         errors = simZRCM()
-        eZ = corrector.reduceError(errors['Z']['b'], True)
+        eZ = corrector.hashError(errors['Z']['b'], True)
         sZ = corrector.getSyndrome(eZ)
         
         #s = (sX << 11) + sZ
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     
     for _ in xrange(1000):
         errors = prepA()
-        eZ = corrector.reduceError(errors['Z']['a2'], True)
+        eZ = corrector.hashError(errors['Z']['a2'], True)
         sZ = corrector.getSyndrome(eZ)
         counts[sZ] += 1
         

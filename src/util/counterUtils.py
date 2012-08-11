@@ -148,7 +148,7 @@ def errorsMerge(e1, e2):
 		errors['Z'][k] = e2['Z'][k]
 	return errors
 
-def reduceError(e, stabilizers):
+def hashError(e, stabilizers):
 	"""Returns a minimum-weight representative for the error e.
 	
 	The error is reduced modulo the stabilizers.  
@@ -156,9 +156,9 @@ def reduceError(e, stabilizers):
 	To speed this up, I might add a third argument shortCircuitWeight=0, and stop the error reduction 
 	as soon as the weight reaches that threshold.
 	
-	>>> reduceError(7, [[0,1],[2]])
+	>>> hashError(7, [[0,1],[2]])
 	0
-	>>> reduceError(15, [[0,1,2],[0,1]])
+	>>> hashError(15, [[0,1,2],[0,1]])
 	8
 	"""
 	if isinstance(stabilizers[0], list):
@@ -276,9 +276,25 @@ def allBlocks(locations):
 			blocks.add(loc['block2'])
 	return blocks
 
+def blockLengths(locations):
+	"""Returns a dictionary containing length of each block used by locations in the input list."""
+	blocks = {}
+	for loc in locations:
+		blockname = loc['block1']
+		bit = loc['bit1']
+		blocks[blockname] = max(blocks.get(blockname, 0), bit+1)
+		if 'block2' in loc: 
+			blockname = loc['block2']
+			bit = loc['bit2']
+			blocks[blockname] = max(blocks.get(blockname, 0), bit+1)
+	return blocks
+
+
+propagateNoOpTypes = set(['rest', 'prepX', 'prepZ', 'measX', 'measZ'])
+
 def propagateErrorsThroughLocation(errors, loc):
 	# currently only cnot location types affect the errors, but a natural addition might be Hadamards
-	if loc['type'] in ['rest', 'prepX', 'prepZ', 'measX', 'measZ']:
+	if loc['type'] in propagateNoOpTypes:
 		return errors
 	if loc['type'] == 'cnot':
 		b1, b2 = errors['X'][loc['block1']], errors['X'][loc['block2']]
@@ -305,6 +321,10 @@ def propagateErrors(errors, locations):
 
 def propagateAllErrors(locations):
 	"""Propagates all bit errors.
+	Errors are constructed using a descending (little endian) bit ordering.
+	A fault that propagates to a single X error on qubit k will results in a bit string
+	in which all bits are zero except bit k.  For example, a single X error on qubit
+	2 is represented by 0b100 (=4). 
 	"""
 	# First extract a list of all the block IDs used in the computation
 	blocks = allBlocks(locations)
@@ -688,7 +708,7 @@ def isFaultTolerant(counts, t, corrector):
 		sNonZero = nonZeroIndices(counts[k])
 		for s in sNonZero:
 			e = corrector.getError(s)
-			e = corrector.reduceError(e, logical)
+			e = corrector.hashError(e, logical)
 			if not weight(e) <= k:
 				logger.warning('s={0}, e={1}, w(e)={2}, k={3}'.format(s, e, weight(e), k))
 				success = False		 

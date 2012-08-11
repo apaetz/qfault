@@ -55,7 +55,7 @@ if __name__ == '__main__':
         #errors = prepareUnverifiedAncilla(errorRates, rounds0, cnotsA0, 'a0')
         #errors = prepareUnverifiedAncilla(errorRates, rounds1, cnotsA1, 'a0')
         errors = prepA0()
-        eZ = corrector.reduceError(errors['Z']['a0'], True)
+        eZ = corrector.hashError(errors['Z']['a0'], True)
         sZ = corrector.getSyndrome(eZ)
         counts[sZ] += 1
         

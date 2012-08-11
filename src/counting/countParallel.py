@@ -4,15 +4,17 @@ Created on 2010-08-30
 
 @author: adam
 '''
+from counting.convolve import convolveDict
 from multiprocessing.pool import Pool
-from util.counterUtils import convolveCounts, PartitionIterator
-from util.listutils import addLists, addDicts
+from util.counterUtils import PartitionIterator
 import logging
 import math
 import time
+from util import listutils
 
 
 logger = logging.getLogger('countParallel')
+defaultPool = None
 
 class DummyPool(object):
 	'''
@@ -26,7 +28,7 @@ class DummyPool(object):
 		Constructor
 		'''
 		
-		self.pool = Pool(1, initializer, initargs)
+		#self.pool = Pool(1, initializer, initargs)
 		
 	def apply(self, func, args=(), kwds={}):
 		'''
@@ -56,7 +58,7 @@ class DummyPool(object):
 		'''
 		Asynchronous equivalent of `apply()` builtin
 		'''
-		result = self.pool.apply(func, args, kwds)
+		result = apply(func, args, kwds)
 		if None != callback:
 			callback(result)
 		return DummyResult(result)
@@ -138,6 +140,10 @@ def numSlots():
 	return nSlots
 
 def getPool():
+	global defaultPool
+	
+	if None == defaultPool:
+		defaultPool = DummyPool()
 	return defaultPool
 
 def setPool(pool):
@@ -145,13 +151,19 @@ def setPool(pool):
 	defaultPool = pool
 
 
-convolve = lambda *args, **kwargs: convolveParallel(defaultPool, *args, **kwargs)
+convolve = lambda *args, **kwargs: convolveParallel(getPool(), *args, **kwargs)
 
 def asyncFuncWrapper(argList):
 	asyncFcn = argList[0]
 	return asyncFcn(*argList[1:])
 	
-def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=None, convolveFcn=convolveCounts, extraArgs=[], splitListsInto=[2,2]):
+def convolveParallel(pool, 
+					counts0, counts1, 
+					partMax0=None, partMax1=None, 
+					kMax=None, 
+					convolveFcn=convolveDict, extraArgs=[], 
+					splitListsInto=[2,2],
+					listMergeOp=listutils.addDicts):
 	
 	if None == partMax0:
 		partMax0 = len(counts0)-1
@@ -167,8 +179,11 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 	# Collate the results
 	convolved = [0] * (kMax+1)
 
+	sleeptime = 0
 	while (len(resultsList)):
-		time.sleep(1)
+		time.sleep(sleeptime)
+		sleeptime = 1
+		
 		done = [False] * len(resultsList)
 		readyResults = [[] for _ in range(kMax+1)]
 		for i, (k, result) in enumerate(resultsList):
@@ -181,7 +196,7 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 		
 		resultsToProcess = sum(len(r) for r in readyResults)
 		if resultsToProcess:
-			logger.info('Now processing {0} results. {1} results remain to be convolved.'.format(resultsToProcess, len(resultsList)))
+			logger.debug('Now processing {0} results. {1} results remain to be convolved.'.format(resultsToProcess, len(resultsList)))
 		
 		for k in range(len(readyResults)):
 			ready = readyResults.pop(0)
@@ -189,16 +204,12 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 				continue
 			
 			ready = [r.get() for r in ready]
-			if type(ready[0]) is dict:
-				addFunc = addDicts
-			else:
-				addFunc = addLists
 			
-			logger.info('Summing contents of {0} lists of size {1} for k={2}'.format(len(ready), len(ready[0]), k))
+			logger.debug('Summing contents of {0} lists of size {1} for k={2}'.format(len(ready), len(ready[0]), k))
 			if 0 != convolved[k]:
 				ready += [convolved[k]]
 			
-			convolved[k] = addFunc(*ready)
+			convolved[k] = listMergeOp(*ready)
 				
 
 			
@@ -206,12 +217,12 @@ def convolveParallel(pool, counts0, counts1, partMax0=None, partMax1=None, kMax=
 #	for k in range(len(resultsList)):
 #		results = resultsList.pop(0)
 #		results = results.get()
-#		logger.info('Summing contents of {0} lists of size {1} for k={2}'.format(len(results), len(results[0]), k))
+#		logger.debug('Summing contents of {0} lists of size {1} for k={2}'.format(len(results), len(results[0]), k))
 #		if type(results[0]) is dict:
 #			convolved.append(addDicts(*results))
 #		else:
 #			convolved.append(addLists(*results))
-#		logger.info('Completed parallel convolution for k={0}'.format(k))
+#		logger.debug('Completed parallel convolution for k={0}'.format(k))
 	
 	return convolved
 
@@ -222,7 +233,7 @@ def distributeConvolutions(pool, counts0, counts1, partMax0, partMax1, kMax, con
 	# Distribute the work
 	results = []
 	for k in reversed(range(kMax+1)):
-		logger.info('Parallel Convolving {0} in {1}x{2} parts'.format(k, splitListsInto[0], splitListsInto[1]))
+		logger.debug('Parallel Convolving {0} in {1}x{2} parts'.format(k, splitListsInto[0], splitListsInto[1]))
 		
 		for k0, k1 in PartitionIterator(k, 2, [partMax0, partMax1]):
 			for count0Part in count0Parts[k0]:
@@ -240,19 +251,32 @@ def splitContents(listOrDict, numParts=2):
 	return splitListContents(listOrDict, numParts)
 
 def splitDictContents(d, numParts=2):
+	'''
+	>>> splitDictContents({1:'a', 2:'b', 3:'c'}, 2)
+	[{1: 'a', 2: 'b'}, {3: 'c'}]
+	'''
 	
 	# Special case to avoid costly d.items() call below, if possible.
 	if 1 == numParts:
 		return [d]
 	
+	keys = d.keys()
+	
+	# If the number of elements in the dict is less than the
+	# requested number of parts, then some of the parts will be empty.
+	nonEmptyParts = min(len(keys), numParts)
+	if 0 != nonEmptyParts:
+		chunksize = int(math.ceil(len(keys) / float(nonEmptyParts)))
+	else:
+		chunksize = 1
+		
 	parts = []
-	# Note: items() can be quite slow when the dictionary is large, or when the values contained
-	# in the dictionary consume a lot of memory.
-	items = d.items()
-	chunksize = int(math.ceil(len(items) / float(numParts)))
-	#logger.info('Splitting dictionary of {0} items into {1} chunks of size {2}'.format(len(items), numParts, chunksize))
-	for i in xrange(0, len(items), chunksize):
-		parts.append(dict(items[i:i+chunksize]))
+	for i in xrange(0, len(keys), chunksize):
+		end = min(i + chunksize, len(keys))
+		parts.append({keys[j]: d[keys[j]] for j in xrange(i, end)})
+		
+	# Append any empty parts
+	parts += [{}] * (numParts - nonEmptyParts)
 			
 	return parts
 
@@ -280,7 +304,7 @@ def splitListContents(l, numParts=2):
 			end = listLen
 		else:
 			end = offset + partLen
-		logger.info('Splitting into part {0} [{1}:{2}]'.format(partNum, offset, end))
+		logger.debug('Splitting into part {0} [{1}:{2}]'.format(partNum, offset, end))
 		contents = l[offset:end]
 		
 		# If the contents of this part are all zeros, then it is useless.
@@ -302,7 +326,7 @@ def packTasks(nSlots, tasks, costs):
 	totalCost = sum(costs)
 	targetCost = totalCost / nSlots
 	
-	logger.info('totalCost={0}, targetCost={1}'.format(totalCost, targetCost))
+	logger.debug('totalCost={0}, targetCost={1}'.format(totalCost, targetCost))
 	
 	taskSlices = []
 	for _ in range(nSlots):
@@ -337,14 +361,11 @@ def packTasks(nSlots, tasks, costs):
 
 
 def iterParallel(iterator, iterFunc, extraArgs=[], callback=None, pool=None):	
-	if None == pool:
-		pool = defaultPool
+	pool = getPool()
 				
 	results = [pool.apply_async(iterFunc, [i] + extraArgs, callback=callback) for i in iterator]
 	return results
 
-
-setPool(DummyPool())
 
 if __name__ == '__main__':
 	import doctest

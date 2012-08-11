@@ -3,20 +3,20 @@ Created on Apr 29, 2011
 
 @author: Adam
 '''
-from component.exrec import countRestExRecZero, countRestExRecPlus, \
-	countPrepZeroExRec, countPrepPlusExRec, countMeasZExRec, countMeasXExRec, \
-	countCnotExRec, exRecXOnly, exRecZOnly
-from component.xverify import countXVerifyXOnly
-from component.zverify import countZVerifyZOnly
+
 from counting.bounding import computeWeights
 from counting.countErrors import CountResult
 from counting.probability import countResultAsPoly, calcPrBad
-from counting.threshold import pseudoThresh
+from counting.threshold import pseudoThresh, findIntersection
 from util.cache import fetchable
 from util.counterUtils import loccnot
 from util.listutils import addLists
 from util.plotting import plotPolyList
 import logging
+from counting import probability
+import counting
+from qec.error import Pauli
+from util.polynomial import sympoly1d, SymPolyWrapper
 
 logger = logging.getLogger('levelOne')
 
@@ -86,7 +86,7 @@ def transformedWeights(ancillaPairs, settings):
 #	settingsStr = str(settings).replace(' ', '').replace('.', '')
 	_, gMax = noise['X'].noiseRange()
 	gMax = min(gMax, pseudothresh)
-	gMin = gMax/100
+	gMin = gMax/10
 #	filename = 'plot-all-' + settingsStr
 #	plotPolyList(results.values(), gMin, gMax, filename, labelList=results.keys(), numPoints=10)
 #	
@@ -152,7 +152,6 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	gMin, gMax = noiseXZ.noiseRange()
 	cnotLoc = loccnot('A', 0, 'A', 1)
 	cnotWeight = sum(noiseXZ.getWeight(cnotLoc, e) for e in range(noiseXZ.numErrors(cnotLoc)))
-	print "cnotWeight=", cnotWeight, "noiseXZ=", noiseXZ.__class__, "numErrors=", noiseXZ.numErrors(cnotLoc) 
 	pMin = cnotWeight * gMin
 	pMax = cnotWeight * gMax
 	
@@ -166,6 +165,7 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	#thresh = pseudoThresh(prFail, pMin, pMax)
 	thresh = pseudoThresh(prFail, pMin, pMax)
 	
+
 #	settingsStr = str(ancillaPairs) + str(settings)
 #	settingsStr = settingsStr.replace(' ', '').replace('.', '').replace(')','').replace('(','')
 #	settingsStr = settingsStr.replace('}', ']').replace('{', '[')	
@@ -182,3 +182,37 @@ def cnotPseudoThresh(ancillaPairs, settings):
 	print 'pseudothreshold (p) >=', thresh
 	
 	return thresh/cnotWeight
+
+def pseudoThreshold(counts, locTotals, prBad, prAccept, noise, prInput=1):
+	
+	#logger.info('Computing CNOT pseudothreshold')
+	
+	gMin, gMax = noise.noiseRange()
+	
+	# prAccept is a lower bound on the probability of acceptance.
+	# When gamma (gMax) is too high, prAccept could be negative.
+	# Avoid this by explicitly checking.
+	while 0 >= prAccept(gMax):
+		gMax *= .95
+	
+	cnotLoc = loccnot('A', 0, 'A', 1)
+	cnotWeight = sum(noise.getWeight(cnotLoc, e) for e in range(noise.numErrors(cnotLoc)))
+	pMin = cnotWeight * gMin
+	pMax = min(cnotWeight * gMax, 1)
+
+	summedCounts = []
+	for count in counts:
+		summedCount = sum(count[key] for key in count.keys() if key != Pauli.I)
+		summedCounts.append({None: summedCount})	
+		
+	print 'summed counts=', summedCounts
+		
+	countPoly = probability.countsToPoly(summedCounts, locTotals, noise)
+	
+	prFailGamma = prInput * (countPoly / prAccept) + prBad
+	prFail = lambda p: prFailGamma(p/cnotWeight)
+	pthresh = counting.threshold.pseudoThresh(prFail, pMin, pMax, tolerance=1e-5)
+	
+	#print 'pseudothreshold (p) >=', thresh
+	
+	return pthresh

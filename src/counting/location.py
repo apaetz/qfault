@@ -1,5 +1,6 @@
 from util.counterUtils import sumLocs
 import operator
+from util import counterUtils
 
 
 class Locations(object):
@@ -8,7 +9,7 @@ class Locations(object):
 	class is to allow a name to be attached to the list of locations.
 	'''
 	
-	def __init__(self, list, name):
+	def __init__(self, list=[], name=''):
 		self.list = list
 		self.name = name
 		
@@ -33,9 +34,18 @@ class Locations(object):
 	def getTotals(self):
 		return LocationCount._fromDict(sumLocs(self))
 	
+	def blocknames(self):
+		return counterUtils.allBlocks(self)
+	
+	def blocklengths(self):
+		return counterUtils.blockLengths(self)
+	
 	
 class LocationCount(tuple):
-		'LocationCount(cnot, prepX, prepZ, measX, measZ, rest)' 
+		'''
+		Deprecated
+		LocationCount(cnot, prepX, prepZ, measX, measZ, rest
+		''' 
 
 		__slots__ = () 
 

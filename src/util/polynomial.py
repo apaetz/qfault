@@ -30,7 +30,7 @@ disableSympyCache()
 import sympy
 from sympy import Symbol
 from sympy.simplify.simplify import powsimp, collect
-from sympy.functions.combinatorial.factorials import factorial as Factorial
+from sympy.functions.combinatorial.factorials import factorial
 
 
 
@@ -46,7 +46,7 @@ def chebyshevT(n, symbol='x'):
 	26
 	'''
 	x = Symbol(symbol)
-	term = lambda k: (-2)**k * Factorial(n+k-1) / (Factorial(n-k) * Factorial(2*k)) * (1-x)**(k)
+	term = lambda k: (-2)**k * factorial(n+k-1) / (factorial(n-k) * factorial(2*k)) * (1-x)**(k)
 	Tn = n * sum(term(k) for k in range(n + 1))
 	return SymPolyWrapper(Tn) 
 

@@ -1,0 +1,25 @@
+\documentclass[11pt]{article}
+
+\usepackage[active,tightpage]{preview}
+\include{Qcircuit}
+\xyoption{pdf}
+
+\usepackage{rotating}
+
+\begin{document}
+\pagestyle{empty}
+
+\begin{preview}
+
+\def\ecBox{\push{\fbox{\raisebox{0em}[1em][0.5em]{EC}}}}
+\def\dectxt{\begin{sideways}\tiny{$\begin{array}{c} \text{Ideal}\\ \text{Decoder} \end{array}$}\end{sideways}}
+\def\decode{\lgate{\dectxt}}
+
+\Qcircuit  @R=1em {
+  &\ecBox \qw&\ctrl{1}&\ecBox \qw&\qw\\
+  &\ecBox \qw&\targ    &\ecBox \qw&\qw
+}
+
+\end{preview}
+
+\end{document}
