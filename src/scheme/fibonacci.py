@@ -298,7 +298,7 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
         
         self._code = ed422.ED412Code()
         
-        self._kGood = {Pauli.Y: 3}
+        self._kGood = {Pauli.Y: 6}
         
         super(FibonacciSchemeSyndrome, self).__init__(epsilon_scale=8/15.)
 
@@ -440,8 +440,10 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
         return p
     
     def _SubblockTeleportComponent(self, m, j):
-        k_good = {key: val + (j-1) for key, val in self._kGood.iteritems()}
-        bp1j = BP1LevelJ(k_good, self.BP1(), j-1)
+        if j == 1:
+            return self.BP1()
+        
+#        bp1j = BP1LevelJ(k_good, self.BP1(), j-1)
         
         if xType == m:
             # Select the Z-basis measurements
@@ -449,9 +451,12 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
         else:
             # Select X-basis measurements
             tp_output_block = 0             
-        
-        sbt = SubblockTeleport(self._kGood, 
-                               ParallelComponent(k_good, bp1j, bp1j), 
+            
+        sbt_j_1 = self._SubblockTeleportComponent(m, j-1)
+
+        k_good = {key: (3*val)*(j) for key, val in self._kGood.iteritems()}        
+        sbt = SubblockTeleport(k_good, 
+                               ParallelComponent(k_good, sbt_j_1, sbt_j_1), 
                                j % 2,
                                teleport_output_block=tp_output_block)
         return sbt
@@ -517,8 +522,9 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
             # 4. Add Pr[bad] (TODO)           
             
             # The sub-block teleportation subcircuit requires three input (j-1)-BPs so
-            # normalization is the fourth power of p(j-1).
+            # normalization is the third power of p(j-1).
             norm = self.PrAccept(j-1, e)**3
+            logger.debug('{0}-BP level-1 sub-block teleport normalization = {1}'.format(j, 1/norm))
                     
             f, sf, sf_bar = self._SubblockTeleportCountDecode(m, j)
             pbad = self._SubblockTeleportPrBad(m, j)(e/15.)
@@ -531,6 +537,9 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
             
         else:
             f, sf, sf_bar = super(FibonacciSchemeSyndrome, self).SubblockTeleport(m, i, j, e)
+            
+        if f > 1 or sf > 1 or sf_bar > 1:
+            logger.warn('Probability > 1: f^s_{0}({1},{2}|{3}={4}, s_{0}({1},{2},f=1|{3})={5}, s_{0}({1},{2},f=0|{3})={6}'.format(m,i,j,j-1,f,sf,sf_bar))
             
         return f, sf, sf_bar
 
@@ -556,7 +565,7 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
             # The block teleportation subcircuit requires four input (j-1)-BPs so
             # normalization is the fourth power of p(j-1).
             norm = self.PrAccept(j-1, e)**4
-            
+            logger.debug('{0}-BP level-1 block teleport normalization = {1}'.format(j, 1/norm))
 
             f, bf, bf_bar = self._BlockTeleportCountDecode(m, j)
             pbad = self._BlockTeleportPrBad(m, j)(e/15.)
@@ -570,6 +579,8 @@ class FibonacciSchemeSyndrome(FibonacciSchemeAP09):
         else:
             f, bf, bf_bar = super(FibonacciSchemeSyndrome, self).BlockTeleport(m, i, j, e)
             
+        if f > 1 or bf > 1 or bf_bar > 1:
+            logger.warn('Probability > 1: f^b_{0}({1},{2}|{3}={4}, b_{0}({1},{2},f=1|{3})={5}, b_{0}({1},{2},f=0|{3})={6}'.format(m,i,j,j-1,f,bf,bf_bar))
         
         return f, bf, bf_bar
     
@@ -783,7 +794,27 @@ def PlotEpsilonCSS(fibonacci, epsilons, j_max):
         
     plotList(epsilons, e_css, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'$\epsilon_{css}$', legendLoc='lower left', filename='fibonacci-e_css',
              xscale='log', yscale='log')
+    
+def PlotPrBadSBT(epsilons, j_max):
+    fibonacci = FibonacciSchemeSyndrome()
+    pbad = []
+    for j in range(1,j_max+1):
+        print j, len(fibonacci._SubblockTeleportComponent(xType, j).locations(Pauli.Y))
+        pbad.append([fibonacci._SubblockTeleportPrBad(xType, j)(e/15.) for e in epsilons])
         
+    plotList(epsilons, pbad, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'Pr[bad] (sub-block)', legendLoc='lower left', filename='fibonacci-pbad-sbt',
+             xscale='log', yscale='log')   
+        
+        
+def PlotPrBadBP1(epsilons):
+    fibonacci = FibonacciSchemeSyndrome()
+    pbad = []
+    pr_bad = fibonacci.BP1().prBad(fibonacci._noise_models[Pauli.Y], Pauli.Y)
+    for j in range(1):
+        pbad.append([pr_bad(e/15.) for e in epsilons])
+        
+    plotList(epsilons, pbad, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'Pr[bad] (1-BP)', legendLoc='lower left', filename='fibonacci-pbad-bp1',
+             xscale='log', yscale='log')
         
 if __name__ == '__main__':
     import util.cache
@@ -817,9 +848,9 @@ if __name__ == '__main__':
 #    print result.counts
 #    raise
     
-    epsilons = [1e-4, 2e-4, 4e-4, 6e-4, 7e-4, 8e-4, 9e-4, 1e-3, 2e-3, 3e-3, 4e-3]#, 1.1e-3, 1.2e-3]
+    epsilons = [1e-4, 2e-4, 4e-4, 6e-4, 7e-4, 8e-4, 9e-4, 1e-3, 2e-3, 3e-3, 4e-3, 5e-3, 6e-3, 7e-3, 8e-3, 9e-3, 1e-2]
 #    epsilons = (1e-3,)
-    j_max = 2
+    j_max = 5
     
     fib_ap09 = FibonacciSchemeAP09(epsilon_scale=8/15., disable_sbt=[])
     fib_syndrome = FibonacciSchemeSyndrome()
@@ -834,8 +865,10 @@ if __name__ == '__main__':
 #    raise
     
 #    print fib_syndrome.PrAccept(1, 1e-3)
-    PlotPaccept(fib_syndrome, epsilons, j_max)
-    PlotEpsilonCSS(fib_syndrome, epsilons, j_max)
+#    PlotPaccept(fib_syndrome, epsilons, j_max)
+    PlotPrBadSBT(epsilons, j_max)
+#    PlotPrBadBP1(epsilons)
+#    PlotEpsilonCSS(fib_syndrome, epsilons, j_max)
     
 #    p_syndrome = []
 #    p_ap09 = []
