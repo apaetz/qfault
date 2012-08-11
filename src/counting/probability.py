@@ -7,12 +7,13 @@ Created on 2010-06-17
 from counting import countParallel
 from counting.location import LocationCount
 from fractions import Fraction
-from settings.noise import NoiseModelXSympy
+from settings.noise import NoiseModelXSympy, Bound
 from util.counterUtils import PartitionIterator, loccnot, locrest, locXprep, \
 	locXmeas, locZprep, locZmeas, SliceIterator
 import gmpy
 import logging
 import operator
+from util.polynomial import SymPolyWrapper, sympoly1d
 
 logger = logging.getLogger('counting.probability')
 
@@ -47,7 +48,7 @@ def prMinFailuresOld(kMin, locTotals, noiseModel, kMax=None):
 	Computes the an upper bound on the probability that at least kMin failures occur for the given
 	numbers of locations.
 	'''
-	logger.info('Computing poly for {0}, {1}, {2}, {3}'.format(kMin, locTotals, noiseModel, kMax))
+	logger.debug('Computing poly for {0}, {1}, {2}, {3}'.format(kMin, locTotals, noiseModel, kMax))
 	
 	
 	if None == kMax:
@@ -112,7 +113,7 @@ def prMinFailuresOld(kMin, locTotals, noiseModel, kMax=None):
 	return pr
 
 
-def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
+def prMinFailures(kMin, locations, noiseModel, kMax=None):
 	'''
 	Returns Pr[kMin <= k <= kMax], an upper bound on the probability that  between kMin and kMax
 	failures (of any kind) occur at the given locations.
@@ -142,6 +143,8 @@ def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
 	# types. Each product term is computed in parallel.
 	#===============================================================================
 
+	boundType = Bound.UpperBound
+	locTotals = locations.getTotals()
 	nTotal = reduce(operator.add, locTotals)
 	if None == kMax:
 		# 10 is arbitrary, but seems to work well.
@@ -152,7 +155,7 @@ def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
 		
 	kMax = min(kMax, nTotal) + 1
 	
-	logger.info('Computing Pr[{0} <= k <= {1}] for {2}, {3}'.format(kMin, kMax, locTotals, noiseModel))
+	logger.debug('Computing Pr[{0} <= k < {1}] for {2}, {3}'.format(kMin, kMax, locTotals, noiseModel))
 	
 	
 	nCnot = locTotals.cnot
@@ -175,11 +178,12 @@ def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
 	locsList = [locsList[i] for i in range(len(locsList)) if nList[i]]
 	nList = [n for n in nList if n]
 	
-	prIdealList = [noiseModel.prIdeal(l) for l in locsList]
+	prIdealList = [noiseModel.prIdeal(l, boundType) for l in locsList]
 	
 	weightList = []
 	for l in locsList:
-		w = sum(noiseModel.getWeight(l,e) for e in range(noiseModel.numErrors(l)))
+		nErrors = len(noiseModel.errorList(l))
+		w = sum(noiseModel.getWeight(l,e, boundType) for e in range(nErrors))
 		weightList.append(w)
 
 	# This should look something like (1-12g)^nCnot * (1-8g)^nRest * ...
@@ -199,10 +203,12 @@ def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
 	nList = newNList
 					
 	pr = 0
-	likelyhood = noiseModel.likelyhood()
-	weights = boundedFailureWeights(kMin, locTotals, noiseModel, kMax)
+	likelyhood = noiseModel.likelyhood(boundType)
+	weights = boundedFailureWeights(kMin, locTotals, noiseModel, kMax, boundType)
 	for k in range(kMin, kMax):
 		pr += weights[k-kMin] * (likelyhood ** k)
+		
+	logger.debug('A=%s, pr=%s', prefactor, pr)
 	
 	pr *= prefactor
 		
@@ -210,10 +216,13 @@ def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
 		# Not all possible failure configurations were computed.  Bound
 		# the probabiliity by ignoring the prefactor and using probabilities (instead of
 		# likelyhoods)
+		
 		iterator = PartitionIterator(kMax, len(nList), nList) 
-		prFailList = [noiseModel.prFail(l) for l in locsList]
+		prFailList = [noiseModel.prFail(l, boundType) for l in locsList]
 		results = countParallel.iterParallel(iterator, constructLocLikely, [nList, prFailList])
-		pr += sum(r.get() for r in results)
+		cap = sum(r.get() for r in results)
+		logger.debug('adding bounding cap: %s', cap)
+		pr += cap
 	
 #	# Simplify, if possible.
 #	try:
@@ -225,9 +234,9 @@ def prMinFailures(kMin, locTotals, noiseModel, kMax=None):
 
 
 
-def boundedFailureWeights(kMin, locTotals, noiseModel, kMax):
+def boundedFailureWeights(kMin, locTotals, noiseModel, kMax, bound=Bound.UpperBound):
 	'''
-	Calculates a vector of likelyhood weights that can be used to upper bound Pr[kMin <= k <= kMax].	
+	Calculates a vector of likelyhood weights that can be used to bound Pr[kMin <= k <= kMax].	
 	Arguments
 	---------
 	kMin		-- The minimum number of failures.
@@ -259,7 +268,7 @@ def boundedFailureWeights(kMin, locTotals, noiseModel, kMax):
 		
 	weightList = []
 	for l in locsList:
-		w = sum(noiseModel.getWeight(l,e) for e in range(noiseModel.numErrors(l)))
+		w = sum(noiseModel.getWeight(l,e, bound) for e in range(noiseModel.numErrors(l)))
 		weightList.append(w)
 		
 	# Check for identical weights.  These can be grouped together which
@@ -291,15 +300,21 @@ def boundedFailureWeights(kMin, locTotals, noiseModel, kMax):
 
 
 def countsAsProbability(counts, likelyhood):
-	return sum(counts[k] * (likelyhood ** k) for k in range(len(counts)))
+	countSums = [sum(countsK.values()) for countsK in counts]
+	return sum(countSums[k] * (likelyhood ** k) for k in range(len(countSums)))
 
 
 
 
 
-def prBadPoly(kGood, locTotals, noiseModel, kMax=None):
+def prBadPoly(kGood, locations, noiseModel, kMax=None):
 	# Count up all of the locations
-	return prMinFailures(kGood+1, locTotals, noiseModel, kMax)
+	
+	prBad = prMinFailures(kGood+1, locations, noiseModel, kMax)
+	if int == type(prBad):
+		prBad = SymPolyWrapper(sympoly1d([prBad]))
+	
+	return prBad
 	
 
 
@@ -588,7 +603,7 @@ def calcP1(prMaligX, prMaligZ, prAccept, prBad):
 	
 
 
-def likelyhoodPrefactorPoly(locTotals, noise):
+def likelyhoodPrefactorPoly(locTotals, noise, bound):
 	nCnot = locTotals.cnot
 	nRest = locTotals.rest
 	nPrepX = locTotals.prepX
@@ -603,23 +618,34 @@ def likelyhoodPrefactorPoly(locTotals, noise):
 	prepZLoc = locZprep('A', 0)
 	measZLoc = locZmeas('A', 0)
 	
-	prefactor = noise.prIdeal(cnotLoc) ** nCnot
-	prefactor *= noise.prIdeal(restLoc) ** nRest
-	prefactor *= noise.prIdeal(prepXLoc) ** nPrepX
-	prefactor *= noise.prIdeal(measXLoc) ** nMeasX
-	prefactor *= noise.prIdeal(prepZLoc) ** nPrepZ
-	prefactor *= noise.prIdeal(measZLoc) ** nMeasZ
+	prefactor = noise.prIdeal(cnotLoc, bound) ** nCnot
+	prefactor *= noise.prIdeal(restLoc, bound) ** nRest
+	prefactor *= noise.prIdeal(prepXLoc, bound) ** nPrepX
+	prefactor *= noise.prIdeal(measXLoc, bound) ** nMeasX
+	prefactor *= noise.prIdeal(prepZLoc, bound) ** nPrepZ
+	prefactor *= noise.prIdeal(measZLoc, bound) ** nMeasZ
 				
 	return prefactor
 	
 
-def toPoly(counts, locTotals, noise):
+def countsToPoly(counts, loc_totals, noise, bound=Bound.UpperBound):
 	'''
 	Convert weighed error likelyhood counts into a polynomial in gamma (= p/15).
 	'''
+	coeffs = [sum(countsK.values()) for countsK in counts]
+	return ConstructPolynomial(coeffs, loc_totals, noise, bound)
+
+def ConstructPolynomial(coeffs, loc_totals, noise, bound=Bound.UpperBound):
+	'''
+	Returns a polynomial for the given coefficients and component location
+	totals.
+	'''
+	prefactor = likelyhoodPrefactorPoly(loc_totals, noise, bound)
+	likelyhood = noise.likelyhood(bound)
+	coeff_sum = sum(coeffs[k] * (likelyhood ** k) for k in range(len(coeffs)))
 	
-	prefactor = likelyhoodPrefactorPoly(locTotals, noise)
-	return prefactor * countsAsProbability(counts, noise.likelyhood())
+	return prefactor * coeff_sum
+
 
 	
 
@@ -689,7 +715,7 @@ def upperBoundPoly(counts, pBad, locTotals, noise, normFactor=1):
 	This probability is computed by Pr[!accept] <= Pr[!accept, good] + Pr[bad]
 	'''
 
-	pr = toPoly(counts, locTotals, noise)
+	pr = countsToPoly(counts, locTotals, noise)
 	pr = pr * normFactor + pBad
 	return pr
 

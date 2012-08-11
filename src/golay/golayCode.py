@@ -107,7 +107,7 @@ class BitPermutations:
 # I think this is because it should be enumerating over the generators, not the parity checks (stabilizers).
 # For this problem, unlike for the Hamming code, the two are not equivalent.
 
-#def reduceError(e, logical=False): 
+#def hashError(e, logical=False): 
 #	"""Reduces the input X or Z error modulo the stabilizers and possibly the logical operator.  
 #	
 #	Returns a minimum-Hamming-weight representative.
@@ -126,7 +126,7 @@ class BitPermutations:
 #	# 10100100111110000000000 = 5405696
 #	if (logical):
 #		stabilizers.append((1<<23)-1)
-#	return util.counterUtils.reduceError(e, stabilizers)
+#	return util.counterUtils.hashError(e, stabilizers)
 
 
 stabGenerators = map(readBinaryString, [
@@ -143,7 +143,7 @@ stabGenerators = map(readBinaryString, [
 		".1..1..11111..........1"
 	])
 
-#def reduceError(e, logical=False):
+#def hashError(e, logical=False):
 #	c1 = corrections[getSyndrome(e)]
 #	if not logical: 
 #		return c1
@@ -225,7 +225,7 @@ class Corrector:
 	def decodeSyndrome(self, s):
 		e = self.getError(s)
 		return bool(weight(e ^ self.corrections[s & self.syndromeMask], 23) % 2)
-	def reduceError(self, e, logical=False): 
+	def hashError(self, e, logical=False): 
 		"""This is the same as reduceErrorGolay, except preprocessed according to the syndrome."""
 		c1 = self.correctError(e)
 		if not logical: 
@@ -531,7 +531,7 @@ def printParities(err):
 #	test = readBinaryString(".....1.1.......1.......")
 #	test = readBinaryString("......1......111x......")
 #	print "syndrome= %d" % getSyndrome(test)
-#	a1, a2, a3 = reduceError(test, False), reduceError(test, False), corrections[getSyndrome(test)]
+#	a1, a2, a3 = hashError(test, False), hashError(test, False), corrections[getSyndrome(test)]
 #	print "\ntest= %d, lookup= %d, brute= %d, table= %d" % (test, a1, a2, a3)
 #	for t in [test, a1, a2, a3]: 
 #		print etostr(t)
@@ -545,8 +545,8 @@ def printParities(err):
 #	print etostr(getSyndrome(test))
 #
 #	print "lowest weight rep'n of the error, logical op + error are "
-#	print etostr(reduceError(test, False))
-#	print etostr(reduceError(test ^ ((1<<23)-1), False))
+#	print etostr(hashError(test, False))
+#	print etostr(hashError(test ^ ((1<<23)-1), False))
 #	
 #	print "\n"
 #	q = [0] * 11
@@ -579,7 +579,7 @@ def printParities(err):
 #		".1..1..11111..........1"
 #	])
 #	for check in checks: 
-#		print reduceError(check, False)
+#		print hashError(check, False)
 #	print "\n"
 #
 #	checks = map(readBinaryString, [
@@ -597,14 +597,14 @@ def printParities(err):
 #		"1...111.1.1...........1"
 #	])
 #	for check in checks: 
-#		print reduceError(check, True)
+#		print hashError(check, True)
 #	print "\n\n"
 #	
 #	print "\n\n\nrunning more tests...\n"
 #	correction 	= readBinaryString("......1.......1.x...x..")
 #	test 		= readBinaryString("......1.......1.1...1..")
 #	test ^= correction
-#	print etostr(reduceError(test, False))
+#	print etostr(hashError(test, False))
 #
 #def makeparitycheckmatrix(): 
 #	p = [0] * 11

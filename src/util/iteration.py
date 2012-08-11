@@ -17,8 +17,10 @@ class SubsetIterator:
         self.universe = universe[:]
         self.subsetsize = subsetsize
     def __iter__(self):
-        if self.subsetsize == 0:
+        if (0 == self.subsetsize) or (len(self.universe) < self.subsetsize):
             return [[]].__iter__()
+        if self.subsetsize == len(self.universe):
+            return [self.universe].__iter__()
         
         self.a = range(self.subsetsize)    # a is used to store the indices of the subset
         self.a[-1] -= 1        # decrement the last index so first increment will return first subset
@@ -48,6 +50,9 @@ class TupleIterator:
     def __init__(self, ranges):
         self.ranges = ranges
     def __iter__(self):
+        if 0 == len(self.ranges):
+            return ().__iter__()
+        
         self.a = [0] * len(self.ranges)
         self.a[-1] = -1        # set the last element to -1, so the first call to next returns [0,0,..,0]
         return self

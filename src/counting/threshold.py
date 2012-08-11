@@ -4,11 +4,11 @@ Created on Apr 29, 2011
 @author: Adam
 '''
 import logging
-logger = logging.getLogger('threshold')
+logger = logging.getLogger('counting.threshold')
 
 def pseudoThresh(prFail, pMin, pMax, tolerance=1e-6):
 	prFail0 = lambda p: p
-	prFail1 = lambda p: prFail(prFail0(p))
+	prFail1 = lambda p: prFail(p)
 	return findIntersection(prFail0, prFail1, pMin, pMax, tolerance)
 
 
@@ -26,7 +26,7 @@ def asymptoticThresh(level1Events, level2Events, gMax):
 #		plotPolyList(plots, GammaZ(gMin), GammaZ(gMax), locName + 'level1and2', labelList=labels, xLabel=r'$\gamma$', numPoints=10)
 		
 		thresh = findIntersection(pr1, pr2, 0., gMax)
-		logger.info('%s threshold = %s', locName, thresh)
+		logger.debug('%s threshold = %s', locName, thresh)
 		thresholds.append(thresh)
 
 	threshold = min(thresholds)
@@ -41,11 +41,11 @@ def findIntersection(prFail0, prFail1, pMin, pMax, tolerance=1e-8):
 	Computation is done via recursive binary search.
 	'''
 	
-	p = (pMax + pMin) / 2
+	p = (pMax + pMin) / 2.
 	p0 = prFail0(p) 
 	p1 = prFail1(p)
-	logger.info('pMin=%f, pMax=%f', pMin, pMax)
-	logger.info('p={0}, p0={1}, p1={2}'.format(p, p0, p1))
+	logger.debug('pMin=%f, pMax=%f', pMin, pMax)
+	logger.debug('p={0}, p0={1}, p1={2}'.format(p, p0, p1))
 	diff = p0 - p1
 	if diff < 0:
 		# threshold is less than p

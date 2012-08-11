@@ -1,0 +1,19 @@
+- Pr[Sin=s] bounds are far too generous.  Need to tighten up.
+
+-Order-2 Logical X/Z error counts for TeleportED seem high.  Should check some of the counts by hand.
+  - Looks like the order two counts are better now that the kGood bug has been fixed.  Alternating gauge types (see below)
+  also help.
+
+- All teleportation components use Bell states with logica |+> gauge qubits.  This gives extra Z-error protection only.
+Should balance it out by using |0> gauge qubits on some error detections. 
+- Knill scheme threshold is dominated by the case in which the input error to both blocks is trivial.
+Is there a way to improve the counts for this case?
+- Scheme code is not well thought-out.
+
+- Component IDs require redefinition of _hashStr for components with extra internal data.  Better solution?
+
+- keyPropagator() and propagateCounts() are not well defined for all components (i.e. postselecting components). An equivalent
+way to propagate keys is to call count() with kMax=0, which is well defined for all components.
+
+- Eliminate dead code.
+- Documentation

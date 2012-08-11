@@ -48,10 +48,10 @@ if __name__ == '__main__':
     for _ in xrange(1000):
         errors = prepA0()
 #        eX = errors['X']['a0']
-#        eX = corrector.reduceError(eX, False)
+#        eX = corrector.hashError(eX, False)
 #        sX = corrector.getSyndrome(eX)
 #        
-        eZ = corrector.reduceError(errors['Z']['a0'], True)
+        eZ = corrector.hashError(errors['Z']['a0'], True)
         sZ = corrector.getSyndrome(eZ)
         
         #s = (sX << 11) + sZ
