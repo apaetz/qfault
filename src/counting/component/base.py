@@ -134,6 +134,7 @@ class Component(object):
 		
 		return result
 	
+	@memoize
 	def prBad(self, noise, pauli, kMax=None):
 		'''
 		Returns polynomial representing an upper bound on the probability that the component is
@@ -144,7 +145,12 @@ class Component(object):
 		'''
 		prSelf = probability.prBadPoly(self.kGood[pauli], self.locations(pauli), noise, kMax)
 		self._log(logging.DEBUG, 'Pr[bad] (self)=%s', prSelf)
-		prSubs = [sub.prBad(noise, pauli, kMax=self.kGood[pauli]) for sub in self.subcomponents()]
+		self._log(logging.INFO, 'Pr[bad] (%s < k <= %s, n=%s) (self)=%s', self.kGood[pauli], kMax, len(self.locations(pauli)), prSelf(0.01/15))
+		foo = self.kGood[pauli]
+		prSubs = [sub.prBad(noise, pauli, kMax=foo) for sub in self.subcomponents()]
+#		print prSelf(0.001/15)
+#		if len(prSubs):
+#			print sum(prSubs)(0.001/15)
 		return sum(prSubs) + prSelf
 	
 	def prAccept(self, noiseModels, input_result=None, kMax=None):
