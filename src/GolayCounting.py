@@ -106,10 +106,24 @@ def RectangleGateOverhead(k, verification_multiplicities):
 	
 	# First, count the number of level-(k-1) rectangles
 	A_prep = 118
-	A_ECX = verification_multiplicities[k-1] * (4 * A_prep + 9*23) + 2*23
-	A_rec = 4 * A_ECX + 23
+	A_EC = 2 * ((4 * A_prep + 9*23) + 2*23)
+	A_rec = 2 * verification_multiplicities[k-1] * A_EC + 23
 	
 	return A_rec * RectangleGateOverhead(k-1, verification_multiplicities)
+
+def RectangleQubitOverhead(k, verification_multiplicities):
+	
+	if 0 == k:
+		return 1
+	
+	mk = verification_multiplicities[k-1]
+	if 1 == k:
+		return 23 * (1 + 8 * mk)
+
+	A_prep = 118
+	A_ECZ = (4 * A_prep + 9*23) + 2*23
+	return (23**k) * (1 + 8 * mk) +\
+		   mk * A_ECZ * RectangleQubitOverhead(k-1, verification_multiplicities) 
 	
 
 def computeAncillaVerifications(k, K, A, prReject1, prReject2, deltaTarg, epsilon):
@@ -156,8 +170,10 @@ def plotOverhead(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
 	A = 4*Aprep + 9*23
 	
 	overhead_results = []
+	qubit_overhead_results = []
 	for t in targetNoiseRates:
 		overhead_results_t = []
+		qubit_overhead_results_t = []
 		for p in startingNoiseRates:
 			gamma = p/15
 			epsilon = computeEpsilon(level1Events, level2Events, gamma)
@@ -181,9 +197,16 @@ def plotOverhead(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
 			gateOverhead = RectangleGateOverhead(level, multiplicities)
 			logger.info('Gate overhead for t={2} p={0} is {1}'.format(p, gateOverhead, t))
 			overhead_results_t.append(gateOverhead)
+			qubit_overhead = RectangleQubitOverhead(level, multiplicities)
+			
+			# Here is a much simpler formula for qubit overhead based on
+			# gate overhead.
+			qubit_overhead = 23**level + (0.15**level) * gateOverhead
+			logger.info('Qubit overhead for t={2} p={0} is {1}'.format(p, qubit_overhead, t))
+			qubit_overhead_results_t.append(qubit_overhead)
 			
 		overhead_results.append(overhead_results_t)
-		
+		qubit_overhead_results.append(qubit_overhead_results_t)
 	
 	# Add text to indicate concatenation level	
 	def concatentation_level_text(plt):
@@ -196,6 +219,18 @@ def plotOverhead(zeroPrep1, zeroPrep2, zeroPrep3, zeroPrep4, settings):
 	labels = [str(t) for t in targetNoiseRates]
 	plotList(startingNoiseRates, overhead_results, filename='gate-overhead-Golay', labelList=labels, xLabel=r'$p$', 
 			 yLabel='physical gates per logical gate',
+			 xscale='log', yscale='log', legendLoc='upper left', xlim=(startingNoiseRates[0], startingNoiseRates[-1]), ylim=(10e1, 10e22),
+			 custom_command=custom)
+
+	def concatentation_level_text_qubit(plt):
+		plt.text(2e-6, 2e3, "1")
+		plt.text(2e-6, 3e6, "2")
+		plt.text(2e-6, 1e10, "3")
+	
+	custom = concatentation_level_text_qubit
+	
+	plotList(startingNoiseRates, qubit_overhead_results, filename='qubit-overhead-Golay', labelList=labels, xLabel=r'$p$', 
+			 yLabel='physical qubits per logical gate',
 			 xscale='log', yscale='log', legendLoc='upper left', xlim=(startingNoiseRates[0], startingNoiseRates[-1]), ylim=(10e1, 10e22),
 			 custom_command=custom)
 	

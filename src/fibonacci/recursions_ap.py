@@ -305,6 +305,19 @@ def BPGateOverhead(j, multiplicities):
 
     return multiplicities[j-1] * A
 
+def BPBPOverhead(j, multiplicities):
+    
+    if 0 == j:
+        return 1
+    
+    if j <= 2:
+        # No sub-block teleportations
+        A = 12 * BPBPOverhead(j-1, multiplicities)
+    else:
+        A = (12+8) * BPBPOverhead(j-1, multiplicities)
+        
+    return multiplicities[j-1] * A
+
 #def LevelJOverhead(j, J, e, e_targ):
 #    '''
 #    Returns M_j, the number of j-BPs required.
@@ -369,6 +382,16 @@ def ComputeOverhead(e, e_targ):
         
     return A_J
 
+def ComputeQubitOverhead(e, e_targ):
+    J, e_eff = ConcatenationLevel(e, e_targ)
+
+    multiplicities = BPMultiplicities(J, e, (e_targ - e_eff)/2)
+    
+    # The J-Rec has two J-BPs plus the data blocks
+    A_J = 2*BPBPOverhead(J, multiplicities) + 2 * 4**J 
+        
+    return A_J
+
 
 def PlotEcssPaccept(epsilons, j_max):
     paccept = []
@@ -414,11 +437,34 @@ def PlotOverhead(epsilons, e_targs):
              legendLoc='upper left', xscale='log', yscale='log', xlim=(epsilons[0], epsilons[-1]), ylim=(10e1, 10e22),
              custom_command=custom)
 
+def PlotQubitOverhead(epsilons, e_targs):
+    
+    
+    overhead = []
+    for e_targ in e_targs:
+        overhead.append([ComputeQubitOverhead(8/15. * e, e_targ) for e in epsilons])
+        
+    # Add text to indicate concatenation level    
+    def concatentation_level_text(plt):
+        plt.text(1.2e-5, 5e2, "2")
+        plt.text(2.8e-5, 7e3, "3")
+        plt.text(1.4e-4, 2e6, "4")
+        plt.text(4e-4, 3e8, "5")
+        plt.text(6e-4, 5e10, "6")
+        
+    custom = concatentation_level_text
+        
+    plotList(epsilons, overhead, filename='fibonacci-qubit-overhead', labelList=[str(et) for et in e_targs], xLabel=r'$p$', 
+#             yLabel='physical locations per logical location', 
+             legendLoc='upper left', xscale='log', yscale='log', xlim=(epsilons[0], epsilons[-1]), ylim=(10e1, 10e22),
+             custom_command=custom)
+
+
 if __name__ == '__main__':
    
     logging.basicConfig()
     logger.setLevel(logging.INFO)
-    
+        
     epsilons = []
     e = 1e-4
     while e < 8e-4:
@@ -430,6 +476,7 @@ if __name__ == '__main__':
     
     epsilons = [1e-6, 5e-6, 1e-5, 2e-5, 4e-5, 1e-4, 2e-4, 4e-4, 6e-4, 8e-4, 9e-4, 1e-3, 1.1e-3, 1.2e-3]
     e_targs = [1e-12, 1e-10, 1e-9, 1e-6]
+    PlotQubitOverhead(epsilons, e_targs)
     PlotOverhead(epsilons, e_targs)
     
     print [A_BP(j) for j in range(1,5)]
