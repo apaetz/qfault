@@ -17,3 +17,4 @@ way to propagate keys is to call count() with kMax=0, which is well defined for 
 
 - Eliminate dead code.
 - Documentation
+- Re-organize test code
