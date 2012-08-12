@@ -3,15 +3,18 @@ Its primary purpose is to compute a lower bound on the tolerable depolarizing no
 
 1. Software requirements 
 ------------------------
-Python modules were written and tested for Python version 2.6.  Some or all modules may be compatible with previous versions, but this has not been tested.
+Python modules were written and tested for Python version 2.7.  Some or all modules may be compatible with previous versions, but this has not been tested.
 The following third-party packages are also required.  Tested versions are listed.
-	- Sympy (development branch 06/02/2011) http://sympy.org
+	- Sympy 0.7.1.rc1 http://sympy.org
 	- matplotlib 1.0.0 http://matplotlib.sourceforge.net
 	- gmpy 1.11 http://gmpy.sourceforge.net
 	- Cython 0.12.1 http://cython.org
 	- numpy 1.3.0 http://numpy.scipy.org
 	- gcc 3.4.3 http://gcc.gnu.org (for build purposes only)
 	
+	
+TODO:  The build and run instructions are out of date.
+
 2. Build instructions
 ---------------------
 Functions for the most time consuming part of the counting procedure are written in C and bound to a Python interface using Cython.
