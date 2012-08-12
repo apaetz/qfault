@@ -6,7 +6,7 @@ Created on 2011-04-04
 import unittest
 import GolayCounting
 import component
-from counting.countErrors import CountResult
+from counting.count_errors import CountResult
 from counting.probability import countResultAsPoly
 from util.polynomial import chebyshevT
 

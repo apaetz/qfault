@@ -8,13 +8,13 @@ import operator
 
 logger = logging.getLogger('counting.convolve')
 
-def convolveDict(counts1, counts2, keyOp=operator.xor, countMul=operator.mul, countAdd=operator.add, nullCount=0):
+def convolve_dict(counts1, counts2, keyOp=operator.xor, countMul=operator.mul, countAdd=operator.add, nullCount=0):
     '''
     Convolve counts from two dictionaries.
     
     >>> a = {0: 1, 1: 2}
     >>> b = {0: 1, 2: 3}
-    >>> convolveDict(a, b)
+    >>> convolve_dict(a, b)
     {0: 1, 1: 2, 2: 3, 3: 6}
     '''
     counts = {}

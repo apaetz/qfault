@@ -11,10 +11,10 @@ etc., and a few simple concrete classes such as Empty, and Prep.
 @author: adam
 '''
 from copy import copy
-from qfault.counting import probability, key, countErrors
+from qfault.counting import probability, key, count_errors
 from qfault.counting.block import Block
-from qfault.counting.countErrors import mapCounts, countBlocksBySyndrome
-from qfault.counting.countParallel import convolve
+from qfault.counting.count_errors import mapCounts, countBlocksBySyndrome
+from qfault.counting.count_parallel import convolve
 from qfault.counting.key import KeyManipulator, SyndromeKeyGenerator, \
 	IdentityManipulator, KeyMerger
 from qfault.counting.location import Locations
@@ -372,7 +372,7 @@ class CountableComponent(Component):
 		return cb
 				
 	def locations(self, pauli=Pauli.Y):
-		return countErrors.pauliFilter(copy(self._locations), pauli)
+		return count_errors.pauliFilter(copy(self._locations), pauli)
 
 	def _hashStr(self):
 		return super(CountableComponent, self)._hashStr() + str(self._locations.list)

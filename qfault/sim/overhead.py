@@ -1,6 +1,6 @@
 
 import qfault.sim.simulateUtils
-from qfault.counting import countParallel
+from qfault.counting import count_parallel
 
 def simAncillaPrep(prepFcn, pMin, pMax, pStep, iters, noRests=False):
 
@@ -16,7 +16,7 @@ def simAncillaPrep(prepFcn, pMin, pMax, pStep, iters, noRests=False):
         if noRests:
             errorRates.rest = 0
         
-        pool = countParallel.getPool()
+        pool = count_parallel.getPool()
         results = [pool.apply_async(prepFcn, [errorRates, 'prep0', 'Z']) for _ in xrange(iters)]
         attemptSamples = [r.get()[1] for r in results]
         

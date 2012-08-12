@@ -5,7 +5,7 @@ Created on 2010-10-24
 
 @author: adam
 '''
-from qfault.counting.countParallel import iterParallel
+from qfault.counting.count_parallel import iterParallel
 import logging
 import matplotlib
 matplotlib.use('PDF')  # Save plots as PDF files.
@@ -214,7 +214,7 @@ def plotList(X, yList, yErrList=None, filename=None, labelList=None, xLabel='', 
 
 
 def plot(poly, xMin, xMax, numPoints=100, label=None):
-	from counting.countParallel import iterParallel
+	from counting.count_parallel import iterParallel
 	
 	dx = (xMax - xMin) / numPoints
 	X = [xMin + dx*i for i in range(numPoints)]

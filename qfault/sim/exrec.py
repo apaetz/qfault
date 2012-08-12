@@ -12,7 +12,7 @@
 #	* Some code needs to be refactored, for example moving stuff into Utils.py.
 #	* It would be useful to keep track of resources used. 
 #	* Look into the quality of the random number generator.
-from counting.countParallel import configureMultiProcess, DummyPool
+from counting.count_parallel import configureMultiProcess, DummyPool
 
 print "Location counter running"
 

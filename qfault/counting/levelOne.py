@@ -5,7 +5,7 @@ Created on Apr 29, 2011
 '''
 
 from qfault.counting.bounding import computeWeights
-from qfault.counting.countErrors import CountResult
+from qfault.counting.count_errors import CountResult
 from qfault.counting.probability import countResultAsPoly, calcPrBad
 from qfault.counting.threshold import pseudoThresh, findIntersection
 from qfault.util.cache import fetchable

@@ -7,7 +7,7 @@ from qfault.counting.component.base import Filter
 from qfault.counting.key import IdentityManipulator, KeyPermuter, KeyRemover,\
     KeyExtender
 from qfault.util import listutils
-from qfault.counting import countErrors
+from qfault.counting import count_errors
 from qfault.counting.result import CountResult
 
 class BlockPermutation(Filter):
@@ -98,6 +98,6 @@ class BlockCombine(Filter):
             block_counts.append(discard.count(inputResult=inputResult).counts)
         
         # Take the maximum count for each fault order k and each syndrome.
-        counts = countErrors.maxCount(*block_counts)
+        counts = count_errors.maxCount(*block_counts)
         
         return CountResult(counts, self.outBlocks() + inputResult.blocks[len(block_counts):])

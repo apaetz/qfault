@@ -13,7 +13,7 @@ from qfault.counting.component.bell import BellPair, BellMeas
 from qfault.counting.component.block import BlockDiscard, BlockPermutation,\
     BlockCombine
 from qfault.counting.component.teleport import Teleport, TeleportED, TeleportWithMeas
-from qfault.counting.countErrors import error, mapCounts, maxCount
+from qfault.counting.count_errors import error, mapCounts, maxCount
 from qfault.counting.key import IdentityManipulator, KeyMerger, SyndromeKeyGenerator,\
     KeyManipulator
 from qfault.qec import ed422
@@ -26,7 +26,7 @@ from qfault.util.cache import memoize, fetchable
 from qfault.util.plotting import plotList
 from qfault.noise import NoiseModelXSympy, NoiseModelZSympy, NoiseModelXZSympy,\
     CountingNoiseModelXZ
-from qfault.counting import probability, countErrors
+from qfault.counting import probability, count_errors
 import qfault.counting
 from qfault.counting.result import CountResult
 
@@ -713,7 +713,7 @@ class BP1Max(SequentialComponent):
 #        counts2 = discard1.count(noiseModels, Pauli.Y, result).counts
 #        
 #        # Take the maximum count for each fault order k and each syndrome.
-#        counts = countErrors.maxCount(counts1, counts2)
+#        counts = count_errors.maxCount(counts1, counts2)
 #        
 #        return CountResult(counts, self.outBlocks() + result.blocks[2:])
 

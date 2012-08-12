@@ -9,7 +9,7 @@ More work is needed to come up with a satisfactory solution.
 @author: adam
 '''
 from collections import OrderedDict
-from qfault.counting.convolve import convolveDict
+from qfault.counting.convolve import convolve_dict
 from qfault.qec.error import xType, zType, dualType, PauliError, Pauli
 from qfault.qec.qecc import StabilizerCode, Codeword
 from qfault.util import listutils, bits
@@ -309,7 +309,7 @@ def convolveKeyCounts(counts1, counts2, key1Lengths, key2Lengths):
     except Exception:
         raise
     
-    counts = convolveDict(counts1, counts2)
+    counts = convolve_dict(counts1, counts2)
     
     return {bits.split(keybits, keyLengths, reverse=True): count for keybits,count in counts.iteritems()}
     

@@ -4,7 +4,7 @@ Created on 2010-06-17
 @author: adam
 '''
 
-from qfault.counting import countParallel
+from qfault.counting import count_parallel
 from qfault.counting.location import LocationCount
 from fractions import Fraction
 from qfault.noise import NoiseModelXSympy, Bound
@@ -91,7 +91,7 @@ def prMinFailuresOld(kMin, locTotals, noiseModel, kMax=None):
 	results = []
 	for k in range(kMin, kMax):
 		iterator = PartitionIterator(k, 4, [nCnot, nRest, nPrep, nMeas])
-		results += countParallel.iterParallel(iterator, constructLocPoly, [nList, prIdealList, prFailList])
+		results += count_parallel.iterParallel(iterator, constructLocPoly, [nList, prIdealList, prFailList])
 	
 	pr = sum(r.get() for r in results)
 		
@@ -101,7 +101,7 @@ def prMinFailuresOld(kMin, locTotals, noiseModel, kMax=None):
 		# likelyhoods)
 		prIdealCnot = prIdealRest = prIdealPrep = prIdealMeas = 1
 		iterator = PartitionIterator(kMax, 4, [nCnot, nRest, nPrep, nMeas]) 
-		results = countParallel.iterParallel(iterator, constructLocPoly, [nList, prIdealList, prFailList])
+		results = count_parallel.iterParallel(iterator, constructLocPoly, [nList, prIdealList, prFailList])
 		pr += sum(r.get() for r in results)
 	
 	# Simplify, if possible.
@@ -219,7 +219,7 @@ def prMinFailures(kMin, locations, noiseModel, kMax=None):
 		
 		iterator = PartitionIterator(kMax, len(nList), nList) 
 		prFailList = [noiseModel.prFail(l, boundType) for l in locsList]
-		results = countParallel.iterParallel(iterator, constructLocLikely, [nList, prFailList])
+		results = count_parallel.iterParallel(iterator, constructLocLikely, [nList, prFailList])
 		cap = sum(r.get() for r in results)
 		logger.debug('adding bounding cap: %s', cap)
 		pr += cap
@@ -290,7 +290,7 @@ def boundedFailureWeights(kMin, locTotals, noiseModel, kMax, bound=Bound.UpperBo
 		# the overhead by grouping partitions together.
 		partitioner = PartitionIterator(k, len(nList), nList)
 		slicer = SliceIterator(partitioner, 100)
-		results[k-kMin] = countParallel.iterParallel(slicer, sumLocationPartitions, [nList, weightList])
+		results[k-kMin] = count_parallel.iterParallel(slicer, sumLocationPartitions, [nList, weightList])
 	
 	weights = [0] * (kMax - kMin)
 	for k in range(len(weights)):
@@ -811,7 +811,7 @@ if __name__ == '__main__':
 		
 	print 'using {0} slots'.format(nSlots)
 	
-	countParallel.configureMultiProcess(nSlots)
+	count_parallel.configureMultiProcess(nSlots)
 	
 	locTotals = LocationCount(1000, 40, 40, 40, 23, 23)
 	prBad = prMinFailures(3, locTotals, NoiseModelXSympy(), kMax=11)
