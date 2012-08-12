@@ -5,7 +5,7 @@ Schemes based on Knill's C4/C6 error-detection and teleportation based proposals
 
 @author: adam
 '''
-from qfault.counting import probability, countParallel
+from qfault.counting import probability, count_parallel
 from qfault.counting.component.adapter import DecodeAdapter, SyndromeAdapter
 from qfault.counting.component.base import Prep, ParallelComponent
 from qfault.counting.component.bell import BellPair, BellMeas
@@ -13,8 +13,8 @@ from qfault.counting.component.exrec import ExRec, Rectangle
 from qfault.counting.component.teleport import TeleportED, EDInputFilter, \
     TeleportWithMeas, Teleport
 from qfault.counting.component.transversal import TransCnot
-from qfault.counting.convolve import convolveDict
-from qfault.counting.countParallel import convolve
+from qfault.counting.convolve import convolve_dict
+from qfault.counting.count_parallel import convolve
 from qfault.counting.key import SyndromeKeyGenerator, convolveKeyCounts
 from qfault.counting.probability import prMinFailures, countsAsProbability
 from qfault.counting.result import CountResult
@@ -188,7 +188,7 @@ class KnillScheme(Scheme):
         nonZeroInputs = self.getInputs(self.ed).values()
         nonZeroInputs.remove((0,))
         inCountsA = [{(0,): 1}, {key: B for key in nonZeroInputs}]
-        inCounts = countParallel.convolve(inCountsA, inCountsA, convolveFcn=convolveInCounts)
+        inCounts = count_parallel.convolve(inCountsA, inCountsA, convolveFcn=convolveInCounts)
         print 'inCounts=', inCounts
         inResult = CountResult(inCounts, rec.inBlocks())
         
@@ -212,4 +212,4 @@ class KnillScheme(Scheme):
         return pr
     
 def convolveInCounts(counts1, counts2):
-    return convolveDict(counts1, counts2, keyOp=operator.add)
+    return convolve_dict(counts1, counts2, keyOp=operator.add)

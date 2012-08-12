@@ -3,14 +3,14 @@ Created on 2012-08-11
 
 @author: adam
 '''
-from qfault.counting import countParallel
+from qfault.counting import count_parallel
 from qfault.qec.error import Pauli
 from qfault.scheme.knill import KnillScheme
 import logging
 
 if __name__ == '__main__':
-    countParallel.setPool(countParallel.DummyPool())
-#    countParallel.configureMultiProcess(16)
+    count_parallel.setPool(count_parallel.DummyPool())
+#    count_parallel.configureMultiProcess(16)
     
     logging.getLogger('counting.threshold').setLevel(logging.DEBUG)
     logging.getLogger('scheme.knill').setLevel(logging.DEBUG)

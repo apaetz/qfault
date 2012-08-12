@@ -26,7 +26,7 @@ from component.xverify import countXVerifyXOnly, countXVerifyZOnly, \
 	countXVerifyXZ
 from counting.countErrors import filterAndPropagate, countXerrorsZero, \
 	CountResult, countZerrorsZeroZero, convolveCountsPostselectZ, \
-	countXZErrorsZeroZero, convolveDict, convolveXZPostselectZ, convolveXZRejectedZ
+	countXZErrorsZeroZero, convolve_dict, convolveXZPostselectZ, convolveXZRejectedZ
 from counting.countParallel import convolve
 from counting.location import Locations
 from counting.convert import xCountsFromXZCounts, rescaleXZCounts
@@ -234,7 +234,7 @@ def countZVerifyXZ(prepPairA, prepPairB, settings, noise):
 		counts1Prop[k] = countsProp
 	
 	# Convolve together the X-verified ancilla on block B, with the rests, CNOTs and measurements.
-	countsZ = convolve(counts1Prop, countsRCM, kMax=kBestVZ, convolveFcn=convolveDict)
+	countsZ = convolve(counts1Prop, countsRCM, kMax=kBestVZ, convolveFcn=convolve_dict)
 	
 	acceptedCounts = convolve(result0.counts, countsZ, kMax=kBestVZ, convolveFcn=convolveXZPostselectZ)
 	rejectedCounts = convolve(result0.counts, countsZ, kMax=kBestVZ, convolveFcn=convolveXZRejectedZ)

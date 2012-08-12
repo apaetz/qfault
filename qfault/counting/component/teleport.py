@@ -10,8 +10,8 @@ from qfault.counting.block import Block
 from qfault.counting.component.base import PostselectionFilter, Empty, \
     ParallelComponent, SequentialComponent
 from qfault.counting.component.transversal import TransRest
-from qfault.counting.countErrors import mapCounts
-from qfault.counting.countParallel import convolve
+from qfault.counting.count_errors import mapCounts
+from qfault.counting.count_parallel import convolve
 from qfault.counting.key import keyForBlock, KeyExtender, KeyManipulator, KeyCopier, \
     IdentityManipulator, SyndromeKeyGenerator, KeyRemover
 from qfault.counting.result import TrivialResult

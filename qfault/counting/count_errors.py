@@ -31,11 +31,11 @@ def countErrorsParallel(k, locations, lsCountingFcn, extraArgs=[]):
 #		# No locations (and at least 1 failure), so all counts must be zero.
 #		return counts
 		
-	import countParallel
-	pool = countParallel.getPool()
+	import count_parallel
+	pool = count_parallel.getPool()
 	
 	lSets = [ls for ls in iteration.SubsetIterator(locations, k)]
-	lSetSlices = countParallel.packTasks(100, lSets, [1] * len(lSets))
+	lSetSlices = count_parallel.packTasks(100, lSets, [1] * len(lSets))
 	lsResults = []
 	
 	for lSetSlice in lSetSlices:

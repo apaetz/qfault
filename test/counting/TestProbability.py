@@ -4,7 +4,7 @@ Created on Nov 3, 2010
 @author: adam
 '''
 from counting.probability import prMinFailures
-from counting import countParallel
+from counting import count_parallel
 from counting.location import LocationCount
 from settings.noise import NoiseModelXSympy
 import unittest
@@ -32,5 +32,5 @@ class Test(unittest.TestCase):
 
 if __name__ == "__main__":
 	#import sys;sys.argv = ['', 'Test.testName']
-	countParallel.configureMultiProcess(0)
+	count_parallel.configureMultiProcess(0)
 	unittest.main()

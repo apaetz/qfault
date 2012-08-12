@@ -4,7 +4,7 @@ Created on 2010-08-30
 
 @author: adam
 '''
-from qfault.counting.convolve import convolveDict
+from qfault.counting.convolve import convolve_dict
 from multiprocessing.pool import Pool
 from qfault.util.counterUtils import PartitionIterator
 import logging
@@ -13,7 +13,7 @@ import time
 from qfault.util import listutils
 
 
-logger = logging.getLogger('countParallel')
+logger = logging.getLogger('count_parallel')
 defaultPool = None
 
 class DummyPool(object):
@@ -161,7 +161,7 @@ def convolveParallel(pool,
 					counts0, counts1, 
 					partMax0=None, partMax1=None, 
 					kMax=None, 
-					convolveFcn=convolveDict, extraArgs=[], 
+					convolveFcn=convolve_dict, extraArgs=[], 
 					splitListsInto=[2,2],
 					listMergeOp=listutils.addDicts):
 	

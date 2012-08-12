@@ -3,7 +3,7 @@ Created on 2012-08-11
 
 @author: adam
 '''
-from qfault.counting import countParallel
+from qfault.counting import count_parallel
 from qfault.qec.error import Pauli
 from qfault.scheme.fibonacci import FibonacciSchemeAP09, FibonacciSchemeSyndrome, \
     PlotPrBadSBT
@@ -15,7 +15,7 @@ if __name__ == '__main__':
 #    util.cache.enableFetch(False)
 #    util.cache.enableMemo(False)
     
-    countParallel.setPool(countParallel.DummyPool())
+    count_parallel.setPool(count_parallel.DummyPool())
     
 #    logging.getLogger('counting.component').setLevel(logging.WARNING)
 #    logging.getLogger('counting.component').setLevel(logging.DEBUG)

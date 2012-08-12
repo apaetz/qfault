@@ -14,7 +14,7 @@ from qfault.qec.error import zType, xType, Pauli
 from qfault.qec.qecc import StabilizerState, StabilizerCode
 from qfault.util import counterUtils, bits
 import logging
-from qfault.counting.countErrors import mapCounts
+from qfault.counting.count_errors import mapCounts
 from qfault.util.counterUtils import locrest
 from qfault.counting.block import Block
 from copy import copy
