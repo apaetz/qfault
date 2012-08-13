@@ -77,20 +77,6 @@ class Component(object):
 # Public methods
 #################
 
-	@staticmethod
-	def ValidateResult(result, expNumBlocks=None):
-		nblocks = len(result.blocks)
-		
-		logger.debug("nblocks={0}, expected={1}".format(nblocks, expNumBlocks))
-		if None != expNumBlocks and nblocks != expNumBlocks:
-			logger.error('nblocks={0}, expNumBlocks={1}'.format(nblocks, expNumBlocks))
-			return False
-		for count in result.counts:
-			if any(nblocks - len(key) for key in count.keys()):
-				logger.error('nblocks={0}, key lengths={1}'.format(nblocks, [len(key) for key in count.keys()]))
-				return False
-			
-		return True
 
 	#@fetchable
 	def count(self, noiseModels, pauli, inputResult=None, kMax=None):
@@ -188,13 +174,7 @@ class Component(object):
 		Returns the list of output blocks.
 		'''
 		return self.inBlocks()
-	
-#	def logicalStabilizers(self):
-#		'''
-#		TODO: necessary?
-#		'''
-#		return tuple([])
-	
+		
 	def subcomponents(self):
 		'''
 		Returns the list of sub-components.
@@ -230,66 +210,7 @@ class Component(object):
 	
 	def identifier(self):
 		return self._id
-	
-###################################
-# Private methods (subclass hooks)
-###################################
-	
-#	def _count(self, *args):
-#		'''
-#		Subclass hook.
-#		Counts the errors in each sub-component and returns the counts
-#		as a dictionary indexed by sub-component name.  
-#		It is expected that most concrete components will not need to 
-#		implement this method. 
-#		'''
-#		return {name: sub.count(*args) for name, sub in self._subs.iteritems()}
-#	
-#	def _convolve(self, results, noiseModels, pauli):
-#		'''
-#		Subclass hook.
-#		Combines errors from each of the sub-components.
-#		The default implementation assumes that all subcomponents contain the same
-#		number of blocks and that those blocks line up correctly.
-#		
-#		:rtype: :class:`CountResult`
-#		'''
-#		
-#		# The sub-component names won't be used
-#		results = results.values()
-#		
-#		if 1 == len(results):
-#			return results[0]
-#		
-#		keyMeta = results[0].keyMeta
-#		if not all((r.keyMeta == keyMeta) for r in results):
-#			raise Exception('Key metadatas are not all identical. {0}'.format([r.keyMeta for r in results]))
-#		
-#		blocks = results[0].blocks
-#		if not all(len(r.blocks) == len(blocks) for r in results):
-#			raise Exception('Block count mismatch. {0}'.format([len(r.blocks) for r in results]))
-#		
-#		counts = [result.counts for result in results]
-#		convolved = counts[0]
-#		k = self.kGood[pauli]
-#		for count in counts[1:]:
-#			convolved = convolve(convolved, count, kMax=k, convolveFcn=key.convolveKeyCounts, extraArgs=[keyMeta])
-#			
-#		return CountResult(convolved, blocks)
-#	
-#	def _postCount(self, result, noiseModels, pauli):
-#		'''
-#		Subclass hook.
-#		Performs (optional) error count post-processing.
-#		
-#		:rtype: :class:`CountResult`
-#		'''
-#		# TODO: this could be a good place to check for, and compute XZ corrections.
-#		return result
-	
-
-#################################
-	
+		
 	def __setitem__(self, name, component):
 		self._subs[name] = component
 	
@@ -299,16 +220,6 @@ class Component(object):
 	def _log(self, level, msg, *args, **kwargs):
 		classname = self.__class__.__name__
 		logger.log(level, ''.join([classname, ': ', msg]), *args, **kwargs)
-	
-#	def nickname(self):
-#		return self._nickname
-#	
-#	def fullname(self):
-#		full = str(self.__class__.name)
-#		if None != self._nickname:
-#			full += '.' + self._nickname
-#		
-#		return full
 	
 	def descriptor(self):
 		rep = str(self.__class__.__name__)

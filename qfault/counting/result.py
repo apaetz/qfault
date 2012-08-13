@@ -5,24 +5,36 @@ Created on 2011-10-22
 '''    
 
 from qfault.counting import key
+import logging
+
+logger = logging.getLogger('counting.result')
 
 class CountResult(object):
     ''' 
     Container for counting results.
     '''
     
-    def __init__(self, counts, blocks, rejectedCounts=None, name=None):
-                    
+    def __init__(self, counts, blocks):                    
         self.blocks = blocks
         self.counts = counts
-        if None == rejectedCounts:
-            # TODO hack
-            rejectedCounts = [{key.rejectKey:0}]
-            
-        self.rejected = rejectedCounts
         
-    def __get__(self, etype):
-        return self.counts[etype]
+    def Validate(self, expNumBlocks=None):
+        nblocks = len(self.blocks)
+        
+        logger.debug("nblocks={0}, expected={1}".format(nblocks, expNumBlocks))
+        if None != expNumBlocks and nblocks != expNumBlocks:
+            logger.error('nblocks={0}, expNumBlocks={1}'.format(nblocks, expNumBlocks))
+            return False
+        for count in self.counts:
+            if any(nblocks - len(key) for key in count.keys()):
+                logger.error('nblocks={0}, key lengths={1}'.format(nblocks, [len(key) for key in count.keys()]))
+                return False
+            
+        return True
+
+        
+    def __get__(self, k):
+        return self.counts[k]
 
     def __str__(self):
         return self.__repr__()

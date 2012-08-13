@@ -5,6 +5,10 @@
 #
 # It might be useful to have code that prints the different errors using I,X,Y,Z.
 # 
+
+# AEP: TODO this file contains many duplicate functions that need to be removed.
+# The functions that are unique require maintenance and possibly restructuring.
+
 from fractions import Fraction
 from qfault.util.listutils import addLists, nonZeroIndices
 import fractions
