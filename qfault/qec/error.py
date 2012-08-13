@@ -210,28 +210,7 @@ class Pauli(object):
 		>>> str(Pauli.FromBits(3))
 		'Y'
 		'''
-		return Pauli._bitTable[bits]
-	
-
-		
-#class CompoundError(object):
-#	
-#	def __init__(self, e1, e2):
-#		self.error = (e1, e2)
-#	
-#	def __xor__(self, other):
-#		e1, e2 = np.bitwise_xor(self.error, other.error)
-#		return CompoundError(e1, e2)
-#	
-#	def __add__(self, other):
-#		return self.__xor__(other)
-#	
-#	def __getitem__(self, index):
-#		return self.error[index]
-#	
-#	def __str__(self):
-#		return str(self.error)
-	
+		return Pauli._bitTable[bits]	
 	
 if __name__ == "__main__":
 	import doctest

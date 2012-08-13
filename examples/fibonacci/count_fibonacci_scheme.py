@@ -3,13 +3,57 @@ Created on 2012-08-11
 
 @author: adam
 '''
+from fibonacci_scheme import FibonacciSchemeAP09, FibonacciSchemeSyndrome
 from qfault.counting import count_parallel
-from qfault.qec.error import Pauli
-from qfault.scheme.fibonacci import FibonacciSchemeAP09, FibonacciSchemeSyndrome, \
-    PlotPrBadSBT
-from qfault.noise import NoiseModelXSympy, NoiseModelZSympy, \
-    NoiseModelXZSympy
+from qfault.noise import NoiseModelXSympy, NoiseModelZSympy, NoiseModelXZSympy
+from qfault.qec.error import Pauli, xType
+from qfault.util.plotting import plotList
 import logging
+
+
+def PlotPaccept(fibonacci, epsilons, j_max):
+    paccept = []
+    for j in range(1,j_max+1):
+        paccept.append([fibonacci.PrAccept(j, e) for e in epsilons])
+        
+#    print epsilons
+#    print 'p(j|j-1):'
+#    for j, pj in enumerate(paccept):
+#        print j+1, pj
+
+    plotList(epsilons, paccept, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'$p(j|j-1)$', legendLoc='lower left', filename='fibonacci-paccept',
+             xscale='log')
+
+def PlotEpsilonCSS(fibonacci, epsilons, j_max):
+    e_css = []
+    for j in range(1,j_max+1):
+        e_css.append([fibonacci.EpsilonCSS(j, e) for e in epsilons])
+        
+    plotList(epsilons, e_css, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'$\epsilon_{css}$', legendLoc='lower left', filename='fibonacci-e_css',
+             xscale='log', yscale='log')
+    
+def PlotPrBadSBT(epsilons, j_max):
+    fibonacci = FibonacciSchemeSyndrome()
+    pbad = []
+    for j in range(1,j_max+1):
+        print j, len(fibonacci._SubblockTeleportComponent(xType, j).locations(Pauli.Y))
+        pbad.append([fibonacci._SubblockTeleportPrBad(xType, j)(e/15.) for e in epsilons])
+        
+    plotList(epsilons, pbad, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'Pr[bad] (sub-block)', legendLoc='lower left', filename='fibonacci-pbad-sbt',
+             xscale='log', yscale='log')   
+        
+        
+def PlotPrBadBP1(epsilons):
+    fibonacci = FibonacciSchemeSyndrome()
+    pbad = []
+    pr_bad = fibonacci.BP1().prBad(fibonacci._noise_models[Pauli.Y], Pauli.Y)
+    for j in range(1):
+        pbad.append([pr_bad(e/15.) for e in epsilons])
+        
+    plotList(epsilons, pbad, labelList=('1','2','3','4','5'), xLabel=r'$\epsilon$', yLabel=r'Pr[bad] (1-BP)', legendLoc='lower left', filename='fibonacci-pbad-bp1',
+             xscale='log', yscale='log')
+        
+
 
 if __name__ == '__main__':
 #    util.cache.enableFetch(False)
