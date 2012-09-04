@@ -5,6 +5,7 @@ Created on 2011-04-28
 @author: adam
 '''
 import operator
+import math
 
 def imax(seq):
 	'''
@@ -37,11 +38,14 @@ def mulLists(*lists):
 	'''
 	return [reduce(operator.mul, (l[i] for l in lists), 1) for i in xrange(len(lists[0]))]
 
-def mul(list):
+def mul(seq):
 	'''
 	Returns the product of all elements in the list.
+	>>> mul([1,2,3])
+	6
 	'''
-	return reduce(operator.mul, list, 1)
+	seq = tuple(seq)
+	return reduce(operator.mul, seq[1:], seq[0])
 
 def addDicts(*dicts):
 	'''
@@ -113,6 +117,18 @@ def chop(seq, lengths):
 		index += l
 	
 	return slices
+
+def equal_chop(seq, num_subsequences):
+	'''
+	Chops the sequence into equal size subsequences.
+	The last subsequence may contain fewer elements.
+	>>> equal_chop(range(10),3)
+	[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]
+	'''
+	step = long(math.ceil(len(seq) / float(num_subsequences)))
+	chopped = [seq[i * step : i * step + step]
+			   for i in range(num_subsequences)]
+	return chopped
 
 def remove_subsequence(seq, remove_indices):
 	'''

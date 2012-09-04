@@ -20,13 +20,13 @@ logger = logging.getLogger('counting.key')
 
 rejectKey = 0
 
-class DefaultErrorKeyGenerator(object):
-    
-    def getKey(self,e):
-        return e
-    
-    def __repr__(self):
-        return 'default_key'
+#class DefaultErrorKeyGenerator(object):
+#    
+#    def get_key(self,e):
+#        return e
+#    
+#    def __repr__(self):
+#        return 'default_key'
     
 
 class SyndromeKeyGenerator(object):
@@ -78,16 +78,13 @@ class SyndromeKeyGenerator(object):
         return self._parityChecks
     
     @memoize
-    def getKey(self, e):
-#        # e is given in little endian bit order (bit 0 = qubit 0), but
-#        # Qecc objects require big endian.
-#        X = bits.endianSwap(e[xType], self.code.n)
-#        Z = bits.endianSwap(e[zType], self.code.n)
-#        e = PauliError(xbits=X, zbits=Z)
-        
+    def get_key(self, e):       
         key = StabilizerCode.Syndrome(e, self.parityChecks())
         #print 'e=', e, 'parityChecks=', self.parityChecks(), 'key={0:b}'.format(key)
         return key
+    
+    def __call__(self, error):
+        return self.get_key(error)
     
 #    def keyMeta(self):
 #        return SyndromeKeyMeta(self.parityChecks(), 1)
@@ -328,8 +325,8 @@ class MaskedKeyGenerator(object):
     def parityChecks(self):
         return self._generator.parityChecks()
     
-    def getKey(self, e):
-        return self._generator.getKey(e) & self.mask()
+    def get_key(self, e):
+        return self._generator.get_key(e) & self.mask()
     
     def decode(self, key):
         return self._generator.decode(key)
@@ -361,56 +358,56 @@ class StabilizerStateKeyGenerator(MaskedKeyGenerator):
     def __repr__(self):
         return 'StabilizerStateKeyGenerator(' + str(self._state) + ')'
     
-class MultiBlockSyndromeKeyGenerator(object):
-    '''
-    '''
-    
-    def __init__(self, blocks):
-        self._blocks = blocks
-        self._blocknames = [block.name for block in blocks]
-        
-        def getGenerator(code, blockname):
-            if isinstance(code, Codeword):
-                return StabilizerStateKeyGenerator(code, blockname)
-            return SyndromeKeyGenerator(code, blockname)
-        
-        self.generators = {block.name: getGenerator(block.code, block.name) for block in blocks}
-        
-        pcSet = set([g.parityChecks() for g in self.generators.values()])
-        if 1 < len(pcSet):
-            raise Exception('Parity check mismatch. {0}'.format(pcSet))
-        
-        self._parityChecks = pcSet.pop()
-        
-#        # oneBlockKey is slightly more efficient.
-#        if 1 == len(blocks):
-#            self.getKey = self.oneBlockKey
-#        else:
-#            self.getKey = self.multiBlockKey
-        
-    def parityChecks(self):
-        return self._parityChecks
-    
-#    def keyMeta(self):
-#        return SyndromeKeyMeta(self._parityChecks, len(self._blocknames))
-        
-#    def oneBlockKey(self, blockErrors):
-#        block = self._blocks[0]
-#        e = blockErrors[block.name]
-#        return self.generators[block.name].getKey(e)
-
-    def getKey(self, blockErrors):
-        gens = self.generators
-        blocknames = self._blocknames
-        
-        key = tuple(gens[name].getKey(blockErrors.get(name, Pauli.I)) for name in blocknames)
-        
-        #print 'blockErrors=', blockErrors, 'key=', key
-        return key
-    
-    def __repr__(self):
-        gens = tuple(self.generators[block.name] for block in self._blocks)
-        return str(gens)
+#class MultiBlockSyndromeKeyGenerator(object):
+#    '''
+#    '''
+#    
+#    def __init__(self, blocks):
+#        self._blocks = blocks
+#        self._blocknames = [block.name for block in blocks]
+#        
+#        def getGenerator(code, blockname):
+#            if isinstance(code, Codeword):
+#                return StabilizerStateKeyGenerator(code, blockname)
+#            return SyndromeKeyGenerator(code, blockname)
+#        
+#        self.generators = {block.name: getGenerator(block.code, block.name) for block in blocks}
+#        
+#        pcSet = set([g.parityChecks() for g in self.generators.values()])
+#        if 1 < len(pcSet):
+#            raise Exception('Parity check mismatch. {0}'.format(pcSet))
+#        
+#        self._parityChecks = pcSet.pop()
+#        
+##        # oneBlockKey is slightly more efficient.
+##        if 1 == len(blocks):
+##            self.get_key = self.oneBlockKey
+##        else:
+##            self.get_key = self.multiBlockKey
+#        
+#    def parityChecks(self):
+#        return self._parityChecks
+#    
+##    def keyMeta(self):
+##        return SyndromeKeyMeta(self._parityChecks, len(self._blocknames))
+#        
+##    def oneBlockKey(self, blockErrors):
+##        block = self._blocks[0]
+##        e = blockErrors[block.name]
+##        return self.generators[block.name].get_key(e)
+#
+#    def get_key(self, blockErrors):
+#        gens = self.generators
+#        blocknames = self._blocknames
+#        
+#        key = tuple(gens[name].get_key(blockErrors.get(name, Pauli.I)) for name in blocknames)
+#        
+#        #print 'blockErrors=', blockErrors, 'key=', key
+#        return key
+#    
+#    def __repr__(self):
+#        gens = tuple(self.generators[block.name] for block in self._blocks)
+#        return str(gens)
     
     
 class SyndromeKeyDecoder(object):
