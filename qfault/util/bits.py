@@ -1,6 +1,7 @@
 '''
 Some simple functions for counting and manipulating bits.
-Some code was copied and adapted from http://wiki.python.org/moin/BitManipulation.
+Some code was copied and adapted from 
+http://wiki.python.org/moin/BitManipulation.
 
 TODO: speed up with Cython or pyrex?
 
@@ -10,9 +11,9 @@ Created on 2011-08-29
 import warnings
 #import util.cython.bits as cbits
 
-def weight(x, n=0):
+def weight(integer, n=0):
     '''
-    Returns the Hamming weight x.
+    Returns the Hamming weight of 'integer'.
     
     Note: bitlength argument (n) is deprecated.
     
@@ -20,11 +21,12 @@ def weight(x, n=0):
     3
     '''
     if __debug__ and 0 != n:
-        warnings.warn('Bitlength argument is deprecated', category=DeprecationWarning)
+        warnings.warn('Bitlength argument is deprecated', 
+                      category=DeprecationWarning)
         
     s = 0
-    while(x):
-        x &= x - 1  # Clears the LSB
+    while(integer):
+        integer &= integer - 1  # Clears the LSB
         s += 1
     return(s)
 
@@ -39,7 +41,8 @@ def parity(e, n = 0):
     0
     '''
     if __debug__ and 0 != n:
-        warnings.warn('Bitlength argument is deprecated', category=DeprecationWarning)
+        warnings.warn('Bitlength argument is deprecated', 
+                      category=DeprecationWarning)
 
     return weight(e) & 1
 
@@ -63,7 +66,8 @@ def numbits(x):
     43
     '''
     
-    warnings.warn('Deprecated.  Use x.bit_length(), instead.', category=DeprecationWarning)
+    warnings.warn('Deprecated.  Use x.bit_length(), instead.', 
+                  category=DeprecationWarning)
     
     i = 0
     while x > 0:
@@ -178,6 +182,36 @@ def lsbMask(n):
     '11111'
     '''
     return (1 << n) - 1
+
+def setbit(bit_index, val, new_bit_val):
+    '''
+    Returns the integer value in which the 'bit_index' bit
+    of 'val' has been set to 'new_bit_val'.  The
+    'bit_index' parameter is zero-based, i.e., zero
+    corresponds to the least-significant bit.
+    
+    >>> val = 0b1101
+    >>> setbit(2, val, 0)
+    9
+    >>> setbit(1, val, 1)
+    15
+    '''
+    assert (1 == new_bit_val) or (0 == new_bit_val)
+    
+    # Save the bits below the bit to be set
+    mask = lsbMask(bit_index)
+    lower_bits = val & mask
+    
+    # Clear out the lower bits
+    mask <<= 1
+    mask += 1
+    val ^= val & mask
+    
+    return val + (new_bit_val << bit_index) + lower_bits
+    
+    
+    
+    
 
 if __name__ == '__main__':
     import doctest
