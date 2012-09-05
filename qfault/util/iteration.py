@@ -3,6 +3,8 @@ Created on 2011-08-29
 
 @author: adam
 '''
+import math
+import itertools
 
 
 ### NOTE: There are built-in itertools functions that do this kind of thing (http://docs.python.org/py3k/library/itertools.html#itertools.combinations_with_replacement)
@@ -335,6 +337,31 @@ class ParallelPairIterator(object):
                                   (self.head[1] not in pair)]
         self.subIterator = ParallelPairIterator(remainingPairs).__iter__()
       
+      
+def equal_slice_iterators(iterable, num_slices):
+    '''
+    Chops the sequence into equal size subsequences.
+    The last subsequence may contain fewer elements.
+    Note: Once the slices have been constructed,
+    the original iterator should not be used anywhere else.
+    
+    >>> map(list, equal_slice_iterators((i for i in range(10)), 3))
+    [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]
+    '''
+    
+    # In the event that the iterable is an iterator or a generator
+    # we will need independent copies for each slice, plus
+    # one more to determine the length.
+    iter_copies = itertools.tee(iterable, num_slices + 1)
+    
+    # We want to know the length of the iterable, but
+    # we don't want to load the whole thing into memory.
+    length = sum(1 for _ in iter_copies[-1])
+    
+    step = long(math.ceil(length / float(num_slices)))
+    slices = [itertools.islice(iter_copies[i], i * step, (i+1) * step)
+              for i in xrange(num_slices)]
+    return slices
             
 if __name__ == "__main__":
     import doctest

@@ -54,7 +54,7 @@ class SyndromeKeyGenerator(object):
     def ParityChecks(stabilizerCode):
         try:
             # Get the underlying code, if dealing with a stabilizer state.
-            stabilizerCode = stabilizerCode.getCode()
+            stabilizerCode = stabilizerCode.get_code()
         except AttributeError:
             pass
         
@@ -339,9 +339,9 @@ class StabilizerStateKeyGenerator(MaskedKeyGenerator):
     def __init__(self, state, blockname):
         self._state = state
         #self.lStabs = set(state.logicalStabilizers())
-        #code = state.getCode()
+        #code = state.get_code()
         
-        skg = SyndromeKeyGenerator(state.getCode(), blockname)
+        skg = SyndromeKeyGenerator(state.get_code(), blockname)
 
         # The check mask eliminates parity checks of logical operators that are in the normalizer
         # of the code, but are not in the normalizer of the state because the corresponding dual
