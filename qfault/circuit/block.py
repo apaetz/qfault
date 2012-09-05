@@ -19,9 +19,9 @@ class Block(object):
 	def length(self):
 		return self.code.n
 	
-	def getCode(self):
+	def get_code(self):
 		return self.code
-	
+		
 	def __str__(self):
 		return self.name + '.' + str(self.code)
 	
@@ -29,7 +29,7 @@ class Block(object):
 		return 'Block(' + self.name + ', ' + str(self.code) + ')'
 	
 	def __eq__(self, other):
-		if self.code == other.code:
+		if self.length == other.length and self.code == other.code:
 			return True
 		
 		return False

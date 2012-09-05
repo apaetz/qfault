@@ -6,7 +6,7 @@ Created on 2010-08-30
 '''
 import multiprocessing
 import logging
-from qfault.util import listutils
+from qfault.util import listutils, iteration
 import itertools
 
 __all__ = ['enable_concurrency', 'map_concurrent']
@@ -68,14 +68,18 @@ class SliceMapReduce(object):
         mapped = map(self._map, _slice)
         return self._reduce(mapped)
 
-def mapreduce_concurrent(map_func, reduce_func, collection):
+def mapreduce_concurrent(map_func, reduce_func, iterable):
     '''
     Concurrently maps all of the elements in the 
-    collection according to 'map_func', then reduces
+    iterable according to 'map_func', then reduces
     the result according to reduce_func. Behavior
-    is equivalent to reduce(map(collection)), but
+    is equivalent to reduce(map(iterable)), but
     the processing is done concurrently on slices of the
     input.
+    
+    Note: If iterable is an iterator or generator, then
+    it should not be used anywhere else after calling
+    mapreduce_concurrent().
     
     >>> initialize_concurrency(1)
     >>> import operator
@@ -88,8 +92,8 @@ def mapreduce_concurrent(map_func, reduce_func, collection):
     
     pool = _get_pool()
     map_result = pool.map(slice_map,
-                          listutils.equal_chop(collection, 
-                                               _slot_count()))
+                          iteration.equal_slice_iterators(iterable, 
+                                                          _slot_count()))
     return reduce_func(map_result)
     
 

@@ -84,3 +84,9 @@ def cnot(block1, bit1, block2, bit2):
 
 def meas(pauli, block, bit):
     return {'type': 'meas'+str(pauli), 'block1': block, 'bit1': bit}
+
+def supported_types():
+    '''
+    Returns a list of all of the supported location types.
+    '''
+    return ('cnot', 'rest', 'prepX', 'prepZ', 'measX', 'measZ')
