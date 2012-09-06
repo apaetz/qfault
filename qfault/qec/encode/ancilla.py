@@ -2,8 +2,8 @@
 # Some basic routines for preparing encoded stabilizer states.
 #
 # Adam Paetznick (9/12/2011)
-from qfault.util.counterUtils import locXprep, locZprep, loccnot, locrest, \
-	propagateAllErrors
+from qfault.circuit import location
+from qfault.qec.error import PauliError, Pauli
 
 
 def permuteCircuit(circuit, rounds):
@@ -50,9 +50,9 @@ def ancillaZPrep(schedule, roundPermutation=None, name='0', reverseQubitOrder=Tr
 
 	# the initial qubit preparations
 	for i in prepAsX:
-		addLoc(locXprep(name, bitLookup[i]))
+		addLoc(location.prep(Pauli.X, name, bitLookup[i]))
 	for i in prepAsZ:
-		addLoc(locZprep(name, bitLookup[i]))
+		addLoc(location.prep(Pauli.Z, name, bitLookup[i]))
 
 	touched = set()
 	
@@ -62,13 +62,13 @@ def ancillaZPrep(schedule, roundPermutation=None, name='0', reverseQubitOrder=Tr
 		
 		for src, tgt in cnots[rnd]:
 			cnotQubits = set([src, tgt])
-			addLoc(loccnot(name, bitLookup[src], name, bitLookup[tgt]))
+			addLoc(location.cnot(name, bitLookup[src], name, bitLookup[tgt]))
 			resting -= cnotQubits
 			touched.update(cnotQubits)
 			
 		# now add the rest locations
 		for r in resting:
-			addLoc(locrest(name, bitLookup[r]))
+			addLoc(location.rest(name, bitLookup[r]))
 			
 	#propagateAllErrors(locations)
 	return locations

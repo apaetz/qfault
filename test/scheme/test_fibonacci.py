@@ -39,7 +39,7 @@ class TestFibonacci(unittest.TestCase):
                     z = 0
                 e = PauliError(4, x, z)
                 
-                key = generator.getKey(e)
+                key = generator.get_key(e)
                 if not emap.has_key(key) or (e.weight() < emap[key].weight()): 
                     emap[key] = e
                         

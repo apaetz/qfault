@@ -5,7 +5,7 @@ This file contains components that adapt the output from other components in som
 
 @author: adam
 '''
-from qfault.counting.block import Block
+from qfault.circuit.block import Block
 from qfault.counting.component.base import Filter, SequentialComponent, \
     ParallelComponent
 from qfault.counting.key import IdentityManipulator, KeyManipulator, \
@@ -86,7 +86,7 @@ class DecodeAdapter(SequentialComponent):
     
     def __init__(self, component):
         outBlocks = component.outBlocks()
-        idealDecoders = [IdealDecoder(block.getCode()) for block in outBlocks]
+        idealDecoders = [IdealDecoder(block.get_code()) for block in outBlocks]
         decoder = ParallelComponent({}, *idealDecoders)
         super(DecodeAdapter, self).__init__(component.kGood, (component, decoder))
         
@@ -94,6 +94,6 @@ class SyndromeAdapter(SequentialComponent):
     
     def __init__(self, component):
         outBlocks = component.outBlocks()
-        idealDecoders = [SyndromeFilter(block.getCode()) for block in outBlocks]
+        idealDecoders = [SyndromeFilter(block.get_code()) for block in outBlocks]
         decoder = ParallelComponent({}, *idealDecoders)
         super(SyndromeAdapter, self).__init__(component.kGood, (component, decoder))

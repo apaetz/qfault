@@ -18,7 +18,7 @@ class CountResult(object):
         self.blocks = blocks
         self.counts = counts
         
-    def Validate(self, expNumBlocks=None):
+    def is_valid(self, expNumBlocks=None):
         nblocks = len(self.blocks)
         
         logger.debug("nblocks={0}, expected={1}".format(nblocks, expNumBlocks))
@@ -27,7 +27,9 @@ class CountResult(object):
             return False
         for count in self.counts:
             if any(nblocks - len(key) for key in count.keys()):
-                logger.error('nblocks={0}, key lengths={1}'.format(nblocks, [len(key) for key in count.keys()]))
+                logger.error('nblocks={0}, key lengths={1}'.format(nblocks, 
+                                                                   [len(key) for key in count.keys()]))
+                logger.debug('count={0}'.format(count))
                 return False
             
         return True

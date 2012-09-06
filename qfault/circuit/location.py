@@ -31,8 +31,8 @@ class Locations(object):
     class is to allow a name to be attached to the list of locations.
     '''
     
-    def __init__(self, list=[], name=''):
-        self.list = list
+    def __init__(self, sequence, name=''):
+        self.list = list(sequence)
         self.name = name
         
     def __str__(self):

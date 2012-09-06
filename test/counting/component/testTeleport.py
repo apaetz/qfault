@@ -231,7 +231,7 @@ class TestTeleport(testComponent.ComponentTestCase):
 #		expected = {}
 #		notDetected = set([Pauli.I, Xl, Zl])
 #		for i, err in enumerate([III, IIX, IXlX, ZlIX, IXI, ZII]):
-#			key = generator.getKey(err)
+#			key = generator.get_key(err)
 #			counts[key] = i+1
 #			
 #			if err[0] in notDetected and err[1] in notDetected:

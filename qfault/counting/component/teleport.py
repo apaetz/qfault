@@ -5,22 +5,23 @@ Teleportation-based components.
 
 @author: adam
 '''
+from copy import copy
+from qfault.circuit.block import Block
 from qfault.counting import key
-from qfault.counting.block import Block
 from qfault.counting.component.base import PostselectionFilter, Empty, \
     ParallelComponent, SequentialComponent
+from qfault.counting.component.block import BlockDiscard, BlockInsert
 from qfault.counting.component.transversal import TransRest
-from qfault.counting.count_errors import mapCounts
-from qfault.counting.count_parallel import convolve
-from qfault.counting.key import keyForBlock, KeyExtender, KeyManipulator, KeyCopier, \
-    IdentityManipulator, SyndromeKeyGenerator, KeyRemover
+from qfault.counting.convolve import convolve_dict_tuples, convolve_counts
+from qfault.counting.count_locations import map_counts
+from qfault.counting.key import keyForBlock, KeyExtender, KeyManipulator, \
+    KeyCopier, IdentityManipulator, SyndromeKeyGenerator, KeyRemover
 from qfault.counting.result import TrivialResult
 from qfault.qec.error import xType, zType, Pauli
 from qfault.util import bits
 from qfault.util.cache import memoize
+import functools
 import logging
-from copy import copy
-from qfault.counting.component.block import BlockDiscard, BlockInsert
 
 logger = logging.getLogger('component')
        
@@ -41,9 +42,9 @@ class TeleportWithMeas(SequentialComponent):
         measXBlock, measZBlock = bellMeas.outBlocks()
         outBlock = bellPair.outBlocks()[1]
         
-        emptyMeasX = Empty(measXBlock.getCode(), measXBlock.name)
-        emptyMeasZ = Empty(measZBlock.getCode(), measZBlock.name)
-        emptyOut = Empty(outBlock.getCode(), outBlock.name)
+        emptyMeasX = Empty(measXBlock.get_code(), measXBlock.name)
+        emptyMeasZ = Empty(measZBlock.get_code(), measZBlock.name)
+        emptyOut = Empty(outBlock.get_code(), outBlock.name)
         
         
 #        # Extend the input
@@ -61,7 +62,7 @@ class TeleportWithMeas(SequentialComponent):
         # both rests??
         if enableRest:
             outBlock = bellPair.outBlocks()[1]
-            rest = TransRest(kGood, outBlock.getCode())
+            rest = TransRest(kGood, outBlock.get_code())
             
             # Extend the rest to include the other two blocks, as well.
             rest = ParallelComponent(kGood, emptyMeasX, emptyMeasZ, rest)
@@ -100,22 +101,22 @@ class TeleportWithMeas(SequentialComponent):
         # TODO: this pattern of memoizing some internal result and then convolving is
         # likely to be present in other components.  Should generalize this behavior.
         # TODO: more robust way of getting key lengths?
-        keyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in result.blocks]
-        inKeyLengths = [len(SyndromeKeyGenerator(block.getCode(), None).parityChecks()) for block in extendedInput.blocks]
+        keyLengths = [len(SyndromeKeyGenerator(block.get_code()).parityChecks()) for block in result.blocks]
+        inKeyLengths = [len(SyndromeKeyGenerator(block.get_code()).parityChecks()) for block in extendedInput.blocks]
         self._log(logging.DEBUG, "keyLengths={0}, inKeyLengths={1}".format(keyLengths, inKeyLengths))
-        result.counts = convolve(extendedInput.counts, 
-                                result.counts, 
-                                kMax=kMax, 
-                                convolveFcn=key.convolveKeyCounts, 
-                                extraArgs=[inKeyLengths, keyLengths])
+        convolve = functools.partial(convolve_dict_tuples, inKeyLengths, keyLengths)
+        result.counts = convolve_counts(extendedInput.counts, 
+                                        result.counts, 
+                                        k_max=kMax, 
+                                        convolve_fcn=convolve)
         
         self._log(logging.DEBUG, "result before corrections: {0}".format(result))
         
         # Finally, make the logical corrections necessary for teleportation.
         inBlock = self.inBlocks()[0]
-        code = inBlock.getCode()
+        code = inBlock.get_code()
         corrector = self._corrector(code)
-        result.counts = mapCounts(result.counts, corrector)
+        result.counts = map_counts(result.counts, corrector)
         result.blocks = extendedInput.blocks
         
         self._log(logging.DEBUG, "result after corrections: {0}".format(result))
@@ -134,7 +135,7 @@ class TeleportWithMeas(SequentialComponent):
 #        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(2, 1))
 #        extender = KeyExtender(IdentityManipulator(), 2, 1)
 #        extendedInput = inputResult
-#        extendedInput.counts = mapCounts(inputResult.counts, extender)
+#        extendedInput.counts = map_counts(inputResult.counts, extender)
 #        extendedInput.blocks = inputResult.blocks[:1]*(3) + inputResult.blocks[1:]
 #        return extendedInput
 #
@@ -145,7 +146,7 @@ class TeleportWithMeas(SequentialComponent):
 #        self._log(logging.DEBUG, 'Extending input by {0} blocks after block {1}'.format(nBP - nIn, nIn))
 #        extender = KeyExtender(IdentityManipulator(), nBP - nIn, nIn)
 #        extendedInput = inputResult
-#        extendedInput.counts = mapCounts(inputResult.counts, extender)
+#        extendedInput.counts = map_counts(inputResult.counts, extender)
 #        extendedInput.blocks = inputResult.blocks[:1]*(nBP) + inputResult.blocks[1:]
 #        return extendedInput
 
@@ -168,7 +169,7 @@ class TeleportWithMeas(SequentialComponent):
 #        return self[self.bmName].keyPropagator(extender)
         
     def _corrector(self, code):
-        parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
+        parityChecks = SyndromeKeyGenerator(code).parityChecks()
         
         # TODO: this assumes that the code contains only one logical qubit.
         logicalOperators = code.logicalOperators()[0]
@@ -216,7 +217,7 @@ class Teleport(SequentialComponent):
 #        
 #        # Now trace out the measurement results
 #        tracer = self.KeyTracer()
-#        result.counts = mapCounts(result.counts, tracer)
+#        result.counts = map_counts(result.counts, tracer)
 #        result.blocks = result.blocks[2:]
 #        
 #        return result
@@ -263,7 +264,7 @@ class TeleportEDFilter(PostselectionFilter):
         # The QECC on the data block and the first ancilla block must match exactly.
         # This includes any gauge stabilizers.  The reason is that all of the stabilizer
         # generators are used in error detection, including gauge stabilizers.
-        dataCode, anc1Code, _ = (block.getCode() for block in teleport.outBlocks())
+        dataCode, anc1Code, _ = (block.get_code() for block in teleport.outBlocks())
         if not dataCode == anc1Code:
             raise Exception("QECC for data block ({0}) and ancilla block ({1}) are not equal.".format(dataCode, anc1Code))
         
@@ -284,7 +285,7 @@ class TeleportEDFilter(PostselectionFilter):
         # This assumes that the code of the input block and the first
         # Bell-state ancilla are *exactly* the same, including all
         # gauge stabilizers.
-#        code = self.inBlocks()[0].getCode()
+#        code = self.inBlocks()[0].get_code()
 #        accept = self._acceptor(code)
         keyAcceptor = self.KeyAcceptor(subPropagator, self.accept)
         return keyAcceptor
@@ -293,7 +294,7 @@ class TeleportEDFilter(PostselectionFilter):
         stabilizers = set(code.stabilizerGenerators())
         # TODO: more robust way to get parity checks?
         # TODO: clean up all of this.
-        parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
+        parityChecks = SyndromeKeyGenerator(code).parityChecks()
         syndromeBits = [(check in stabilizers) for check in parityChecks]
         l = len(syndromeBits)
         syndromeIndices = [l-i-1 for i in range(l) if syndromeBits[i]]
@@ -365,8 +366,8 @@ class EDInputFilter(SequentialComponent):
         return self.inBlocks()
         
     def count(self, noiseModels, pauli, inputResult=None, kMax=None):
-        teleport = self[0]
-        numBlocks = len(teleport.inBlocks())
+        ed = self[0]
+        numBlocks = len(ed.inBlocks())
         
         # Copy the input block.  One of the copies will be propagated through the
         # teleportation ED, the other will be preserved (so long as the input
@@ -375,16 +376,16 @@ class EDInputFilter(SequentialComponent):
         for block in range(numBlocks):
             copier = KeyCopier(copier, block, block+numBlocks)
         extendedInput = copy(inputResult)
-        extendedInput.counts = mapCounts(inputResult.counts, copier)
+        extendedInput.counts = map_counts(inputResult.counts, copier)
         extendedInput.blocks = inputResult.blocks[:numBlocks] + inputResult.blocks
         
         result = super(EDInputFilter, self).count(noiseModels, pauli, extendedInput, kMax)
         
-        # Now remove the output block of the teleportation.  We only want to keep the original
+        # Now remove the output blocks of the ED.  We only want to keep the original
         # input.
-        numBlocks = len(teleport.outBlocks())
-        remover = KeyRemover(IdentityManipulator(), [1,2])
-        result.counts = mapCounts(result.counts, remover)
+        numBlocks = len(ed.outBlocks())
+        remover = KeyRemover(IdentityManipulator(), range(numBlocks))
+        result.counts = map_counts(result.counts, remover)
         result.blocks = result.blocks[numBlocks:]
         
         return result

@@ -8,10 +8,9 @@ More work is needed to come up with a satisfactory solution.
 
 @author: adam
 '''
-from collections import OrderedDict
 from qfault.counting.convolve import convolve_dict
-from qfault.qec.error import xType, zType, dualType, PauliError, Pauli
-from qfault.qec.qecc import StabilizerCode, Codeword
+from qfault.qec.error import xType, zType
+from qfault.qec.qecc import StabilizerCode
 from qfault.util import listutils, bits
 from qfault.util.cache import memoize
 import logging
@@ -60,16 +59,14 @@ class SyndromeKeyGenerator(object):
         
         return stabilizerCode.stabilizerGenerators() + stabilizerCode.normalizerGenerators()
     
-    def __init__(self, code, blockname):
+    def __init__(self, code):
                 
         # Ordered list of all parity checks, including logical operators.
         # Some of the stabilizer generators may also be logical operators (e.g,
         # a stabilizer state), so we need to eliminate duplicates.
-        parityChecks = self.ParityChecks(code)
-        
+        parityChecks = self.ParityChecks(code)        
         nStabs = len(code.stabilizerGenerators())
 
-        self.blockname = blockname
         self.code = code
         self._parityChecks = parityChecks
         self.nStabs = nStabs
@@ -85,44 +82,77 @@ class SyndromeKeyGenerator(object):
     
     def __call__(self, error):
         return self.get_key(error)
-    
-#    def keyMeta(self):
-#        return SyndromeKeyMeta(self.parityChecks(), 1)
-    
-#    def getError(self, key):
-#        syndrome, logical = key
-#        e = self.code.getSyndromeCorrection(syndrome)
-#        for l,d in zip(self.logicals, self.dualLogicals):
-#            if (logical & 1) == e.commutesWith(l):
-#                e *= d
-#            logical >>= 1
-#        return e
-    
-#    def decode(self, key):
-#        normalizers = self.code.normalizerGenerators()
-#        nNorms = len(normalizers)
-#        logicalChecks = key & ((1 << nNorms) - 1)
-#        syndrome = key >> nNorms
-#        
-#        e = self.code.syndromeCorrection(syndrome)
-#        
-#        decoded = (0,0)
-#        for i, check in self.code.normalizerGenerators():
-#            qubit = i/2
-#            decoded[i % 2] += ((logicalChecks & 1) ^ e.commutesWith(check)) << qubit
-#            logicalChecks >>= 1
-#    
-#        return PauliError(xbits=decoded[0], zbits=decoded[1])
-    
+        
     def __repr__(self):
         return 'SyndromeKeyGenerator(' + str(self.code) + ')'
     
+class MaskedKeyGenerator(object):
+    
+    def __init__(self, generator):
+        self._generator = generator
+        
+    def mask(self):
+        return 0
+    
+    def parityChecks(self):
+        return self._generator.parityChecks()
+    
+    def get_key(self, e):
+        return self._generator.get_key(e) & self.mask()
+    
+    def decode(self, key):
+        return self._generator.decode(key)
+    
+    def __call__(self, error):
+        return self.get_key(error)
+    
+#    def keyMeta(self):
+#        return self._generator.keyMeta()
+    
+class StabilizerStateKeyGenerator(MaskedKeyGenerator):
+    
+    def __init__(self, state):
+        self._state = state
+        #self.lStabs = set(state.logicalStabilizers())
+        #code = state.get_code()
+        
+        skg = SyndromeKeyGenerator(state.get_code())
+
+        # The check mask eliminates parity checks of logical operators that are in the normalizer
+        # of the code, but are not in the normalizer of the state because the corresponding dual
+        # operator is now in the stabilizer.
+        maskedChecks = set(state.stabilizerGenerators() + state.normalizerGenerators())
+        masks = [check in maskedChecks for check in skg.parityChecks()]
+        self._mask = bits.listToBits(masks)
+        
+        super(StabilizerStateKeyGenerator, self).__init__(skg)
+        
+    def mask(self):
+        return self._mask
+    
+    def __repr__(self):
+        return 'StabilizerStateKeyGenerator(' + str(self._state) + ')'
     
 def IntegerKey(value, nblocks=1):
     return tuple([value]*nblocks)
     
-identity = lambda key: key
+
+def keyForBlock(key, block):
+    return (key[block],)
+
+
+######
+# Key manipulators.
+# Originally the idea was to isolate all of the location/component counting
+# code from error key representation.  In reality, though, the extra
+# abstraction is probably unnecessary and only complicates the code.
+# In the future it would be worth looking at eliminating the key manipulators
+# and modifying keys directly in the counting code.
+# 
+#####
     
+identity = lambda key: key
+
 class KeyManipulator(object):
     
     def __init__(self, manipulator=identity):
@@ -220,10 +250,6 @@ class MultiManipulatorAdapter(object):
     def __call__(self, keys):
         return tuple(self._manipulators[i](key) for i,key in enumerate(keys))
     
-    
-def keyForBlock(key, block):
-    return (key[block],)
-
 class KeyCopier(KeyManipulator):
     
     def __init__(self, manipulator, fromBlock, toBlock, mask=None):
@@ -262,8 +288,6 @@ class KeyMasker(KeyManipulator):
             self._manipulate = self._manipulateSelected
             
         self.mask = mask
-        
-    
     
     def _manipulateSelected(self, key):
         mask = self.mask
@@ -287,76 +311,7 @@ class SyndromeKeyFilter(KeyManipulator):
     def _manipulate(self, key):
         return ((key[0] >> self._nNorms) << self._nNorms,) + key[1:]
         
-def convolveKeyCounts(counts1, counts2, key1Lengths, key2Lengths):
-    
-    # Return counts according to the larger of the two keys.
-    if len(key2Lengths) > len(key1Lengths):
-        keyLengths = key2Lengths
-        k = len(key1Lengths)
-    else:
-        keyLengths = key1Lengths
-        k = len(key2Lengths)
-    
-    if key1Lengths[:k] != key2Lengths[:k]:
-        raise Exception('Incompatible key lengths {0}, {1}'.format(key1Lengths, key2Lengths))
-    
-    try:
-        counts1 = {bits.concatenate(key, key1Lengths, reverse=True): count for key,count in counts1.iteritems()}
-        counts2 = {bits.concatenate(key, key2Lengths, reverse=True): count for key,count in counts2.iteritems()}
-    except Exception:
-        raise
-    
-    counts = convolve_dict(counts1, counts2)
-    
-    return {bits.split(keybits, keyLengths, reverse=True): count for keybits,count in counts.iteritems()}
-    
-    
-    
 
-    
-class MaskedKeyGenerator(object):
-    
-    def __init__(self, generator):
-        self._generator = generator
-        
-    def mask(self):
-        return 0
-    
-    def parityChecks(self):
-        return self._generator.parityChecks()
-    
-    def get_key(self, e):
-        return self._generator.get_key(e) & self.mask()
-    
-    def decode(self, key):
-        return self._generator.decode(key)
-    
-#    def keyMeta(self):
-#        return self._generator.keyMeta()
-    
-class StabilizerStateKeyGenerator(MaskedKeyGenerator):
-    
-    def __init__(self, state, blockname):
-        self._state = state
-        #self.lStabs = set(state.logicalStabilizers())
-        #code = state.get_code()
-        
-        skg = SyndromeKeyGenerator(state.get_code(), blockname)
-
-        # The check mask eliminates parity checks of logical operators that are in the normalizer
-        # of the code, but are not in the normalizer of the state because the corresponding dual
-        # operator is now in the stabilizer.
-        maskedChecks = set(state.stabilizerGenerators() + state.normalizerGenerators())
-        masks = [check in maskedChecks for check in skg.parityChecks()]
-        self._mask = bits.listToBits(masks)
-        
-        super(StabilizerStateKeyGenerator, self).__init__(skg)
-        
-    def mask(self):
-        return self._mask
-    
-    def __repr__(self):
-        return 'StabilizerStateKeyGenerator(' + str(self._state) + ')'
     
 #class MultiBlockSyndromeKeyGenerator(object):
 #    '''

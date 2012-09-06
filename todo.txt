@@ -1,3 +1,15 @@
+- get concurrency to work for lambda functions.
+	-- It is difficult or impossible to use lambda functions with the Python multiprocessing
+	   module.  The reason is that lambda functions can't be pickled.  Parts of lambda function
+	   *can* be marshaled.  But I have not found a complete recipe that reliably reconstructs
+	   the entire lambda function. In particular, it is not clear how to reliably reconstruct
+	   the func_closure attribute. 
+	   See: http://stackoverflow.com/questions/11878300/serializing-and-deserializing-lambdas
+- Re-organize test code (compare to sympy, and check distutils options)
+- Re-write location counting for separate kx, kz params
+- Combine component counting and simulation.
+- pylint
+
 - Pr[Sin=s] bounds are far too generous.  Need to tighten up.
 
 -Order-2 Logical X/Z error counts for TeleportED seem high.  Should check some of the counts by hand.
@@ -17,4 +29,3 @@ way to propagate keys is to call count() with kMax=0, which is well defined for 
 
 - Eliminate dead code.
 - Documentation
-- Re-organize test code

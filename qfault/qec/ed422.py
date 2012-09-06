@@ -3,7 +3,7 @@ Created on 2011-09-09
 
 @author: adam
 '''
-from qfault.counting.location import Locations
+from qfault.circuit.location import Locations
 from encode.ancilla import ancillaZPrep
 from error import Pauli
 from qecc import CssCode

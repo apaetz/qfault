@@ -29,8 +29,8 @@ from counting.countErrors import CountResult, reduceAllErrorSyndromes, \
 	countZerrorsPlus, reduceAllErrorSyndromesPlus
 from counting.countParallel import packTasks
 from counting.location import Locations
-from counting.probability import exRecConfigs, prBadPoly, calcPrBadExRec, \
-	prMinFailures, countResultAsPoly, \
+from counting.probability import exRecConfigs, pr_bad, calcPrBadExRec, \
+	pr_at_least_k_failures, countResultAsPoly, \
 	calcPrBadCnotExRec_LEC_CNOT_ignore
 from golay import golayCode
 from util.cache import fetchable
@@ -77,7 +77,7 @@ def exRecXOnly(prepPairs, settings):
 	prBadEC = resultEC.prBad
 	prAcceptEC = resultEC.prAccept
 	totalsCnot = locsCnot.getTotals()
-	prBadCnot = prBadPoly(kGoodCnot, totalsCnot, noise['X'], kGoodExRec)
+	prBadCnot = pr_bad(kGoodCnot, totalsCnot, noise['X'], kGoodExRec)
 	
 	
 	prIgnored = calcPrBadCnotExRec_LEC_CNOT_ignore(totalsEC, totalsCnot, kGoodEC, kGoodCnot, kGood_LEC_CNOT, prAcceptEC, noise['X'])
@@ -144,7 +144,7 @@ def exRecZOnly(prepPairs, settings):
 	prBadEC = resultEC.prBad
 	prAcceptEC = resultEC.prAccept
 	totalsCnot = locsCnot.getTotals()
-	prBadCnot = prBadPoly(kGoodCnot, totalsCnot, noise['Z'], kGoodExRec)
+	prBadCnot = pr_bad(kGoodCnot, totalsCnot, noise['Z'], kGoodExRec)
 	
 	# countCnotExRecParallel assumes X-error propagation.  This has the effect
 	# of swapping IZ and ZI results, and the TEC configurations.  Swap them back.
@@ -352,7 +352,7 @@ def countMeasZExRec(ancillaPairs, settings):
 	
 	maligCountsZbasis = countMeasExRecMalig(countsLEC.counts, countsMZ, kGoodExRec)
 	measTotals = locationsMZ.getTotals()
-	prBadMeas = prMinFailures(kGoodMeas+1, measTotals, noise['X'], kGoodExRec)
+	prBadMeas = pr_at_least_k_failures(kGoodMeas+1, measTotals, noise['X'], kGoodExRec)
 	ecPresent = [True] + [False]*3
 	prBad = calcPrBadExRec(resultEC.locTotals, locationsMZ.getTotals(), resultEC.prBad, prBadMeas, kGoodExRec, noise['X'], ecPresent, resultEC.prAccept)
 			
@@ -379,7 +379,7 @@ def countMeasXExRec(ancillaPairs, settings):
 	
 	maligCountsXbasis = countMeasExRecMalig(countsLEC.counts, countsMX, kGoodExRec)
 	measTotals = locationsMX.getTotals()
-	prBadMeas = prMinFailures(kGoodMeas+1, measTotals, noise['Z'], kGoodExRec)
+	prBadMeas = pr_at_least_k_failures(kGoodMeas+1, measTotals, noise['Z'], kGoodExRec)
 	ecPresent = [True] + [False]*3
 	prBad = calcPrBadExRec(resultEC.locTotals, locationsMX.getTotals(), resultEC.prBad, prBadMeas, kGoodExRec, noise['Z'], ecPresent, resultEC.prAccept)
 			
@@ -408,7 +408,7 @@ def countRestExRecZero(ancillaPairs, settings):
 	maligCounts = countExRecMalig(countsLECx.counts, countsX, lCountsTECx.counts, kGoodExRec)
 	
 	restTotals = locationsRest.getTotals()
-	prBadRest = prMinFailures(kGoodRest+1, restTotals, noise['X'], kGoodExRec)
+	prBadRest = pr_at_least_k_failures(kGoodRest+1, restTotals, noise['X'], kGoodExRec)
 	ecPresent = [True] + [False]*3
 	prBad = calcPrBadExRec(resultEC.locTotals, restTotals, resultEC.prBad, prBadRest, kGoodExRec, noise['X'], ecPresent, resultEC.prAccept)
 	
@@ -438,7 +438,7 @@ def countRestExRecPlus(ancillaPairs, settings):
 	
 	
 	restTotals = locationsRest.getTotals()
-	prBadRest = prMinFailures(kGoodRest+1, restTotals, noise['Z'], kGoodExRec)
+	prBadRest = pr_at_least_k_failures(kGoodRest+1, restTotals, noise['Z'], kGoodExRec)
 	ecPresent = [True] + [False]*3
 	prBad = calcPrBadExRec(resultEC.locTotals, restTotals, resultEC.prBad, prBadRest, kGoodExRec, noise['Z'], ecPresent, resultEC.prAccept)
 	

@@ -7,7 +7,6 @@ from qfault.counting.component.base import Filter
 from qfault.counting.key import IdentityManipulator, KeyPermuter, KeyRemover,\
     KeyExtender
 from qfault.util import listutils
-from qfault.counting import count_errors
 from qfault.counting.result import CountResult
 
 class BlockPermutation(Filter):
