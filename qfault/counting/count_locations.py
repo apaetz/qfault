@@ -13,7 +13,11 @@ from copy import copy
 from qfault import noise
 import functools
 
-__all__ = ['count_errors_of_order_k', 'count_location_set', 'propagate_location_errors']
+__all__ = ['count_errors_of_order_k', 
+           'count_location_set', 
+           'propagate_location_errors',
+           'merge_counts',
+           'map_counts']
 LOGGER = logging.getLogger('Counting')
 
 
@@ -180,7 +184,8 @@ def count_errors_of_order_k(k,
     if 0 == k:
         # Only possible error with 0 failures is the trivial one
         lengths = locations.blocklengths()
-        error = tuple(Pauli.I ** lengths[name] for name in block_order)
+        error = tuple(emap(Pauli.I ** lengths[name]) 
+                      for name, emap in zip(block_order, block_error_maps))
         return {error: 1}
 
     propagated_errors = propagate_location_errors(locations)
@@ -191,7 +196,7 @@ def count_errors_of_order_k(k,
                                                                 noise_model,
                                                                 block_order,
                                                                 block_error_maps),
-                                              _merge_counts,
+                                              merge_counts,
                                               location_index_sets)
                 
     return counts
@@ -244,18 +249,22 @@ def count_location_set(propagated_errors,
 #    
 #    return counts
 
-#def mapCounts(counts, keymap):
-#
-#    newCounts = []
-#    for countsK in counts:
-#        newCountsK = {}
-#        for key,count in countsK.iteritems():
-#            mappedKey = keymap(key)
-#            newCountsK[mappedKey] = newCountsK.get(mappedKey, 0) + count
-#            
-#        newCounts.append(newCountsK)
-#        
-#    return newCounts
+def map_counts(counts, keymap):
+    '''
+    Map count keys according to keymap.
+    If two keys map to the same new key, the
+    counts are summed.
+    '''
+    newCounts = []
+    for countsK in counts:
+        newCountsK = {}
+        for key,count in countsK.iteritems():
+            mappedKey = keymap(key)
+            newCountsK[mappedKey] = newCountsK.get(mappedKey, 0) + count
+            
+        newCounts.append(newCountsK)
+        
+    return newCounts
 #
 #def maxCount(*countss):
 #    '''
@@ -293,7 +302,7 @@ def _count_func(locations,
                               block_order, 
                               block_error_maps)
     
-def _merge_counts(counts):
+def merge_counts(counts):
     master = copy(counts[0])
     for count in counts[1:]:
         for key, val in count.iteritems():

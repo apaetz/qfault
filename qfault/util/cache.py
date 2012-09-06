@@ -42,9 +42,9 @@ class memoize(object):
 		self.func = function
 		self.memo = {}
 		
-	def __call__(self, *args):
-		key = self.getKey(args)
-		return self._fetch(key, args)
+	def __call__(self, *args, **kwargs):
+		key = self.get_key(args, kwargs)
+		return self._fetch(key, args, kwargs)
 	
 	def _fetch(self, key, args, kwargs):
 		if not memoEnabled:
@@ -67,7 +67,7 @@ class memoize(object):
 		logger.debug('getting memo for {0}'.format(key))
 		return copy.copy(self.memo[key])
 	
-	def getKey(self, args, kwargs):
+	def get_key(self, args, kwargs):
 		key = [0] * (len(args) + len(kwargs))
 		for i, arg in enumerate(args + tuple(kwargs.values())):
 			try:
@@ -79,7 +79,7 @@ class memoize(object):
 	
 	def _methodCall(self, obj, *args, **kwargs):
 		funcName = ''.join([repr(obj), '.', self.func.func_name])
-		key = self.getKey(tuple([funcName]) + args, kwargs)
+		key = self.get_key(tuple([funcName]) + args, kwargs)
 		return self._fetch(key, tuple([obj]) + args, kwargs)
 	
 	def __get__(self, obj, objtype):
@@ -99,7 +99,7 @@ class memoizeMutable(memoize):
 	def __init__(self, function):
 		super(memoizeMutable, self).__init__(function)
 	
-	def getKey(self, args):
+	def get_key(self, args):
 		return cPickle.dumps(args)
 	
 class memoizeFetchable(memoize):
@@ -146,12 +146,12 @@ class fetchable(object):
 		#self.dm = DataManager()
 	
 	def __call__(self, *args, **kwargs):
-		key = self.GetKey(self.func.func_name, args, kwargs)
+		key = self.get_key(self.func.func_name, args, kwargs)
 		return self._fetch(key, args, kwargs)
 	
 	def _methodCall(self, obj, *args, **kwargs):
 		funcName = repr(obj) + '.' + self.func.func_name
-		key = self.GetKey(funcName, args, kwargs)
+		key = self.get_key(funcName, args, kwargs)
 		return self._fetch(key, tuple([obj]) + args, kwargs)
 	
 	def _fetch(self, key, args, kwargs):
@@ -171,7 +171,7 @@ class fetchable(object):
 
 	
 	@staticmethod
-	def GetKey(funcName, args, kwargs):
+	def get_key(funcName, args, kwargs):
 		args = list(args) + kwargs.values()
 		key =  reduce(lambda s, arg: s + '.' + str(arg), args, funcName)
 		

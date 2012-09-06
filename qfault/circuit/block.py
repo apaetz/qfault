@@ -29,7 +29,7 @@ class Block(object):
 		return 'Block(' + self.name + ', ' + str(self.code) + ')'
 	
 	def __eq__(self, other):
-		if self.length == other.length and self.code == other.code:
+		if self.length() == other.length() and self.code == other.code:
 			return True
 		
 		return False

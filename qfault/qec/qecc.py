@@ -223,7 +223,7 @@ class Codeword(Qecc):
     This class is intended as an extra interface that is implemented
     by codeword states (e.g. stabilizer states).
     '''
-    def getCode(self):
+    def get_code(self):
         raise NotImplementedError
     
 class StabilizerState(StabilizerCode, Codeword):
@@ -255,7 +255,7 @@ class StabilizerState(StabilizerCode, Codeword):
     def logicalOperators(self):
         return self.code.logicalOperators()
         
-    def getCode(self):
+    def get_code(self):
         return self.code
             
 class CssCode(StabilizerCode):
@@ -324,7 +324,7 @@ class CssCode(StabilizerCode):
 #    def logicalOperator(self, qubit, eType):
 #        return self.code.logicalOperator(qubit,eType)
 #
-#    def getCode(self):
+#    def get_code(self):
 #        return self.code
 
 

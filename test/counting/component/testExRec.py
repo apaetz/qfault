@@ -31,7 +31,7 @@ class TestExRecTeleportED(testComponent.ComponentTestCase):
 		# an ED with one fault, and 2 ways to produce an I-error with one fault.  
 		# There are 10 ways to get an X with two faults in an ED, and 20 ways to
 		# get an I-error.
-		key = {pauli: (SyndromeKeyGenerator(self.trivialCode, None).getKey(pauli),) for pauli in kGood.keys()}
+		key = {pauli: (SyndromeKeyGenerator(self.trivialCode, None).get_key(pauli),) for pauli in kGood.keys()}
 		expected = {pauli: [{(0,): 1}, {(0,): 4, key[pauli]: 2*7}, {(0,): 7*7 + 2*2 + 2*20, key[pauli]: 2*7*2 + 2*10}] for pauli in (Pauli.X, Pauli.Z)}
 		checkCount(self.trivialCode, expected)
 	

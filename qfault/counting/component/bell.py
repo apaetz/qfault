@@ -5,15 +5,14 @@ Components for preparing Bell states and making Bell measurements.
 
 @author: adam
 '''
-from qfault.counting.component.base import ParallelComponent,\
-    SequentialComponent, Filter
+from qfault.circuit.block import Block
+from qfault.counting.component.base import SequentialComponent, \
+    ParallelComponent, Filter
 from qfault.counting.component.transversal import TransCnot, TransMeas
-from qfault.qec.error import Pauli, xType, zType
+from qfault.counting.key import KeyManipulator, IdentityManipulator, \
+    SyndromeKeyGenerator
+from qfault.qec.error import xType, zType, Pauli
 import logging
-from qfault.counting.key import SyndromeKeyGenerator, MultiBlockSyndromeKeyGenerator,\
-    KeyManipulator, IdentityManipulator
-from qfault.counting.block import Block
-import qfault.counting
 
 logger = logging.getLogger('component')
 
@@ -24,12 +23,12 @@ class BellPair(SequentialComponent):
 
     def __init__(self, kGood, plus, zero, kGoodCnot):
         # Construct a transversal CNOT component from the two input codes.
-        ctrlCode = plus.outBlocks()[0].getCode()
-        targCode = zero.outBlocks()[0].getCode()
+        ctrlCode = plus.outBlocks()[0].get_code()
+        targCode = zero.outBlocks()[0].get_code()
         cnot = TransCnot(kGoodCnot, ctrlCode, targCode)
         
         prep = ParallelComponent(kGood, plus, zero)
-        bf = BellFilter(cnot.outBlocks()[0].getCode())
+        bf = BellFilter(cnot.outBlocks()[0].get_code())
 
         # Order is important here.  The preps must be in front of the CNOT.
         super(BellPair, self).__init__(kGood, subcomponents=(prep, cnot, bf))
@@ -47,14 +46,15 @@ class BellFilter(Filter):
         self.code = code
         logicals = code.logicalOperators()[0]
         blocks = self.inBlocks()
-        generator = MultiBlockSyndromeKeyGenerator(blocks)
-        xx = {blocks[0].name: logicals[xType], blocks[1].name: logicals[xType]}
-        zz = {blocks[0].name: logicals[zType], blocks[1].name: logicals[zType]}
-        xxKey = generator.getKey(xx)
-        zzKey = generator.getKey(zz)
+        generators = [SyndromeKeyGenerator(code)]* len(blocks)
+        xxKey = tuple(generator.get_key(logicals[xType])
+                      for generator in generators)
+        zzKey = tuple(generator.get_key(logicals[xType])
+                      for generator in generators)
         
         self.keys = (xxKey, zzKey)
-        self.trivialKey = generator.getKey({str(blocks[0]): Pauli.I, str(blocks[1]): Pauli.I})
+        self.trivialKey = tuple(generator.get_key(Pauli.I)
+                                for generator in generators)
         
     def inBlocks(self):
         return (Block("A", self.code), Block("B", self.code))

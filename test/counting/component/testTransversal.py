@@ -42,10 +42,10 @@ class TestCnot(testComponent.ComponentTestCase):
 		for e0 in (Pauli.I, Pauli.X, Pauli.Z, Pauli.Y):
 			for e1 in (Pauli.I, Pauli.X, Pauli.Z, Pauli.Y):
 				e = {'0': e0, '1': e1}
-				key = generator.getKey(e)
+				key = generator.get_key(e)
 				propagated = propagator(key)
 				expected = {'0': e0 * PauliError(1,zbits=e1[zType]), '1': e1 * PauliError(1,xbits=e0[xType])}
-				expectedKey = generator.getKey(expected)
+				expectedKey = generator.get_key(expected)
 #				print 'e=', e, 'key=', key, 'propagated=', propagated, 'expected=', expected
 				assert propagated == expectedKey
 				
@@ -76,12 +76,12 @@ class TestMeas(testComponent.ComponentTestCase):
 			
 			if basis == Pauli.X:
 				expected = {Pauli.X: [{(0,): 1}, {}],
-					    Pauli.Z: [{(0,): 1}, {(generator.getKey(Pauli.Z),): 1}],
-					    Pauli.Y: [{(0,): 1}, {(generator.getKey(Pauli.Z),): 1}],}
+					    Pauli.Z: [{(0,): 1}, {(generator.get_key(Pauli.Z),): 1}],
+					    Pauli.Y: [{(0,): 1}, {(generator.get_key(Pauli.Z),): 1}],}
 			else:
-				expected = {Pauli.X: [{(0,): 1}, {(generator.getKey(Pauli.X),): 1}],
+				expected = {Pauli.X: [{(0,): 1}, {(generator.get_key(Pauli.X),): 1}],
 					    Pauli.Z: [{(0,): 1}, {}],
-					    Pauli.Y: [{(0,): 1}, {(generator.getKey(Pauli.X),): 1}],}
+					    Pauli.Y: [{(0,): 1}, {(generator.get_key(Pauli.X),): 1}],}
 
 			
 			for pauli in (Pauli.X, Pauli.Z, Pauli.Y):
@@ -99,11 +99,11 @@ class TestMeas(testComponent.ComponentTestCase):
 			
 			for e0 in (Pauli.I, Pauli.X, Pauli.Z, Pauli.Y):
 				e = {'0': e0}
-				key = generator.getKey(e)
+				key = generator.get_key(e)
 				propagated = propagator(key)
 				# Filter the part of the error that can't be detected by measurement.
 				expected = {'0': self.Filter(e0, 1, basis)}
-				expectedKey = generator.getKey(expected)
+				expectedKey = generator.get_key(expected)
 #				print 'e=', e, 'key=', key, 'propagated=', propagated, 'expected=', expected
 				assert propagated == expectedKey
 

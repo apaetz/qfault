@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
 
 #    generator = SyndromeKeyGenerator(ed422.ED412Code(gaugeType=error.xType), None)
-#    xkey = generator.getKey(PauliError(4, 1, 0))
+#    xkey = generator.get_key(PauliError(4, 1, 0))
 #    print xkey
 #        
 ##    print fib_syndrome.Epsilon1(xkey, 1, 1, 1e-3/15)

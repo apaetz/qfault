@@ -23,7 +23,7 @@ logger = logging.getLogger('scheme.fibonacci')
 class SubblockTeleport(SequentialComponent):
     
     def __init__(self, kGood, bell_pair, block_to_teleport=0, teleport_output_block=2, postselect=False):
-        code = bell_pair.outBlocks()[0].getCode()
+        code = bell_pair.outBlocks()[0].get_code()
         
         cnot = transversal.TransCnot(kGood, code, code)
         discard = BlockDiscard(cnot.outBlocks(), [block_to_teleport ^ 1])
@@ -44,7 +44,7 @@ class SubblockTeleport(SequentialComponent):
 class BlockTeleport(SequentialComponent):
     
     def __init__(self, kGood, bell_pair, meas_basis, block_to_meas):
-        code = bell_pair.outBlocks()[0].getCode()
+        code = bell_pair.outBlocks()[0].get_code()
         cnot = transversal.TransCnot({p: 1 for p in kGood.keys()}, code, code)
         
         bpc = SequentialComponent(kGood, subcomponents=[bell_pair, cnot])
@@ -79,7 +79,7 @@ class CnotGadget(SequentialComponent):
     def __init__(self, kGood, j):
         bp1 = BP1Max(kGood)
         bpj = BP1LevelJ(kGood, bp1, j)
-        code = bpj.outBlocks()[0].getCode()
+        code = bpj.outBlocks()[0].get_code()
         
         bp_in = ParallelComponent(kGood, bpj, bpj)
         cnot = transversal.TransCnot(kGood, code, code)
@@ -92,7 +92,7 @@ class CnotExRec(SequentialComponent):
         gadget = CnotGadget(kGood, j)
         discard = BlockDiscard(gadget.outBlocks(), [output_block ^ 1])
         
-        code = gadget.outBlocks()[output_block].getCode()
+        code = gadget.outBlocks()[output_block].get_code()
         
         bp1 = BP1Max(kGood)
         bpj = BP1LevelJ(kGood, bp1, j)

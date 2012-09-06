@@ -5,19 +5,19 @@ Basic transversal components such as: CNOT, rest, measurement.
 
 @author: adam
 '''
-from qfault.counting.component.base import CountableComponent, Component,\
+from copy import copy
+from qfault.circuit import location
+from qfault.circuit.block import Block
+from qfault.circuit.location import Locations
+from qfault.counting.component.base import CountableComponent, Component, \
     ParallelComponent
-from qfault.counting.key import KeyCopier, KeyMasker, IdentityManipulator,\
+from qfault.counting.count_locations import map_counts
+from qfault.counting.key import KeyCopier, KeyMasker, IdentityManipulator, \
     SyndromeKeyGenerator
-from qfault.counting.location import Locations
 from qfault.qec.error import zType, xType, Pauli
 from qfault.qec.qecc import StabilizerState, StabilizerCode
 from qfault.util import counterUtils, bits
 import logging
-from qfault.counting.count_errors import mapCounts
-from qfault.util.counterUtils import locrest
-from qfault.counting.block import Block
-from copy import copy
 
 logger = logging.getLogger('component')
 
@@ -36,7 +36,7 @@ class TransCnot(CountableComponent):
             raise Exception('Control ({0}) and target ({1}) blocklengths do not match.'.format(n, targCode.blockLength()))
         
         nickname='transCNOT.'+str(n)
-        locs = Locations([counterUtils.loccnot(self.ctrlName, i, self.targName, i) for i in range(n)], nickname)
+        locs = Locations([location.cnot(self.ctrlName, i, self.targName, i) for i in range(n)], nickname)
         
         super(TransCnot, self).__init__(kGood, locs)
         self.blockorder = blockorder
@@ -51,7 +51,7 @@ class TransCnot(CountableComponent):
         # entangled, so the output codes are just the underlying code.
         for block, code in outCodes.iteritems():
             try:
-                outCodes[block] = code.getCode()
+                outCodes[block] = code.get_code()
             except AttributeError:
                 pass
             
@@ -73,15 +73,19 @@ class TransCnot(CountableComponent):
         
         # TODO: this assumes that the parity checks for both blocks are identical.
         # Need to explicitly check this condition?
-        parityChecks = SyndromeKeyGenerator(self.outBlocks()[0].getCode(), None).parityChecks()
+        code = self.outBlocks()[0].get_code()
+        parityChecks = SyndromeKeyGenerator(code).parityChecks()
+        identity = Pauli.I ** code.blockLength()
         
         # On the control input X errors propagate through to the target
         # block.
-        fromCtrlMask = bits.listToBits((0 == check[xType]) for check in parityChecks)
+        fromCtrlMask = bits.listToBits((identity == check.partial(Pauli.X)) 
+                                       for check in parityChecks)
         
         # On the target input Z errors propagate through to the control
         # block.
-        fromTargMask = bits.listToBits((0 == check[zType]) for check in parityChecks)
+        fromTargMask = bits.listToBits((identity == check.partial(Pauli.Z)) 
+                                       for check in parityChecks)
         
         ctrlNum = self.blockorder.index(self.ctrlName)
         targNum = ctrlNum ^ 1
@@ -99,17 +103,8 @@ class TransMeas(CountableComponent):
     
     def __init__(self, kGood, code, basis, blockname=''):
         n = code.blockLength()
-        nickname = 'transMeas' + str(basis) + str(n)
-        if Pauli.X == basis:
-            loc = counterUtils.locXmeas
-            self._basisType = xType
-        elif Pauli.Z == basis:
-            loc = counterUtils.locZmeas
-            self._basisType = zType
-        else:
-            raise Exception('{0}-basis measurement is not supported'.format(basis))
-        
-        locs = Locations([loc(blockname, i) for i in range(n)], nickname)
+        nickname = 'transMeas' + str(basis) + str(n)   
+        locs = Locations([location.meas(basis, blockname, i) for i in range(n)], nickname)
         super(TransMeas, self).__init__(kGood, locs)
         
         self._basis = basis
@@ -119,12 +114,14 @@ class TransMeas(CountableComponent):
         return (self._block,)
         
     def keyPropagator(self, subPropagator=IdentityManipulator()):
-        code = self.inBlocks()[0].getCode()
-        parityChecks = SyndromeKeyGenerator(code, None).parityChecks()
+        code = self.inBlocks()[0].get_code()
+        parityChecks = SyndromeKeyGenerator(code).parityChecks()
+        identity = Pauli.I ** code.blockLength()
         
         # Eliminate bits corresponding to checks of the same type as the
         # measurement.  These errors/syndromes cannot be detected.
-        mask = bits.listToBits((0 != check[self._basisType]) for check in parityChecks)
+        mask = bits.listToBits(identity != check.partial(self._basis) 
+                               for check in parityChecks)
         
         blocks = range(len(self.inBlocks()))
         return KeyMasker(subPropagator, mask, blocks=blocks)
