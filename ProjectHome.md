@@ -1,0 +1,3 @@
+qfault is a collection of Python modules for counting malignant sets of locations in fault-tolerant quantum circuits. Its primary purpose is to compute a lower bound on the tolerable depolarizing noise threshold for fault-tolerant circuits based on the Golay code. Details of and motivation for the malignant set counting technique on which qfault is based is discussed [here](http://arxiv.org/abs/1106.2190).
+
+Many of the modules are hardcoded to work for the Golay code.  However, much of the code could be adapted for use with other quantum error correcting codes in the future.
